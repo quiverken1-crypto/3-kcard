@@ -159,6 +159,77 @@ function randomPick(state, arr) {
   return arr[i];
 }
 
+// ==========================================
+// 结算中途的目标选择（孙权·御将、法正·谋主）：玩家选，15 秒未选则随机
+// ==========================================
+const CHOICE_SPECS = {
+  sunQuan: {
+    source: '孙权·御将', prompt: '选择1个敌军，造成1点伤害',
+    auto: list => [...list].sort((a, b) => a.hp - b.hp)[0],
+    apply(state, pid, t) { damageUnit(state, t, 1, '孙权·御将'); }
+  },
+  faZheng: {
+    source: '法正·谋主', prompt: '选择1个友方单位，获得+1+1',
+    auto: list => [...list].filter(isMilitary).sort((a, b) => b.atk - a.atk)[0] || list[0],
+    apply(state, pid, t) { buff(t, 1, 1); log(state, pid, `法正·谋主：【${t.name}】获得+1+1`); }
+  }
+};
+
+let _choiceSeq = 0;
+function queueChoice(state, pid, kind, sourceUnit, candidates) {
+  const list = candidates.filter(Boolean);
+  if (!list.length) return;
+  const spec = CHOICE_SPECS[kind];
+  // 只有1个候选时无需询问
+  if (list.length === 1) { spec.apply(state, pid, list[0]); return; }
+  const p = state.players[pid];
+  (p.pendingChoices ||= []).push({
+    id: `ch_${state.turnNumber}_${++_choiceSeq}_${Math.floor(Math.random() * 1e6)}`,
+    kind, source: spec.source, prompt: spec.prompt, sourceId: sourceUnit?.instanceId,
+    targetIds: list.map(u => u.instanceId)
+  });
+}
+
+/** 结算队首的选择：targetId=玩家所选；mode='random' 随机（超时）；mode='auto' AI 挑选 */
+export function resolveChoice(state, pid, { choiceId, targetId, mode } = {}) {
+  const p = state.players[pid];
+  const choice = p.pendingChoices?.[0];
+  if (!choice) throw new Error('当前没有待选择的目标');
+  if (choiceId && choiceId !== choice.id) throw new Error('该选择已失效');
+  const spec = CHOICE_SPECS[choice.kind];
+  const live = choice.targetIds.map(id => findUnit(state, id)?.unit).filter(Boolean);
+  let t = null;
+  if (targetId) {
+    t = live.find(u => u.instanceId === targetId);
+    if (!t) throw new Error('目标不合法');
+  } else if (mode === 'random') t = randomPick(state, live);
+  else t = spec.auto(live);
+  p.pendingChoices.shift();
+  if (t) {
+    const name = t.name;
+    if (mode === 'random') log(state, pid, `${choice.source}：超时，随机选择了【${name}】`);
+    spec.apply(state, pid, t);
+  }
+  processDeaths(state);
+  refreshAuras(state);
+  return t;
+}
+
+export function autoChoiceTarget(state, pid) {
+  const choice = state.players[pid]?.pendingChoices?.[0];
+  if (!choice) return null;
+  const live = choice.targetIds.map(id => findUnit(state, id)?.unit).filter(Boolean);
+  return CHOICE_SPECS[choice.kind].auto(live)?.instanceId || null;
+}
+
+/** 选牌超时：随机挑选至多 max 张 */
+export function randomPickCards(state, pick) {
+  const pool = [...(pick?.cards || [])];
+  const out = [];
+  while (pool.length && out.length < (pick?.max ?? 0)) out.push(pool.splice(state.prng.randomInt(0, pool.length - 1), 1)[0].instanceId);
+  return out;
+}
+
 function discardRandom(state, playerId, count = 1, reason = '') {
   const player = state.players[playerId];
   for (let i = 0; i < count && player.hand.length; i++) {
@@ -1083,9 +1154,7 @@ export function resolveTactic(state, owner, card, prepared, payload = {}) {
   }
   // 法正·谋主：己方使用战法时，使1友方单位+1+1
   for (const fz of unitsWith(state, owner, 'shu_fa_zheng')) {
-    const t = [...getAllUnits(state, owner)].filter(isMilitary).sort((a, b) => b.atk - a.atk)[0] || fz;
-    buff(t, 1, 1);
-    log(state, owner, `法正·谋主：【${t.name}】获得+1+1`);
+    queueChoice(state, owner, 'faZheng', fz, getAllUnits(state, owner));
   }
   // 诸葛亮·料敌：敌方使用战法时，对其主城造成等同于其花费的伤害
   for (const zg of unitsWith(state, opp(owner), 'shu_zhu_ge_liang')) {
@@ -1249,8 +1318,8 @@ function afterRefill(state, pid) {
     if (isId(u, 'wei_yu_jin') && u.hp < u.maxHp) { u.hp = u.maxHp; log(state, pid, '于禁·毅重：完全恢复'); }
     // 孙权·御将：若上回合未被攻击，对任意敌军造成1伤害
     if (isId(u, 'wu_sun_quan') && u._attackedOnTurn !== state.turnNumber - 1) {
-      const t = getAllUnits(state, opp(pid)).filter(canTargetEnemy).sort((a, b) => a.hp - b.hp)[0];
-      if (t) damageUnit(state, t, 1, '孙权·御将');
+      _stateForTarget = state;
+      queueChoice(state, pid, 'sunQuan', u, getAllUnits(state, opp(pid)).filter(canTargetEnemy));
     }
     // 贾逵·筑城：回合开始时，己方主城+1防
     if (isId(u, 'wei_jia_kui')) { healHq(state, pid, 1, true); log(state, pid, '贾逵·筑城：主城+1'); }

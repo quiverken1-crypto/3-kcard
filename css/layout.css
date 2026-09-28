@@ -758,3 +758,20 @@ body.m-land .pick-box { padding: 10px 12px !important; }
 .hq-title { font-size: 12px !important; }
 .hq-info { min-width: 0; max-width: 100%; }
 .hq-terrains { white-space: nowrap; }
+
+/* 技能目标选择提示条 */
+.choice-bar { position: fixed; z-index: 970; left: 50%; top: calc(46px + env(safe-area-inset-top, 0px)); transform: translateX(-50%);
+  width: min(560px, calc(100vw - 16px)); padding: 8px 10px; border-radius: 10px; background: rgba(20,14,8,.95);
+  border: 1px solid #f0cf6a; box-shadow: 0 8px 20px rgba(0,0,0,.6); color: #f3e2b5; font-size: 13px; text-align: center; }
+.choice-bar.hidden { display: none; }
+.choice-bar b { color: #f0cf6a; }
+.choice-bar .choice-timer { margin-left: 8px; font: 700 12px var(--font-mono-numbers); color: #f3d892; }
+.choice-bar .choice-timer.urgent, .card-pick-timer.urgent { color: #ff7a60; }
+.choice-bar .choice-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 6px; }
+.choice-bar .choice-chip { padding: 4px 10px; border-radius: 14px; border: 1px solid rgba(243,216,146,.6); background: #2a1f14; color: #f3e2b5; font-size: 12px; cursor: pointer; }
+.choice-bar .choice-random { border-color: #8a7a5a; color: #cdbb90; }
+body.choice-active .board-unit:not(.choice-target) { opacity: .45; }
+.board-unit.choice-target { outline: 3px solid #f0cf6a !important; box-shadow: 0 0 14px rgba(240,207,106,.8) !important; cursor: pointer; }
+.card-pick-timer { font: 700 13px var(--font-mono-numbers); color: #f3d892; margin: 2px 0 6px; }
+/* 提示条放在手牌条上方，不遮挡战场上的候选目标 */
+.choice-bar { top: auto !important; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }

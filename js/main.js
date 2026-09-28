@@ -664,6 +664,129 @@ export class AppCoordinator {
     if (delay) setTimeout(play, delay); else requestAnimationFrame(play);
   }
 
+  // ==========================================
+  // 结算中途的目标选择（孙权·御将 / 法正·谋主）：提示条 + 场上高亮，15 秒不选则随机
+  // ==========================================
+  _syncChoiceBar(state) {
+    const doc = globalThis.document;
+    if (!doc) return;
+    const me = this.localPlayerId;
+    const opp = me === 'WEI' ? 'SHU' : 'WEI';
+    const mine = state?.players?.[me]?.pendingChoices?.[0] || null;
+    const theirs = !mine ? (state?.players?.[opp]?.pendingChoices?.[0] || null) : null;
+    const choice = this.mode === APP_MODE.BOT_VS_BOT ? null : (mine || (this.mode === APP_MODE.SOLO_VS_BOT ? null : theirs));
+    let bar = doc.getElementById('choice-bar');
+    doc.querySelectorAll('.choice-target').forEach(el => el.classList.remove('choice-target'));
+    doc.body.classList.toggle('choice-active', Boolean(mine));
+    this._activeChoice = mine;
+    if (!choice) { bar?.classList.add('hidden'); return; }
+    if (!bar) {
+      bar = doc.createElement('div');
+      bar.id = 'choice-bar';
+      bar.className = 'choice-bar';
+      doc.body.appendChild(bar);
+      this._bindChoiceInput(doc);
+    }
+    this._choiceSeenAt ||= {};
+    this._choiceSeenAt[choice.id] ||= Date.now();
+    if (mine) {
+      for (const id of mine.targetIds) doc.querySelectorAll(`.board-unit[data-instance-id="${id}"]`).forEach(el => el.classList.add('choice-target'));
+    }
+    if (bar.dataset.choiceId !== choice.id) {
+      bar.dataset.choiceId = choice.id;
+      const nameOf = id => {
+        for (const pid of ['WEI', 'SHU']) {
+          const all = [...(state.battlefield.support[pid]?.slots || []), ...['LEFT', 'CENTER', 'RIGHT'].flatMap(k => state.battlefield.frontline[k].units)];
+          const u = all.find(x => x.instanceId === id);
+          if (u) return `${u.name} ${u.atk}/${u.hp}`;
+        }
+        return null;
+      };
+      const chips = mine ? mine.targetIds.map(id => ({ id, label: nameOf(id) })).filter(c => c.label)
+        .map(c => `<button type="button" class="choice-chip" data-id="${c.id}">${escapeHtml(c.label)}</button>`).join('') : '';
+      bar.innerHTML = mine
+        ? `<div class="choice-head"><b>【${escapeHtml(choice.source)}】</b>${escapeHtml(choice.prompt)}<span class="choice-timer">15</span></div>
+           <div class="choice-chips">${chips}<button type="button" class="choice-chip choice-random">🎲 随机</button></div>`
+        : `<div class="choice-head">对方正在选择【${escapeHtml(choice.source)}】的目标…<span class="choice-timer">15</span></div>`;
+      bar.querySelectorAll('.choice-chip').forEach(btn => btn.addEventListener('click', e => {
+        e.stopPropagation();
+        this._submitChoice(btn.classList.contains('choice-random') ? null : btn.dataset.id);
+      }));
+    }
+    bar.classList.remove('hidden');
+    this._tickChoiceTimer();
+  }
+
+  _submitChoice(targetId) {
+    const c = this._activeChoice;
+    if (!c || this._choiceSent === c.id) return;
+    this._choiceSent = c.id;
+    this.handleUserAction({ type: ACTION_TYPES.CHOOSE_TARGET, playerId: this.localPlayerId, payload: targetId ? { choiceId: c.id, targetId } : { choiceId: c.id, random: true } });
+    setTimeout(() => { if (this._choiceSent === c.id) this._choiceSent = null; }, 3000);
+  }
+
+  _bindChoiceInput(doc) {
+    // 选择期间，点场上高亮单位 = 选它；其它战场操作暂停
+    doc.getElementById('battlefield-main')?.addEventListener('pointerdown', e => {
+      if (!this._activeChoice) return;
+      e.stopPropagation();
+      e.preventDefault();
+      const id = e.target?.closest?.('.board-unit')?.dataset?.instanceId;
+      if (id && this._activeChoice.targetIds.includes(id)) this._submitChoice(id);
+      else FX.showTriggerHint(`请先为【${this._activeChoice.source}】选择目标`);
+    }, true);
+  }
+
+  /** 15 秒倒计时：自己的选择到时随机；联机房主替掉线/超时的对方随机 */
+  _tickChoiceTimer() {
+    const doc = globalThis.document;
+    const state = this.getCurrentState();
+    if (!doc || !state) return;
+    const now = Date.now();
+    this._choiceSeenAt ||= {};
+    const LIMIT = 15000;
+    const bar = doc.getElementById('choice-bar');
+    const me = this.localPlayerId;
+    const opp = me === 'WEI' ? 'SHU' : 'WEI';
+    // 1) 技能目标选择
+    const mine = state.players?.[me]?.pendingChoices?.[0];
+    const theirs = state.players?.[opp]?.pendingChoices?.[0];
+    const shown = mine || theirs;
+    if (shown && bar && !bar.classList.contains('hidden')) {
+      const left = Math.max(0, Math.ceil((LIMIT - (now - (this._choiceSeenAt[shown.id] ||= now))) / 1000));
+      const t = bar.querySelector('.choice-timer');
+      if (t) { t.textContent = `⏳ ${left}s`; t.classList.toggle('urgent', left <= 5); }
+    }
+    if (mine && this.mode !== APP_MODE.BOT_VS_BOT && now - (this._choiceSeenAt[mine.id] ||= now) >= LIMIT) this._submitChoice(null);
+    if (theirs && this.mode === APP_MODE.P2P_HOST && now - (this._choiceSeenAt[theirs.id] ||= now) >= LIMIT + 2000 && this._hostForced !== theirs.id) {
+      this._hostForced = theirs.id;
+      this.hostSync?.dispatchAction({ type: ACTION_TYPES.CHOOSE_TARGET, playerId: opp, payload: { choiceId: theirs.id, random: true } });
+    }
+    // 2) 选牌（豪杰归心）
+    const pick = state.players?.[me]?.pendingPick;
+    if (pick?.cards?.length && this.mode !== APP_MODE.BOT_VS_BOT) {
+      const key = `pick:${pick.cards.map(c => c.instanceId).join(',')}`;
+      const since = (this._choiceSeenAt[key] ||= now);
+      const left = Math.max(0, Math.ceil((LIMIT - (now - since)) / 1000));
+      const el = doc.getElementById('card-pick-timer');
+      if (el) { el.textContent = `⏳ ${left}s 后随机`; el.classList.toggle('urgent', left <= 5); }
+      if (now - since >= LIMIT && this._pickSent !== key) {
+        this._pickSent = key;
+        doc.getElementById('overlay-card-pick')?.classList.add('hidden');
+        this.handleUserAction({ type: ACTION_TYPES.PICK_CARDS, playerId: me, payload: { random: true } });
+      }
+    }
+    const oppPick = state.players?.[opp]?.pendingPick;
+    if (oppPick && this.mode === APP_MODE.P2P_HOST) {
+      const key = `opick:${state.turnNumber}:${oppPick.count ?? oppPick.cards?.length}`;
+      const since = (this._choiceSeenAt[key] ||= now);
+      if (now - since >= LIMIT + 2000 && this._hostForced !== key) {
+        this._hostForced = key;
+        this.hostSync?.dispatchAction({ type: ACTION_TYPES.PICK_CARDS, playerId: opp, payload: { random: true } });
+      }
+    }
+  }
+
   /** 己方有待选择的牌（豪杰归心）时弹出选择框；只有自己看得到翻出的牌 */
   _syncPickModal(state) {
     const doc = globalThis.document;
@@ -1097,6 +1220,7 @@ export class AppCoordinator {
   _tickTurnClock() {
     this.turnClock.tick();
     this._renderTurnClock();
+    try { this._tickChoiceTimer(); } catch { /* ignore */ }
   }
 
   _renderTurnClock() {
@@ -1268,6 +1392,7 @@ export class AppCoordinator {
       this.interaction.refreshSelection?.();
     }
     this._syncPickModal(state);
+    this._syncChoiceBar(state);
   }
 
   // ==========================================

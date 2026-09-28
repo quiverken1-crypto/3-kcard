@@ -56,7 +56,7 @@ import {
 } from '../data/terrains.js';
 import { runAbilityTrigger } from './abilities.js';
 import {
-  applyEnterKeywords, onUnitEnter, onUnitMoved, prepareTactic, resolveTactic, afterAttack, resolvePick, autoPickCards,
+  applyEnterKeywords, onUnitEnter, onUnitMoved, prepareTactic, resolveTactic, afterAttack, resolvePick, autoPickCards, randomPickCards, resolveChoice, autoChoiceTarget,
   processDeaths, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getTacticTargets, refreshAuras, baseId, targetSurcharge
 } from './cardSkills.js';
 
@@ -456,12 +456,20 @@ export function dispatch(state, action) {
   // 选牌（豪杰归心等）：先完成选择；结束回合/超时则自动挑选
   if (action.type === ACTION_TYPES.PICK_CARDS) {
     if (!player?.pendingPick) throw new Error('当前没有待选择的牌');
-    const kept = resolvePick(state, action.playerId, action.payload?.cardIds || []);
+    const ids = action.payload?.random ? randomPickCards(state, player.pendingPick) : (action.payload?.cardIds || []);
+    const kept = resolvePick(state, action.playerId, ids);
     return { success: true, kept: kept.map(c => c.instanceId) };
   }
-  if (player?.pendingPick) {
-    if (action.type === ACTION_TYPES.END_TURN || action.type === ACTION_TYPES.SURRENDER) resolvePick(state, action.playerId, autoPickCards(player.pendingPick));
-    else throw new Error('请先完成选牌');
+  if (action.type === ACTION_TYPES.CHOOSE_TARGET) {
+    const t = resolveChoice(state, action.playerId, { choiceId: action.payload?.choiceId, targetId: action.payload?.targetId, mode: action.payload?.random ? 'random' : (action.payload?.targetId ? null : 'auto') });
+    return { success: true, targetId: t?.instanceId || null };
+  }
+  if (player?.pendingPick || player?.pendingChoices?.length) {
+    if (action.type === ACTION_TYPES.END_TURN || action.type === ACTION_TYPES.SURRENDER) {
+      if (player.pendingPick) resolvePick(state, action.playerId, randomPickCards(state, player.pendingPick));
+      while (player.pendingChoices?.length && state.phase !== PHASES.GAME_OVER) resolveChoice(state, action.playerId, { mode: 'random' });
+      if (state.phase === PHASES.GAME_OVER) return { success: true, winner: state.winner };
+    } else throw new Error(player.pendingPick ? '请先完成选牌' : '请先选择技能目标');
   }
   const handId = action.payload?.cardInstanceId;
   const source = action.type === ACTION_TYPES.ATTACK
@@ -548,6 +556,7 @@ export function getLegalActions(state, playerId) {
   const actions = [];
   const player = state.players[playerId];
   if (player?.pendingPick) return [{ type: ACTION_TYPES.PICK_CARDS, playerId, payload: { cardIds: autoPickCards(player.pendingPick) } }];
+  if (player?.pendingChoices?.length) return [{ type: ACTION_TYPES.CHOOSE_TARGET, playerId, payload: { choiceId: player.pendingChoices[0].id, targetId: autoChoiceTarget(state, playerId) } }];
 
   // 1. Legal Deploys
   const noDeploy = player.noDeployNextTurn && player._noDeployActive;
