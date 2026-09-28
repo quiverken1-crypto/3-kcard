@@ -775,3 +775,18 @@ body.choice-active .board-unit:not(.choice-target) { opacity: .45; }
 .card-pick-timer { font: 700 13px var(--font-mono-numbers); color: #f3d892; margin: 2px 0 6px; }
 /* 提示条放在手牌条上方，不遮挡战场上的候选目标 */
 .choice-bar { top: auto !important; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+
+/* 选目标时：候选目标醒目，其它单位（包括己方可行动的金色光）一律压暗 */
+body.tactic-targeting .board-unit.status-can-act:not(.legal-tactic-target),
+body.choice-active .board-unit.status-can-act:not(.choice-target) { box-shadow: none !important; animation: none !important; }
+body.tactic-targeting .board-unit:not(.legal-tactic-target) { opacity: .35 !important; filter: grayscale(.7) brightness(.8) !important; }
+.board-unit.legal-tactic-target, .board-unit.choice-target {
+  opacity: 1 !important; filter: none !important;
+  outline: 3px solid #ffd76a !important; outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgba(0,0,0,.6), 0 0 20px 4px rgba(255,200,80,.85) !important;
+}
+.board-unit.legal-tactic-target::after, .board-unit.choice-target::after {
+  content: '可选'; position: absolute; top: -10px; left: 50%; transform: translateX(-50%); z-index: 8;
+  padding: 0 6px; border-radius: 8px; background: #ffd76a; color: #3a2400; font-size: 10px; font-weight: 800; pointer-events: none;
+}
+/* 选目标时提示移到下方，不挡敌方阵线 */

@@ -533,15 +533,15 @@ function chosenOr(list, unit, fallback) {
 
 /** 进场时需要选择目标的武将技能：候选列表（部署前计算，不含自身） */
 export const DEPLOY_TARGETS = {
-  shu_jian_yong: { prompt: '说降：选择敌方支援阵线1个目标', list: (state, owner) => state.battlefield.support[opp(owner)].slots.filter(canTargetEnemy) },
-  wu_yu_fan: { prompt: '说降：选择敌方支援阵线1个目标', list: (state, owner) => state.battlefield.support[opp(owner)].slots.filter(canTargetEnemy) },
+  shu_jian_yong: { prompt: '说降：选择敌方支援阵线1个目标', list: (state, owner) => state.battlefield.support[opp(owner)].slots.filter(canSkillTarget) },
+  wu_yu_fan: { prompt: '说降：选择敌方支援阵线1个目标', list: (state, owner) => state.battlefield.support[opp(owner)].slots.filter(canSkillTarget) },
   wei_xu_chu: {
     prompt: '震慑：选择要压制的敌军',
     list: (state, owner) => getAllUnits(state, opp(owner)).filter(u => !u.status.suppressed && canBeSuppressed(state, u) && !u.status?.[STATUS_TYPES.IS_FACE_DOWN])
   },
   shu_zhang_fei: {
     prompt: '咆哮：选择1个战力不高于张飞的单位，返回其所有者手牌',
-    list: (state, owner, card) => [...getAllUnits(state, opp(owner)).filter(canTargetEnemy), ...getAllUnits(state, owner)]
+    list: (state, owner, card) => [...getAllUnits(state, opp(owner)).filter(canSkillTarget), ...getAllUnits(state, owner)]
       .filter(u => u.instanceId !== card?.instanceId && getAttackValue(state, u) <= (card?.atk ?? 0) && !isSteadfast(u))
   },
   lb_zhang_liao: {
@@ -559,7 +559,7 @@ export function getDeployTargets(state, owner, card) {
 
 /** 说降：对敌方支援阵线1个目标造成2伤害，二心翻倍 */
 function persuade(state, unit, who) {
-  const list = state.battlefield.support[opp(unit.faction)].slots.filter(canTargetEnemy);
+  const list = state.battlefield.support[opp(unit.faction)].slots.filter(canSkillTarget);
   const t = chosenOr(list, unit, l => [...l].sort((a, b) => (hasBadge(b, '二心') - hasBadge(a, '二心')) || (a.hp - b.hp))[0]);
   if (!t) return;
   damageUnit(state, t, hasBadge(t, '二心') ? 4 : 2, who);
@@ -623,7 +623,7 @@ const DEPLOY_SKILLS = {
   // 张飞·大喝：将1个战力不高于自己的单位返回其所有者卡组顶
   shu_zhang_fei(state, unit) {
     const myAtk = getAttackValue(state, unit);
-    const enemies = getAllUnits(state, opp(unit.faction)).filter(u => getAttackValue(state, u) <= myAtk && !isSteadfast(u));
+    const enemies = getAllUnits(state, opp(unit.faction)).filter(u => canSkillTarget(u) && getAttackValue(state, u) <= myAtk && !isSteadfast(u));
     const own = getAllUnits(state, unit.faction).filter(u => u !== unit && getAttackValue(state, u) <= myAtk && !isSteadfast(u));
     const t = chosenOr([...enemies, ...own], unit, () => [...enemies].sort((a, b) => (b.cost - a.cost) || (b.atk - a.atk))[0]);
     if (!t) return;
@@ -724,6 +724,9 @@ export function triggerCounters(state, event, ctx) {
 
 /** 敌方战法/反制能否指向该单位（警戒、背面） */
 let _stateForTarget = null;
+/** 武将技能指向：【警戒】只防战法/反制，技能只排除潜伏(背面)单位 */
+export const canSkillTarget = u => !u?.status?.[STATUS_TYPES.IS_FACE_DOWN];
+
 export const canTargetEnemy = u => {
   if (active(u) && hasKeyword(u, '警戒')) return false;
   if (u.status?.[STATUS_TYPES.IS_FACE_DOWN]) return false;
@@ -1331,7 +1334,7 @@ function afterRefill(state, pid) {
     // 孙权·御将：若上回合未被攻击，对任意敌军造成1伤害
     if (isId(u, 'wu_sun_quan') && u._attackedOnTurn !== state.turnNumber - 1) {
       _stateForTarget = state;
-      queueChoice(state, pid, 'sunQuan', u, getAllUnits(state, opp(pid)).filter(canTargetEnemy));
+      queueChoice(state, pid, 'sunQuan', u, getAllUnits(state, opp(pid)).filter(canSkillTarget));
     }
     // 贾逵·筑城：回合开始时，己方主城+1防
     if (isId(u, 'wei_jia_kui')) { healHq(state, pid, 1, true); log(state, pid, '贾逵·筑城：主城+1'); }

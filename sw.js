@@ -1,5 +1,5 @@
 /* 三国KARDS 离线缓存：卡图/音频缓存优先（改资源时请把 VERSION 加一），代码网络优先、断网回落缓存 */
-const VERSION = 'sgk-v7';
+const VERSION = 'sgk-v8';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
