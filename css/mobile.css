@@ -5,8 +5,9 @@
 /* 手机布局：由 JS 设置 body.m-land（横屏矮屏）；竖屏手机额外加 body.m-port 改排版 */
 html:has(body.m-land), body.m-land, body.m-land { height: 100%; overscroll-behavior: none; }
 body.m-land #game-app.game-container {
+    position: fixed !important; inset: 0 !important;
     display: grid !important;
-    width: 100vw; height: 100vh; height: 100dvh; height: min(var(--app-h, 100dvh), 100dvh);
+    width: auto !important; height: auto !important;
     grid-template-columns: minmax(0, 1fr) 118px;
     grid-template-rows: 32px auto auto auto minmax(0, 1fr) auto 92px;
     background: #120e0a !important;
@@ -129,9 +130,6 @@ body.m-land .card-inspector-tooltip { width: 270px !important; max-width: 270px 
 
 /* 手牌：触摸拖动时不让浏览器滚动；多牌时互相叠压以放下全部 */
 body.m-land .card-hand, body.m-land .board-unit, body.m-land .battlefield-viewport { touch-action: none; }
-body.m-land #player-dock .hand-card-fan:has(> :nth-child(7)) .card-hand + .card-hand { margin-left: -10px; }
-body.m-land #player-dock .hand-card-fan:has(> :nth-child(8)) .card-hand + .card-hand { margin-left: -22px; }
-body.m-land #player-dock .hand-card-fan:has(> :nth-child(9)) .card-hand + .card-hand { margin-left: -30px; }
 body.m-land #player-dock .hand-card-fan .card-hand.selected { z-index: 30 !important; }
 
 /* 刘海屏/底部横条安全区 */
@@ -217,11 +215,6 @@ body.m-port #player-dock #btn-end-turn { font-size: 12px !important; white-space
   body.m-land:not(.m-port) #player-dock .player-resources .prestige-display { display: none; }
 }
 /* 竖屏手牌：牌多时叠压，保证一屏放下 */
-body.m-port #player-dock .hand-card-fan:has(> :nth-child(5)) .card-hand + .card-hand { margin-left: -8px; }
-body.m-port #player-dock .hand-card-fan:has(> :nth-child(6)) .card-hand + .card-hand { margin-left: -22px; }
-body.m-port #player-dock .hand-card-fan:has(> :nth-child(7)) .card-hand + .card-hand { margin-left: -36px; }
-body.m-port #player-dock .hand-card-fan:has(> :nth-child(8)) .card-hand + .card-hand { margin-left: -48px; }
-body.m-port #player-dock .hand-card-fan:has(> :nth-child(9)) .card-hand + .card-hand { margin-left: -58px; }
 body.m-port #player-dock .hand-card-fan .card-hand { position: relative; }
 @media (max-width: 400px) {
   body.m-port #top-bar .prestige-badge { display: none !important; }

@@ -19,7 +19,7 @@ import { HostSyncManager, ClientSyncManager } from './network/syncProtocol.js';
 
 import { InteractionController } from './ui/interaction.js';
 import { NetworkModalController } from './ui/networkModal.js';
-import { renderBoard, renderResourceHUD } from './ui/boardRenderer.js';
+import { renderBoard, renderResourceHUD, fitHandStrip } from './ui/boardRenderer.js';
 import { CardInspector, renderHandCard, escapeHtml, getCardDescription } from './ui/cardRenderer.js';
 import { CombatLogController } from './ui/combatLog.js';
 import FX from './ui/fx.js';
@@ -189,7 +189,7 @@ export class AppCoordinator {
       const land = (w >= h && h <= 540) || port;
       doc.body.classList.toggle('m-land', land);
       doc.body.classList.toggle('m-port', port);
-      setTimeout(() => this._fitBoard(), 50);
+      setTimeout(() => { this._fitBoard(); fitHandStrip(); }, 50);
     };
     this._applyLayout = applyLayout;
     globalThis.addEventListener?.('resize', applyLayout);
@@ -358,6 +358,10 @@ export class AppCoordinator {
     fit();
   }
 
+  /**
+   * 战场按可用区域等比缩放（transform 实现，各浏览器表现一致，包括 iOS Safari）；
+   * 缩放后再用实际尺寸校验一遍，保证不会被上下/左右裁掉。
+   */
   _fitBoard() {
     const doc = typeof document !== 'undefined' ? document : globalThis.document;
     const viewport = doc?.getElementById('battlefield-main');
@@ -366,13 +370,27 @@ export class AppCoordinator {
     const cs = getComputedStyle(viewport);
     const availW = viewport.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     const availH = viewport.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-    board.style.setProperty('--board-scale', '1');
+    Object.assign(board.style, { transform: 'none', marginLeft: '0px', marginTop: '0px', marginRight: '0px', marginBottom: '0px', transformOrigin: 'top left' });
     const naturalW = board.offsetWidth;
     const naturalH = board.offsetHeight;
     if (!naturalW || !naturalH || availW <= 0 || availH <= 0) return;
-    const scale = Math.max(0.4, Math.min(availW / naturalW, availH / naturalH, 1.8));
-    board.style.setProperty('--board-scale', scale.toFixed(4));
+    let scale = Math.max(0.25, Math.min(availW / naturalW, availH / naturalH, 1.8));
+    const apply = () => Object.assign(board.style, {
+      transform: `scale(${scale.toFixed(4)})`,
+      marginRight: `${(naturalW * (scale - 1)).toFixed(1)}px`,
+      marginBottom: `${(naturalH * (scale - 1)).toFixed(1)}px`
+    });
+    apply();
+    for (let i = 0; i < 3; i++) {
+      const r = board.getBoundingClientRect();
+      const over = Math.max(r.width / availW, r.height / availH);
+      if (!(over > 1.005)) break;
+      scale = Math.max(0.25, scale / over * 0.995);
+      apply();
+    }
+    this._boardScale = scale;
   }
+
 
   _bindGlobalControls() {
     const doc = typeof document !== 'undefined' ? document : globalThis.document;

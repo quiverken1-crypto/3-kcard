@@ -63,7 +63,6 @@ body { overflow: hidden; }
   min-height: 0 !important;
   max-height: none !important;
   margin: 0 auto;
-  zoom: var(--board-scale, 1);
 }
 .battlefield-line { flex: 0 0 auto !important; }
 
