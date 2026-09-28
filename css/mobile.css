@@ -281,3 +281,6 @@ body.m-land .touch-cancel-btn {
 }
 @media (max-width: 340px) { body.m-port #player-dock #btn-end-turn { font-size: 11px !important; } }
 body.m-port .touch-cancel-btn { padding: 5px 10px !important; font-size: 12px; bottom: calc(112px + env(safe-area-inset-bottom, 0px)) !important; }
+body.m-land #player-dock #turn-timer .turn-timer-total { font-size: 10px; }
+body.m-port #player-dock #turn-timer .turn-timer-total { display: none; }
+body.m-port #player-dock #turn-timer.total-warning { outline: 2px solid #ff5a45; border-radius: 8px; }

@@ -29,6 +29,7 @@ import {
 } from '../engine/rulesEngine.js';
 import { getValidTargets, validateAttack, getEffectiveAttack } from '../engine/combat.js';
 import { evaluateBoard, DEFAULT_EVALUATION_WEIGHTS } from './evaluator.js';
+import { autoPickCards } from '../engine/cardSkills.js';
 import { PRNG } from '../engine/prng.js';
 
 /**
@@ -456,6 +457,8 @@ export class HeuristicBot {
    * @returns {object}
    */
   chooseBestAction(state, botFaction = this.faction) {
+    const pick = state.players?.[botFaction]?.pendingPick;
+    if (pick) return { type: ACTION_TYPES.PICK_CARDS, playerId: botFaction, payload: { cardIds: autoPickCards(pick) } };
     // 1. Check immediate lethal strike
     const lethalAction = this.checkImmediateLethal(state, botFaction);
     if (lethalAction) return lethalAction;

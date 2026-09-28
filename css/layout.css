@@ -720,3 +720,41 @@ body.is-dragging .board-unit { transition: none; }
 .boot-skip.hidden { display: none; }
 .bg-load-chip { position: fixed; left: 10px; bottom: 10px; z-index: 950; padding: 4px 10px; border-radius: 12px; font-size: 11px; color: #e8d3a2; background: rgba(0,0,0,.6); border: 1px solid rgba(217,179,106,.3); pointer-events: none; }
 .boot-tip { margin-top: 14px; font-size: 11px; opacity: .55; line-height: 1.6; }
+
+/* 回合总计时 */
+.dock-timer .turn-timer-total { flex: 0 0 auto; font: 600 11px var(--font-mono-numbers); color: #bfae86; white-space: nowrap; }
+.dock-timer.total-warning .turn-timer-chip { color: #fff; border-color: #ff5a45; background: rgba(150,30,20,.92); }
+.dock-timer.total-warning .turn-timer-total { color: #ff8f7a; font-weight: 800; }
+body.clock-alarm #turn-timer .turn-timer-chip { animation: clockAlarm .5s ease-in-out 5 !important; }
+@keyframes clockAlarm { 50% { transform: scale(1.18); } }
+
+/* 选牌框（豪杰归心） */
+.pick-box { max-height: calc(100dvh - 16px); overflow-y: auto; text-align: center; }
+.pick-box .mulligan-cards-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.pick-box .card-hand { cursor: pointer; position: relative !important; }
+.pick-box .card-hand.selected { outline: 3px solid #f3d892; outline-offset: 2px; transform: translateY(-6px); }
+body.m-land .pick-box .card-hand { zoom: .7; }
+body.m-land .pick-box { padding: 10px 12px !important; }
+
+/* 行动预演浮窗 */
+.action-preview { position: fixed; z-index: 980; display: none; pointer-events: none; min-width: 120px; max-width: 240px;
+  padding: 6px 9px; border-radius: 8px; background: rgba(16,11,7,.94); border: 1px solid rgba(243,216,146,.6);
+  box-shadow: 0 6px 16px rgba(0,0,0,.55); color: #f3e2b5; font-size: 12px; line-height: 1.5; }
+.action-preview .pv-line { white-space: nowrap; }
+.action-preview .pv-tag { display: inline-block; font-size: 10px; padding: 0 4px; margin-right: 4px; border-radius: 3px; background: #7a2a1e; color: #fff; }
+.action-preview .pv-mine .pv-tag { background: #2f5d86; }
+.action-preview b { color: #fff; }
+.action-preview .pv-kill { color: #ff8a70; font-weight: 800; }
+.action-preview .pv-note { font-size: 10px; color: #a8977a; }
+.action-preview .pv-confirm { margin-top: 3px; padding-top: 3px; border-top: 1px dashed rgba(243,216,146,.35); color: #f0cf6a; font-weight: 700; }
+
+/* 三字城名（濡须坞等）不换行、不越界 */
+/* 主城选择卡片 */
+.hq-card-name { white-space: nowrap; word-break: keep-all; font-size: clamp(18px, 6vw, 34px) !important; letter-spacing: 2px !important; }
+.hq-title, .fortress-name, #top-bar .hq-name {
+  white-space: nowrap !important; word-break: keep-all; letter-spacing: 0 !important;
+  max-width: 100%; overflow: hidden; text-overflow: clip;
+}
+.hq-title { font-size: 12px !important; }
+.hq-info { min-width: 0; max-width: 100%; }
+.hq-terrains { white-space: nowrap; }

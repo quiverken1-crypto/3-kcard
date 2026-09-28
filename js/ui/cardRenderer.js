@@ -467,6 +467,9 @@ function attachInspectorEvents(el, card) {
   });
   el.addEventListener('dblclick', e => {
     e.preventDefault();
+    // 触屏上“再点一次确认”会被浏览器识别为双击：只在鼠标、且没有正在选择目标时打开详情
+    const body = globalThis.document?.body;
+    if (lastPointerType !== 'mouse' || body?.classList.contains('is-selecting') || body?.classList.contains('tactic-targeting')) return;
     showCardDetails(card);
   });
 
@@ -492,6 +495,9 @@ function attachInspectorEvents(el, card) {
 /**
  * Singleton Card Inspector Tooltip
  */
+let lastPointerType = 'mouse';
+globalThis.document?.addEventListener?.('pointerdown', e => { lastPointerType = e.pointerType || 'mouse'; }, true);
+
 export class CardInspector {
   static tooltipEl = null;
 

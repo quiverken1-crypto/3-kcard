@@ -49,6 +49,7 @@ export const ACTION_TYPES = Object.freeze({
   COUNTER_TACTIC: 'SET_COUNTER', // Semantic alias
   END_TURN: 'END_TURN',
   MULLIGAN: 'MULLIGAN',
+  PICK_CARDS: 'PICK_CARDS',
   SURRENDER: 'SURRENDER'
 });
 

@@ -196,7 +196,8 @@ export function maskStateForPlayer(masterState, viewerFaction) {
       [oppFaction]: {
         ...JSON.parse(JSON.stringify(oppPlayer)),
         hand: maskedOppHand,
-        deck: { count: oppDeckCount }
+        deck: { count: oppDeckCount },
+        pendingPick: oppPlayer.pendingPick ? { source: oppPlayer.pendingPick.source, max: oppPlayer.pendingPick.max, count: oppPlayer.pendingPick.cards?.length || 0, cards: [] } : null
       }
     },
 

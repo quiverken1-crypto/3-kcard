@@ -634,6 +634,76 @@ export class AppCoordinator {
     overlay.classList.remove('hidden');
   }
 
+  _animateBoardShift(container, before) {
+    if (!before.size || globalThis.document?.body?.classList.contains('is-dragging')) return;
+    const els = [...container.querySelectorAll('.board-unit[data-instance-id]')];
+    const now = new Set(els.map(el => el.dataset.instanceId));
+    const removed = [...before.keys()].some(id => !now.has(id));
+    const delay = removed ? 820 : 0;
+    const scale = this._boardScale || 1;
+    const moving = [];
+    for (const el of els) {
+      const r0 = before.get(el.dataset.instanceId);
+      if (!r0) continue;
+      const r1 = el.getBoundingClientRect();
+      const dx = (r0.left - r1.left) / scale, dy = (r0.top - r1.top) / scale;
+      if (Math.abs(dx) + Math.abs(dy) < 2) continue;
+      el.style.transition = 'none';
+      el.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
+      moving.push(el);
+    }
+    if (!moving.length) return;
+    const play = () => requestAnimationFrame(() => {
+      for (const el of moving) {
+        if (!el.isConnected) continue;
+        el.style.transition = 'transform 280ms ease-out';
+        el.style.transform = '';
+        setTimeout(() => { if (el.isConnected) el.style.transition = ''; }, 320);
+      }
+    });
+    if (delay) setTimeout(play, delay); else requestAnimationFrame(play);
+  }
+
+  /** 己方有待选择的牌（豪杰归心）时弹出选择框；只有自己看得到翻出的牌 */
+  _syncPickModal(state) {
+    const doc = globalThis.document;
+    const overlay = doc?.getElementById('overlay-card-pick');
+    if (!overlay) return;
+    const pick = state?.players?.[this.localPlayerId]?.pendingPick;
+    if (!pick || !pick.cards?.length || this.mode === APP_MODE.BOT_VS_BOT) {
+      overlay.classList.add('hidden');
+      this._pickKey = null;
+      return;
+    }
+    const key = pick.cards.map(c => c.instanceId).join(',');
+    if (key === this._pickKey && !overlay.classList.contains('hidden')) return;
+    this._pickKey = key;
+    const selected = new Set();
+    const box = doc.getElementById('card-pick-container');
+    const countEl = doc.getElementById('card-pick-count');
+    doc.getElementById('card-pick-max').textContent = String(pick.max);
+    doc.getElementById('card-pick-title').textContent = `【${pick.source}】翻看 ${pick.cards.length} 张`;
+    doc.getElementById('card-pick-subtitle').textContent = `选择至多 ${pick.max} 张加入手牌，其余弃置（只有你能看到）`;
+    box.innerHTML = '';
+    for (const card of pick.cards) {
+      const el = renderHandCard(card);
+      el.addEventListener('click', () => {
+        if (selected.has(card.instanceId)) { selected.delete(card.instanceId); el.classList.remove('selected'); }
+        else if (selected.size < pick.max) { selected.add(card.instanceId); el.classList.add('selected'); }
+        else FX.showTriggerHint(`最多选择 ${pick.max} 张`);
+        countEl.textContent = String(selected.size);
+      });
+      box.appendChild(el);
+    }
+    countEl.textContent = '0';
+    const btn = doc.getElementById('btn-confirm-pick');
+    btn.onclick = () => {
+      overlay.classList.add('hidden');
+      this.handleUserAction({ type: ACTION_TYPES.PICK_CARDS, playerId: this.localPlayerId, payload: { cardIds: [...selected] } });
+    };
+    overlay.classList.remove('hidden');
+  }
+
   _teardownCurrentMode() {
     this.isSandboxRunning = false;
     this._surrendered = false;
@@ -1014,9 +1084,12 @@ export class AppCoordinator {
       return;
     }
     const key = `${state.turnNumber}:${state.activePlayer}:${state.phase}`;
-    if (force || key !== this.clockTurnKey) {
+    if (key !== this.clockTurnKey) {
       this.clockTurnKey = key;
       this.turnClock.start();
+      this._totalWarned = false;
+    } else if (force) {
+      this.turnClock.restartStep();
     }
     this._renderTurnClock();
   }
@@ -1031,11 +1104,24 @@ export class AppCoordinator {
     const wrapper = doc?.getElementById('turn-timer');
     const label = doc?.getElementById('turn-timer-text');
     const fill = doc?.getElementById('turn-timer-fill');
-    const seconds = this.turnClock.remainingSeconds();
+    const clock = this.turnClock;
+    const seconds = clock.remainingSeconds();
+    const total = clock.totalRemainingSeconds();
     const compact = doc?.body?.classList.contains('m-port');
-    if (label) label.textContent = this.turnClock.deadline ? (compact ? `${seconds}s` : `00:${String(seconds).padStart(2, '0')}`) : (compact ? '--' : '--:--');
-    if (fill) fill.style.width = `${(seconds / 30) * 100}%`;
-    wrapper?.classList.toggle('warning', this.turnClock.deadline && seconds <= 10);
+    if (label) label.textContent = clock.deadline ? (compact ? `${seconds}s` : `00:${String(seconds).padStart(2, '0')}`) : (compact ? '--' : '--:--');
+    const totalEl = doc?.getElementById('turn-timer-total');
+    if (totalEl) totalEl.textContent = clock.deadline ? `回合 ${total}s` : '';
+    if (fill) fill.style.width = `${Math.min(100, (seconds / (clock.stepMs / 1000)) * 100)}%`;
+    const totalWarn = Boolean(clock.deadline) && clock.isTotalWarning();
+    wrapper?.classList.toggle('warning', Boolean(clock.deadline) && seconds <= 10);
+    wrapper?.classList.toggle('total-warning', totalWarn);
+    if (totalWarn && !this._totalWarned) {
+      this._totalWarned = true;
+      const state = this.getCurrentState();
+      const mine = state?.activePlayer === this.localPlayerId || state?.phase === PHASES.MULLIGAN;
+      FX.showTriggerHint(mine ? '⏳ 本回合总时间只剩 30 秒！' : '⏳ 对方本回合总时间只剩 30 秒');
+      if (mine) { doc?.body?.classList.add('clock-alarm'); setTimeout(() => doc?.body?.classList.remove('clock-alarm'), 2600); }
+    }
   }
 
   _handleTurnTimeout() {
@@ -1051,10 +1137,10 @@ export class AppCoordinator {
     }
     const action = { type: ACTION_TYPES.END_TURN, playerId: state.activePlayer, payload: {} };
     if (this.mode === APP_MODE.SOLO_VS_BOT && state.activePlayer === this.localPlayerId) {
-      FX.showTriggerHint('⏱ 30 秒无操作，自动结束回合');
+      FX.showTriggerHint('⏱ 时间到，自动结束回合');
       this.handleUserAction(action);
     } else if (this.mode === APP_MODE.P2P_HOST) {
-      FX.showTriggerHint('⏱ 30 秒无操作，房主自动结束当前回合');
+      FX.showTriggerHint('⏱ 时间到，房主自动结束当前回合');
       const result = this.hostSync?.dispatchAction(action);
       if (result?.success === false) this._syncTurnClock(true);
     }
@@ -1163,9 +1249,14 @@ export class AppCoordinator {
     // 1. Render Battlefield Grid (Support lines, 3 Frontline zones)
     const bfContainer = doc.getElementById('battlefield-main');
     if (bfContainer) {
+      // 记录重绘前每张单位卡的位置：有单位阵亡/离场时，其余单位先原地不动，
+      // 等阵亡动画播完再滑动补位（FLIP）
+      const before = new Map();
+      bfContainer.querySelectorAll('.board-unit[data-instance-id]').forEach(el => before.set(el.dataset.instanceId, el.getBoundingClientRect()));
       renderBoard(bfContainer, state, this.localPlayerId, {
         player: state.players?.[this.localPlayerId]
       });
+      this._animateBoardShift(bfContainer, before);
     }
 
     // 2. Render Top & Bottom HUDs
@@ -1176,6 +1267,7 @@ export class AppCoordinator {
       this.interaction.setContext(state, this.localPlayerId);
       this.interaction.refreshSelection?.();
     }
+    this._syncPickModal(state);
   }
 
   // ==========================================

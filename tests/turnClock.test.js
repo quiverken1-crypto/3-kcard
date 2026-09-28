@@ -6,25 +6,31 @@ import { dispatch } from '../js/engine/rulesEngine.js';
 import { HostSyncManager } from '../js/network/syncProtocol.js';
 import { AppCoordinator, APP_MODE } from '../js/main.js';
 
-test('30 second inactivity clock expires once and can restart', () => {
+test('40s step clock and 80s turn clock', () => {
   let now = 1000;
   let expired = 0;
   const clock = new TurnClock({ now: () => now, onExpire: () => expired++ });
   clock.start();
-  now = 30999;
-  assert.equal(clock.remainingSeconds(), 1);
-  clock.tick();
+  assert.equal(clock.remainingSeconds(), 40);
+  assert.equal(clock.totalRemainingSeconds(), 80);
+  now = 40999; clock.tick();
   assert.equal(expired, 0);
-  now = 31000;
-  clock.tick();
-  clock.tick();
-  assert.equal(expired, 1);
-  now = 32000;
-  clock.start();
+  // 行动后只重置单步
+  clock.restartStep();
+  assert.equal(clock.remainingSeconds(), 40);
+  assert.equal(clock.totalRemainingSeconds(), 41);
+  assert.equal(clock.isTotalWarning(), false);
+  now = 51000;
+  assert.equal(clock.isTotalWarning(), true);
+  clock.restartStep();
+  // 总时间比单步先到
   assert.equal(clock.remainingSeconds(), 30);
+  now = 81000; clock.tick(); clock.tick();
+  assert.equal(expired, 1);
+  clock.start();
+  assert.equal(clock.remainingSeconds(), 40);
   clock.stop();
-  now = 100000;
-  clock.tick();
+  now = 999999; clock.tick();
   assert.equal(expired, 1);
 });
 

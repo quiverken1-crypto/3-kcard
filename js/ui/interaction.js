@@ -13,8 +13,10 @@
 import { ACTION_TYPES, KEYWORDS, STATUS_TYPES, hasKeyword } from '../engine/constants.js';
 import { getValidTargets, validateAttack } from '../engine/combat.js';
 import { findUnit, getAllUnits } from '../engine/state.js';
-import { getTacticTargets, getActionCost, actsLikeCavalry as skillActsLikeCavalry } from '../engine/cardSkills.js';
+import { getTacticTargets, getDeployTargets, getActionCost, actsLikeCavalry as skillActsLikeCavalry } from '../engine/cardSkills.js';
 import { CardInspector } from './cardRenderer.js';
+import { getUnitMoveZones, unitHasUsefulAction } from '../engine/unitOptions.js';
+import { previewAction, estimateAttack } from '../engine/preview.js';
 
 export const INTERACTION_STATE = Object.freeze({
   IDLE: 'IDLE',
@@ -36,7 +38,7 @@ const ATTACK_REASON_CN = [
   [/帷幄/, '目标有【帷幄】：它行动前不能被攻击（攻心可无视）'],
   [/险关/, '险关：该单位本回合已被攻击过'],
   [/already attacked/, '该单位本回合已攻击过'],
-  [/cannot attack after moving/, '步军移动后不能再攻击（骑兵可以先移后打）'],
+  [/cannot attack after moving/, '步兵移动后不能再攻击（骑兵可以先移后打）'],
   [/deployed/, '刚部署的单位本回合不能攻击（【突袭】除外）'],
   [/Suppressed/, '该单位被【压制】，无法攻击'],
   [/Insufficient provisions for attack \(need (\d+)\)/, m => `粮草不足，攻击需要 ${m[1]} 粮草`],
@@ -256,7 +258,9 @@ export class InteractionController {
     this._computeLegalDropZones(card);
     this._highlightLegalDropZones(true);
     cardEl.classList?.add('selected');
-    this._updateCardTargetingCurve(e.clientX ?? 0, (e.clientY ?? 0) - 120);
+    try { this._cardTargetIds = card.type === 'TACTIC' ? (getTacticTargets(this.gameState, this.localPlayerId, card) || []).map(t => t.instanceId) : null; } catch { this._cardTargetIds = null; }
+    this._touchSel = this._isTouch(e);
+    if (!this._touchSel) this._updateCardTargetingCurve(e.clientX ?? 0, (e.clientY ?? 0) - 120);
   }
 
   _computeLegalDropZones(card) {
@@ -324,16 +328,33 @@ export class InteractionController {
       const unitEl = e.target?.closest?.('.board-unit');
       const targetId = unitEl?.dataset?.instanceId;
       const pending = this.pendingTactic;
+      const armKey = `${pending.instanceId}>${targetId}`;
+      if (this._isTouch(e) && targetId && pending.targetIds.includes(targetId) && this._armedTarget !== armKey) {
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        this._previewPendingAt(e.clientX ?? 0, e.clientY ?? 0);
+        this._appendConfirmHint('再点一次确认');
+        this._armedTarget = armKey;
+        return;
+      }
+      this._armedTarget = null;
       this._endTacticTargeting();
       if (targetId && pending.targetIds.includes(targetId)) {
         if (typeof e.preventDefault === 'function') e.preventDefault();
-        this.onAction({
-          type: ACTION_TYPES.PLAY_TACTIC,
-          playerId: this.localPlayerId,
-          payload: { cardInstanceId: pending.instanceId, targetId }
-        });
+        if (pending.kind === 'DEPLOY') {
+          this.onAction({
+            type: ACTION_TYPES.DEPLOY,
+            playerId: this.localPlayerId,
+            payload: { cardInstanceId: pending.instanceId, targetZone: pending.targetZone, slotIndex: pending.slotIndex, skillTargetId: targetId }
+          });
+        } else {
+          this.onAction({
+            type: ACTION_TYPES.PLAY_TACTIC,
+            playerId: this.localPlayerId,
+            payload: { cardInstanceId: pending.instanceId, targetId }
+          });
+        }
       } else {
-        this._showToast('已取消战法');
+        this._showToast(pending.kind === 'DEPLOY' ? '已取消部署' : '已取消战法');
       }
       return;
     }
@@ -355,6 +376,16 @@ export class InteractionController {
       const targetId = this._attackTargetAt(e.clientX ?? 0, e.clientY ?? 0, e.target);
       if (targetId) {
         if (typeof e.preventDefault === 'function') e.preventDefault();
+        // 手机没有悬停：第一次点目标先显示预演，再点一次确认
+        const armKey = `${this.selectedUnit.instanceId}>${targetId}`;
+        if (this._isTouch(e) && this._armedTarget !== armKey) {
+          const tEl = targetId === 'HQ' ? globalThis.document.getElementById('slot-opp-hq') : globalThis.document.querySelector(`.board-unit[data-instance-id="${targetId}"]`);
+          this._previewFor({ type: ACTION_TYPES.ATTACK, playerId: this.localPlayerId, payload: { attackerId: this.selectedUnit.instanceId, targetId } }, tEl, tEl?.dataset?.isFaceDown === 'true');
+          this._appendConfirmHint('再点一次确认攻击');
+          this._armedTarget = armKey;
+          return;
+        }
+        this._armedTarget = null;
         this._dispatchAttack(targetId);
         return;
       }
@@ -422,9 +453,10 @@ export class InteractionController {
     this._computeUnitLegalTargets(unit, loc);
     this._highlightUnitTargets(true);
     unitEl.classList?.add('unit-acting-active');
+    this._touchSel = this._isTouch(e);
     if (!this.legalMoveTargets.length) this._hintNoTargets(unit);
     else if (!this.legalAttackTargets.length && this._isTouch(e)) this._hintNoTargets(unit);
-    this._updateTargetingCurve(e.clientX ?? 0, (e.clientY ?? 0) - 100);
+    if (!this._touchSel) this._updateTargetingCurve(e.clientX ?? 0, (e.clientY ?? 0) - 100);
   }
 
   /** 手指落点附近最近的合法攻击目标（手指比卡牌缝隙粗，放宽 22px 判定） */
@@ -487,6 +519,7 @@ export class InteractionController {
 
   /** 重绘战场后把选中/高亮状态补回去（否则高亮丢失，点目标会没反应） */
   refreshSelection() {
+    if (this.pendingTactic) this._applyTacticHighlight();
     if (this.state !== INTERACTION_STATE.TARGETING || !this.selectedUnit || !this.gameState) return;
     const loc = findUnit(this.gameState, this.selectedUnit.instanceId);
     if (!loc || loc.unit.faction !== this.localPlayerId) { this.cancelSelection(); return; }
@@ -494,6 +527,99 @@ export class InteractionController {
     this._computeUnitLegalTargets(loc.unit, loc);
     this._highlightUnitTargets(true);
     globalThis.document?.querySelector(`.board-unit[data-instance-id="${loc.unit.instanceId}"]`)?.classList.add('unit-acting-active');
+  }
+
+  // ------------------------------------------------------------
+  // 行动预演：指向目标时显示将造成的伤害、反击、剩余血量或击败
+  // ------------------------------------------------------------
+  _previewFor(action, anchorEl, faceDown = false) {
+    const doc = globalThis.document;
+    if (!doc || !anchorEl || !this.gameState) { this._hidePreview(); return; }
+    const key = JSON.stringify(action.payload) + action.type;
+    if (key !== this._previewKey) {
+      this._previewKey = key;
+      if (faceDown) this._previewData = { hidden: true };
+      else {
+        this._previewData = previewAction(this.gameState, action)
+          || (action.type === ACTION_TYPES.ATTACK ? estimateAttack(this.gameState, action.payload.attackerId, action.payload.targetId) : null);
+      }
+    }
+    const data = this._previewData;
+    if (!data) { this._hidePreview(); return; }
+    if (!this.previewEl) {
+      this.previewEl = doc.createElement('div');
+      this.previewEl.className = 'action-preview';
+      doc.body.appendChild(this.previewEl);
+    }
+    const me = this.localPlayerId;
+    const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    const lines = [];
+    if (data.hidden) lines.push('<div class="pv-line">🌫️ 潜伏单位：伤害未知</div>');
+    const targetId = action.payload?.targetId || action.payload?.skillTargetId;
+    if (!data.hidden && targetId && targetId !== 'HQ' && !(data.units || []).some(u => u.id === targetId)) {
+      const t = findUnit(this.gameState, targetId)?.unit;
+      if (t && action.type === ACTION_TYPES.ATTACK) lines.push(`<div class="pv-line pv-foe"><span class="pv-tag">敌方</span>${esc(t.name)} 无伤害（格挡）→ 剩 <b>${t.hp}</b></div>`);
+    }
+    const order = [...(data.units || [])].sort((a, b) => (b.id === targetId) - (a.id === targetId) || (a.faction === me) - (b.faction === me));
+    for (const u of order) {
+      const mine = u.faction === me;
+      const dmg = u.before - u.after;
+      const tag = mine ? (u.id === action.payload?.attackerId ? '反击' : '我方') : '敌方';
+      let res;
+      if (u.returned) res = '<b>返回手牌</b>';
+      else if (u.dead) res = `<b class="pv-kill">${mine ? '阵亡' : '击败'}</b>`;
+      else if (dmg > 0) res = `-${dmg} → 剩 <b>${u.after}</b>`;
+      else res = `+${-dmg} → <b>${u.after}</b>`;
+      lines.push(`<div class="pv-line ${mine ? 'pv-mine' : 'pv-foe'}"><span class="pv-tag">${tag}</span>${esc(u.name)} ${res}</div>`);
+    }
+    for (const h of data.hq || []) {
+      const mine = h.pid === me;
+      lines.push(`<div class="pv-line ${mine ? 'pv-mine' : 'pv-foe'}"><span class="pv-tag">${mine ? '我方' : '敌方'}</span>主城 -${h.before - h.after} → 剩 <b>${h.after}</b></div>`);
+    }
+    if (data.gameOver) lines.push(`<div class="pv-line pv-kill">${data.gameOver === me ? '🏆 直接获胜' : '⚠️ 此举会导致落败'}</div>`);
+    if (!lines.length) lines.push('<div class="pv-line">无伤害变化</div>');
+    if (data.estimate) lines.push('<div class="pv-note">估算（未计技能）</div>');
+    this.previewEl.innerHTML = lines.join('');
+    this.previewEl.style.display = 'block';
+    const r = anchorEl.getBoundingClientRect();
+    const w = this.previewEl.offsetWidth, h = this.previewEl.offsetHeight;
+    const vw = globalThis.innerWidth || 800;
+    let left = Math.min(Math.max(6, r.left + r.width / 2 - w / 2), vw - w - 6);
+    let top = r.top - h - 8;
+    if (top < 4) top = r.bottom + 8;
+    Object.assign(this.previewEl.style, { left: `${left}px`, top: `${top}px` });
+  }
+
+  _appendConfirmHint(text) {
+    if (!this.previewEl || this.previewEl.style.display === 'none') {
+      this._showToast(text);
+      return;
+    }
+    const d = globalThis.document.createElement('div');
+    d.className = 'pv-confirm';
+    d.textContent = `👆 ${text}`;
+    this.previewEl.appendChild(d);
+    // 追加一行后重新定位，避免盖住目标
+    const top = parseFloat(this.previewEl.style.top) || 0;
+    if (top > 0) this.previewEl.style.top = `${Math.max(4, top - d.offsetHeight)}px`;
+  }
+
+  _hidePreview() {
+    this._armedTarget = null;
+    this._previewKey = null;
+    if (this.previewEl) this.previewEl.style.display = 'none';
+  }
+
+  /** 指着（悬停/拖动经过）战法或进场技能目标时预演 */
+  _previewPendingAt(x, y) {
+    const pending = this.pendingTactic;
+    const el = globalThis.document?.elementFromPoint?.(x, y)?.closest?.('.board-unit');
+    const id = el?.dataset?.instanceId;
+    if (!pending || !id || !pending.targetIds.includes(id)) { this._hidePreview(); return; }
+    const action = pending.kind === 'DEPLOY'
+      ? { type: ACTION_TYPES.DEPLOY, playerId: this.localPlayerId, payload: { cardInstanceId: pending.instanceId, targetZone: pending.targetZone, slotIndex: pending.slotIndex, skillTargetId: id } }
+      : { type: ACTION_TYPES.PLAY_TACTIC, playerId: this.localPlayerId, payload: { cardInstanceId: pending.instanceId, targetId: id } };
+    this._previewFor(action, el);
   }
 
   _unitBlockReason(unit, loc, player) {
@@ -506,7 +632,7 @@ export class InteractionController {
     if (cav) {
       if (unit.status?.[STATUS_TYPES.MOVED_THIS_TURN] && unit.status?.[STATUS_TYPES.ATTACKED_THIS_TURN] && (!fen || (unit.status?.attacksThisTurn || 0) >= 2)) return '该骑兵本回合行动力已耗尽（可拖动调整站位）';
     } else if (unit.status?.[STATUS_TYPES.ACTIONS_USED] > 0 && (!fen || (unit.status?.attacksThisTurn || 0) >= 2)) {
-      return '步军每回合仅能移动或攻击一次（可拖动调整站位）';
+      return '步兵每回合仅能移动或攻击一次（可拖动调整站位）';
     }
     return '';
   }
@@ -611,33 +737,8 @@ export class InteractionController {
     const bf = this.gameState?.battlefield;
     if (!bf) return;
 
-    // 1. Legal Move Destinations
-    const actsLikeCavalry = skillActsLikeCavalry(this.gameState, unit, loc);
-    const canMove = actsLikeCavalry ? !unit.status?.[STATUS_TYPES.MOVED_THIS_TURN] : (unit.status?.[STATUS_TYPES.ACTIONS_USED] || 0) === 0;
-
-    if (canMove) {
-      if (loc.zoneType === 'SUPPORT') {
-        for (const zk of ['LEFT', 'CENTER', 'RIGHT']) {
-          const zone = bf.frontline?.[zk];
-          if (zone && (zone.occupant === null || zone.occupant === this.localPlayerId) && zone.units.length < zone.capacity) {
-            this.legalMoveTargets.push(`FRONTLINE_${zk}`);
-          }
-        }
-      } else if (loc.zoneType === 'FRONTLINE') {
-        const cur = loc.zoneKey;
-        const adj = cur === 'CENTER' ? ['LEFT', 'RIGHT'] : ['CENTER'];
-        for (const zk of adj) {
-          const zone = bf.frontline?.[zk];
-          if (zone && (zone.occupant === null || zone.occupant === this.localPlayerId) && zone.units.length < zone.capacity) {
-            this.legalMoveTargets.push(`FRONTLINE_${zk}`);
-          }
-        }
-        // 游击 (Guerilla) retreat
-        if (hasKeyword(unit, KEYWORDS.YOU_JI) && (bf.support?.[this.localPlayerId]?.slots?.length || 0) < 4) {
-          this.legalMoveTargets.push('SUPPORT');
-        }
-      }
-    }
+    // 1. Legal Move Destinations（与规则引擎一致：粮草、刚部署、白毦军换位等）
+    this.legalMoveTargets = getUnitMoveZones(this.gameState, unit, loc);
 
     // 2. Legal Attack Targets via Authoritative combat.getValidTargets
     const hasDoubleStrike = hasKeyword(unit, KEYWORDS.FEN_ZHAN);
@@ -730,6 +831,9 @@ export class InteractionController {
       }
     }
     if (this.repositionOnly) return;
+    if (this.pendingTactic) { this._previewPendingAt(e.clientX ?? 0, e.clientY ?? 0); return; }
+    // 手机：点按只选中，不出箭头；真正拖动时才画箭头
+    if (e.pointerType && e.pointerType !== 'mouse' && !this.isDragging) return;
     if (this.state === INTERACTION_STATE.CARD_SELECTED && this.selectedCard) this._updateCardTargetingCurve(e.clientX ?? 0, e.clientY ?? 0);
     else if (this.state === INTERACTION_STATE.TARGETING && this.selectedUnit) this._updateTargetingCurve(e.clientX ?? 0, e.clientY ?? 0);
   }
@@ -781,6 +885,17 @@ export class InteractionController {
     const moveTarget = elemBelow?.closest?.(isHandCard ? '.legal-drop-highlight' : '.legal-move-target');
 
     this.targetingCurve.classList?.remove('curve-attack', 'curve-move', 'curve-neutral');
+    if (!isHandCard && attackTarget && this.selectedUnit) {
+      const tEl = attackTarget === 'HQ' ? doc.getElementById('slot-opp-hq') : doc.querySelector(`.board-unit[data-instance-id="${attackTarget}"]`);
+      const fd = attackTarget !== 'HQ' && tEl?.dataset?.isFaceDown === 'true';
+      this._previewFor({ type: ACTION_TYPES.ATTACK, playerId: this.localPlayerId, payload: { attackerId: this.selectedUnit.instanceId, targetId: attackTarget } }, tEl, fd);
+    } else if (isHandCard && this.selectedCard?.cardDef?.type === 'TACTIC') {
+      const uEl = elemBelow?.closest?.('.board-unit');
+      const ids = this._cardTargetIds;
+      if (uEl && ids?.includes(uEl.dataset.instanceId)) {
+        this._previewFor({ type: ACTION_TYPES.PLAY_TACTIC, playerId: this.localPlayerId, payload: { cardInstanceId: this.selectedCard.instanceId, targetId: uEl.dataset.instanceId } }, uEl);
+      } else this._hidePreview();
+    } else this._hidePreview();
     if (attackTarget) {
       this.targetingCurve.classList?.add('curve-attack');
       this.targetingCurve.setAttribute('marker-end', 'url(#arrowhead-attack)');
@@ -836,7 +951,9 @@ export class InteractionController {
       if (this.isDragging) {
         const dropZone = this._resolveDropZone(elemBelow);
         if (dropZone && this.legalDropZones.has(dropZone)) {
+          this._dragged = true;
           this._dispatchDeploy(this.selectedCard.instanceId, dropZone);
+          this._dragged = false;
         } else {
           this.cancelSelection();
         }
@@ -870,11 +987,13 @@ export class InteractionController {
         if (sel && selfEl?.dataset?.instanceId === sel.instanceId) {
           this.isDragging = false;
           globalThis.document?.body?.classList.remove('is-dragging');
+          if (e.pointerType && e.pointerType !== 'mouse') this._clearTargetingCurve();
           return;
         }
         if (this._explainIllegalTarget(elemBelow)) {
           this.isDragging = false;
           globalThis.document?.body?.classList.remove('is-dragging');
+          if (e.pointerType && e.pointerType !== 'mouse') this._clearTargetingCurve();
           return;
         }
         this.cancelSelection();
@@ -917,7 +1036,15 @@ export class InteractionController {
           this._showToast(`【${card.name}】当前没有合法目标`);
           return;
         }
-        this._beginTacticTargeting(card, targets.map(t => t.instanceId));
+        const ids = targets.map(t => t.instanceId);
+        // 直接把战法拖到某个合法目标上：立即对它释放
+        const p = this._lastPointer;
+        const dropEl = p && this._dragged ? globalThis.document?.elementFromPoint?.(p.x, p.y)?.closest?.('.board-unit') : null;
+        if (dropEl && ids.includes(dropEl.dataset.instanceId)) {
+          this.onAction({ type: ACTION_TYPES.PLAY_TACTIC, playerId: this.localPlayerId, payload: { cardInstanceId, targetId: dropEl.dataset.instanceId } });
+          return;
+        }
+        this._beginTacticTargeting(card, ids);
         return;
       }
       this.onAction({
@@ -933,6 +1060,13 @@ export class InteractionController {
       });
     } else {
       const slotIndex = this._lastPointer ? this._insertIndex(targetZone, this._lastPointer.x) : undefined;
+      const skill = card && this.gameState ? getDeployTargets(this.gameState, this.localPlayerId, card) : null;
+      if (skill && skill.targets.length) {
+        // 进场技能需要选目标：先选目标，再一起部署
+        this.cancelSelection();
+        this._beginTacticTargeting(card, skill.targets.map(t => t.instanceId), { kind: 'DEPLOY', targetZone, slotIndex, prompt: skill.prompt });
+        return;
+      }
       this.onAction({
         type: ACTION_TYPES.DEPLOY,
         playerId: this.localPlayerId,
@@ -942,19 +1076,27 @@ export class InteractionController {
     this.cancelSelection();
   }
 
-  _beginTacticTargeting(card, targetIds) {
+  _beginTacticTargeting(card, targetIds, extra = {}) {
     const doc = typeof document !== 'undefined' ? document : globalThis.document;
-    this.pendingTactic = { instanceId: card.instanceId, name: card.name, targetIds };
-    doc?.body?.classList?.add('tactic-targeting');
-    for (const id of targetIds) {
-      doc?.querySelectorAll?.(`.board-unit[data-instance-id="${id}"]`).forEach(el => el.classList.add('legal-tactic-target'));
+    this.pendingTactic = { instanceId: card.instanceId, name: card.name, targetIds, card, kind: 'TACTIC', ...extra };
+    this._applyTacticHighlight();
+    doc?.querySelector?.(`.card-hand[data-instance-id="${card.instanceId}"]`)?.classList.add('selected');
+    this._showToast(extra.prompt ? `【${card.name}】${extra.prompt}（点空白处取消）` : `选择【${card.name}】的目标（点击空白处取消）`);
+  }
+
+  _applyTacticHighlight() {
+    const doc = globalThis.document;
+    if (!this.pendingTactic || !doc) return;
+    doc.body?.classList?.add('tactic-targeting');
+    for (const id of this.pendingTactic.targetIds) {
+      doc.querySelectorAll?.(`.board-unit[data-instance-id="${id}"]`).forEach(el => el.classList.add('legal-tactic-target'));
     }
-    this._showToast(`选择【${card.name}】的目标（点击空白处取消）`);
   }
 
   _endTacticTargeting() {
     const doc = typeof document !== 'undefined' ? document : globalThis.document;
     this.pendingTactic = null;
+    this._hidePreview();
     doc?.body?.classList?.remove('tactic-targeting');
     doc?.querySelectorAll?.('.legal-tactic-target').forEach(el => el.classList.remove('legal-tactic-target'));
   }
@@ -1109,6 +1251,7 @@ export class InteractionController {
   // ==========================================
   cancelSelection() {
     globalThis.document?.body?.classList.remove('is-dragging');
+    this._hidePreview?.();
     this.selectedCard = null;
     this.selectedUnit = null;
     this.legalDropZones.clear();
