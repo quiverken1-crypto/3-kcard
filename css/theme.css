@@ -427,3 +427,4 @@ body.tactic-targeting .board-unit:not(.legal-tactic-target) { opacity: .45; filt
 .inspector-card-preview .stat-disc { width: 32px !important; height: 32px !important; font-size: 16px !important; }
 .inspector-traits { margin-bottom: 6px; }
 .inspector-traits .trait-tag { font-size: 12px; padding: 3px 6px; }
+.card-hand .card-footer-stats, .card-hand .card-stats-footer { border-top: none !important; }
