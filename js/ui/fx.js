@@ -239,7 +239,7 @@ export function showTriggerHint(text, durationMs = 3200) {
   if (!_stackEl || !_stackEl.isConnected) {
     _stackEl = doc.createElement('div');
     _stackEl.className = 'toast-stack';
-    doc.body.appendChild(_stackEl);
+    (doc.getElementById('game-app') || doc.body).appendChild(_stackEl);
   }
   const item = doc.createElement('div');
   item.className = 'toast-item';

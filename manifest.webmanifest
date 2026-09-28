@@ -1,0 +1,14 @@
+{
+  "name": "三国 KARDS",
+  "short_name": "三国KARDS",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#120e0a",
+  "theme_color": "#120e0a",
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

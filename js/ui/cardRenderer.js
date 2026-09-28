@@ -63,8 +63,8 @@ export function getCardArtUrl(card) {
   const id = String(card?.cardId || '').replace(/_[0-9]+$/, '');
   const m = id.match(/^(wei|shu|wu|lb)_([a-z_]+)$/);
   if (!m || NO_ART.has(id)) return '';
-  if (COMMON_ART.has(m[2])) return `assets/cards/common_${m[2]}.jpg`;
-  return `assets/cards/${id}.jpg`;
+  if (COMMON_ART.has(m[2])) return `assets/cards/common_${m[2]}.webp`;
+  return `assets/cards/${id}.webp`;
 }
 
 function artStyle(card) {
@@ -484,7 +484,7 @@ function attachInspectorEvents(el, card) {
       CardInspector.show(card, el.getBoundingClientRect());
     }, 220);
   });
-  el.addEventListener('pointerleave', hide);
+  el.addEventListener('pointerleave', e => { if (!e.pointerType || e.pointerType === 'mouse') hide(); });
   el.addEventListener('pointerdown', hide);
 
 }
@@ -502,7 +502,7 @@ export class CardInspector {
 
     this.tooltipEl = doc.createElement('div');
     this.tooltipEl.className = 'card-inspector-tooltip hidden';
-    doc.body.appendChild(this.tooltipEl);
+    (doc.getElementById('game-app') || doc.body).appendChild(this.tooltipEl);
   }
 
   static show(card, anchorRect) {

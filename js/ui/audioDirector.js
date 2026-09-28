@@ -1,18 +1,27 @@
 const BASE = 'assets/audio/';
 const SOUND_FILES = Object.freeze({
-  sword: ['melee-sword-1.ogg', 'melee-sword-2.ogg', 'melee-sword-3.ogg'],
-  fireball: ['ranged-fireball.ogg', 'fire-spell-1.ogg', 'fire-spell-2.ogg', 'fire-spell-3.ogg'],
-  footstep: ['infantry-step-sand-1.ogg', 'infantry-step-sand-2.ogg', 'infantry-step-stone-1.ogg'],
-  sand: ['infantry-step-sand-1.ogg', 'infantry-step-sand-2.ogg'],
-  stone: ['infantry-step-stone-1.ogg'],
+  sword: ['melee-sword-1.mp3', 'melee-sword-2.mp3', 'melee-sword-3.mp3'],
+  fireball: ['ranged-fireball.mp3', 'fire-spell-1.mp3', 'fire-spell-2.mp3', 'fire-spell-3.mp3'],
+  footstep: ['infantry-step-sand-1.mp3', 'infantry-step-sand-2.mp3', 'infantry-step-stone-1.mp3'],
+  sand: ['infantry-step-sand-1.mp3', 'infantry-step-sand-2.mp3'],
+  stone: ['infantry-step-stone-1.mp3'],
   cavalry: ['cavalry-gallop.mp3'],
-  water: ['naval-entry.ogg', 'naval-swim.ogg'],
-  splash: ['naval-entry.ogg'],
-  spell: ['fire-spell-2.ogg', 'fire-spell-3.ogg']
+  water: ['naval-entry.mp3', 'naval-swim.mp3'],
+  splash: ['naval-entry.mp3'],
+  spell: ['fire-spell-2.mp3', 'fire-spell-3.mp3']
 });
 // 没有素材文件的音效用 WebAudio 合成
 const SYNTH_CUES = new Set(['grass', 'arrow', 'boulder', 'orb', 'hit', 'hqhit', 'chime', 'death', 'banner']);
 const MUSIC_FILES = Object.freeze({ lobby: 'bgm-connection-changan.m4a', match: 'bgm-match-sanguosha-theme.m4a' });
+
+// 优先 AAC（体积小），不支持的浏览器改用 MP3
+function musicFile(scene) {
+  const f = MUSIC_FILES[scene];
+  try {
+    const ok = typeof document !== 'undefined' && document.createElement('audio').canPlayType('audio/mp4; codecs="mp4a.40.2"');
+    return ok ? f : f.replace(/\.m4a$/, '.mp3');
+  } catch { return f; }
+}
 
 /** 地形 → 脚步音：水域入水、平原/林地草地、山地石地、支援阵线沙地 */
 const TERRAIN_STEP = Object.freeze({ WATER: 'splash', PLAIN: 'grass', MOUNTAIN: 'stone', FOREST: 'grass', PASS: 'stone', LAND: 'sand' });
@@ -79,26 +88,100 @@ export class AudioDirector {
     } catch { /* Private browsing may disable storage. */ }
   }
 
+  _track(scene) {
+    this._tracks = this._tracks || {};
+    const src = this.localMusic[scene] || this.musicBlobs?.[scene] || BASE + musicFile(scene);
+    let a = this._tracks[scene];
+    if (!a || (a._src !== src && a.paused)) {
+      a = new Audio(src);
+      a._src = src;
+      a.loop = true;
+      a.preload = src.startsWith('blob:') ? 'auto' : 'none'; // 网络版等点击后再边下边播，不和卡图抢带宽
+      this._tracks[scene] = a;
+    }
+    return a;
+  }
+
   setScene(scene) {
     if (scene === this.scene) return;
     this.scene = scene;
     this.music?.pause();
     this.music = null;
     if (!MUSIC_FILES[scene] || typeof Audio === 'undefined') return;
-    const music = new Audio(this.localMusic[scene] || BASE + MUSIC_FILES[scene]);
-    music.loop = true;
-    music.preload = 'auto';
+    const music = this._track(scene);
+    try { music.currentTime = 0; } catch { /* 未加载时忽略 */ }
     music.volume = this.muted ? 0 : this.volume * 0.36;
     this.music = music;
     if (!this.muted) this.unlock();
   }
 
-  unlock() {
-    if (this.ctx?.state === 'suspended') this.ctx.resume?.();
-    if (this.muted || !this.music) return;
-    const promise = this.music.play();
-    promise?.catch?.(() => {}); // Browser autoplay waits for a user gesture.
+  /** 浏览器要求用户先点一下才能出声：在任意点击/触摸/按键时解锁，直到真正播放成功 */
+  armUnlock(doc = globalThis.document) {
+    if (!doc || this._armed) return;
+    this._armed = true;
+    const handler = () => {
+      this.unlock();
+      if ((this.muted || (this.music && !this.music.paused)) && this.ctx?.state === 'running') {
+        for (const t of events) doc.removeEventListener(t, handler, true);
+      }
+    };
+    const events = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'];
+    for (const t of events) doc.addEventListener(t, handler, true);
   }
+
+  unlock() {
+    const ctx = this._ctx();
+    if (ctx?.state === 'suspended') ctx.resume?.();
+    this._preloadSfx();
+    if (this.muted || !this.music) return;
+    if (!this.music.paused) return;
+    const promise = this.music.play();
+    promise?.catch?.(() => {}); // 等待下一次用户操作再试
+  }
+
+  _loadSfx(f) {
+    this.buffers = this.buffers || {};
+    this._sfxPromises = this._sfxPromises || {};
+    if (this._sfxPromises[f]) return this._sfxPromises[f];
+    const ctx = this._ctx();
+    if (!ctx || typeof fetch === 'undefined') return Promise.resolve();
+    this._sfxPromises[f] = fetch(BASE + f).then(r => r.arrayBuffer())
+      .then(buf => new Promise((res, rej) => { const p = ctx.decodeAudioData(buf, res, rej); p?.then?.(res, rej); }))
+      .then(decoded => { this.buffers[f] = decoded; })
+      .catch(() => { delete this._sfxPromises[f]; });
+    return this._sfxPromises[f];
+  }
+
+  /** 音效解码进内存（WebAudio），首次之后零延迟播放；手机上也不用每次重新下载 */
+  _preloadSfx() {
+    if (this._sfxLoading) return;
+    this._sfxLoading = true;
+    for (const f of new Set(Object.values(SOUND_FILES).flat())) this._loadSfx(f);
+  }
+
+  /** 供加载页使用的预加载任务：只含体积小的音效 */
+  preloadTasks() {
+    return [...new Set(Object.values(SOUND_FILES).flat())].map(f => ({ weight: 1, label: '音效', run: () => this._loadSfx(f) }));
+  }
+
+  /** 背景音乐在后台依次下载（不阻塞进入游戏）：先主页乐、再对局乐；下完后切换场景不再联网 */
+  loadMusicInBackground() {
+    if (this._musicLoading || typeof fetch === 'undefined' || !URL.createObjectURL) return;
+    this._musicLoading = true;
+    this.musicBlobs = this.musicBlobs || {};
+    const order = [...Object.keys(MUSIC_FILES)].sort((a, b) => (a === this.scene ? -1 : b === this.scene ? 1 : 0));
+    (async () => {
+      for (const scene of order) {
+        try {
+          const r = await fetch(BASE + musicFile(scene));
+          if (!r.ok) continue;
+          this.musicBlobs[scene] = URL.createObjectURL(await r.blob());
+          if (this.scene === scene && this.music?.paused) { this.scene = null; this.setScene(scene); }
+        } catch { /* 网络失败时仍按原方式边下边播 */ }
+      }
+    })();
+  }
+
 
   setLocalTrack(scene, file) {
     if (!MUSIC_FILES[scene] || !file || !(file.type?.startsWith('audio/') || /\.(mp3|ogg|wav|m4a|flac)$/i.test(file.name))) throw new Error('请选择有效的音频文件');
@@ -200,7 +283,22 @@ export class AudioDirector {
     const files = SOUND_FILES[cue];
     const index = this.nextVariant[cue] || 0;
     this.nextVariant[cue] = (index + 1) % files.length;
-    const sound = new Audio(BASE + files[index]);
+    const file = files[index];
+    const buf = this.buffers?.[file];
+    const ctx = this.ctx;
+    if (buf && ctx) {
+      try {
+        if (ctx.state === 'suspended') ctx.resume?.();
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const g = ctx.createGain();
+        g.gain.value = this.volume * 0.75;
+        src.connect(g); g.connect(ctx.destination);
+        src.start();
+        return;
+      } catch { /* 回落 */ }
+    }
+    const sound = new Audio(BASE + file);
     sound.volume = this.volume * 0.75;
     sound.play()?.catch?.(() => {});
   }

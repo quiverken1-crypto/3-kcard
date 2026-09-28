@@ -63,7 +63,6 @@ body { overflow: hidden; }
   min-height: 0 !important;
   max-height: none !important;
   margin: 0 auto;
-  zoom: var(--board-scale, 1);
 }
 .battlefield-line { flex: 0 0 auto !important; }
 
@@ -706,3 +705,18 @@ body.is-dragging .board-unit { transition: none; }
 .net-mode-tab { padding: 9px 6px; border: 0; border-radius: 8px; background: transparent; color: #cdbf9f; font-size: 14px; cursor: pointer; }
 .net-mode-tab.active { background: linear-gradient(180deg, #8e3a22, #5e2314); color: #fff3d6; box-shadow: 0 0 0 1px rgba(240,207,106,.4); }
 .net-mode-tab:disabled:not(.active) { opacity: .35; cursor: default; }
+
+/* ===== 资源加载页 ===== */
+.boot-loader { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 40%, #2a2016, #0e0b08 75%); transition: opacity .45s; }
+.boot-loader.done { opacity: 0; pointer-events: none; }
+.boot-panel { width: min(360px, 84vw); text-align: center; color: #f3e2b5; }
+.boot-seal { margin: 0 auto 10px; }
+.boot-title { font-family: var(--font-serif-calligraphy); font-size: 26px; letter-spacing: 6px; margin-bottom: 22px; color: #f0cf6a; }
+.boot-bar { height: 10px; border-radius: 6px; background: rgba(255,255,255,.08); border: 1px solid rgba(217,179,106,.35); overflow: hidden; }
+.boot-bar-fill { height: 100%; width: 0; background: linear-gradient(90deg, #8e3a22, #e8b04a); transition: width .2s; }
+.boot-info { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; opacity: .8; }
+.boot-skip { margin-top: 18px; padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(217,179,106,.45); background: rgba(0,0,0,.35); color: #e8d3a2; font-size: 13px; cursor: pointer; }
+.boot-skip.hidden { display: none; }
+.bg-load-chip { position: fixed; left: 10px; bottom: 10px; z-index: 950; padding: 4px 10px; border-radius: 12px; font-size: 11px; color: #e8d3a2; background: rgba(0,0,0,.6); border: 1px solid rgba(217,179,106,.3); pointer-events: none; }
+.boot-tip { margin-top: 14px; font-size: 11px; opacity: .55; line-height: 1.6; }

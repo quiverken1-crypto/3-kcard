@@ -320,6 +320,36 @@ export function renderHandFan(container, playerData, options = {}) {
   });
 
   // A readable row gives every card its own full-size pointer target.
+  fitHandStrip(container);
+}
+
+/**
+ * 手机：手牌放不下时才叠压，且只叠压刚好需要的量（按实际渲染尺寸计算，兼容 iOS 的 zoom 差异）。
+ */
+export function fitHandStrip(container = document.getElementById('hand-container')) {
+  if (!container) return;
+  const cards = [...container.querySelectorAll('.card-hand')];
+  cards.forEach(c => { c.style.marginLeft = ''; });
+  if (!document.body.classList.contains('m-land') || cards.length < 2) return;
+  const tray = container.parentElement || container;
+  const avail = tray.clientWidth - 12;
+  const first = cards[0].getBoundingClientRect();
+  const second = cards[1].getBoundingClientRect();
+  const step = second.left - first.left;          // 当前相邻两张牌的间距（屏幕像素）
+  const total = step * (cards.length - 1) + first.width;
+  if (!(total > avail) || step <= 0) return;
+  const wantStep = Math.max(first.width * 0.28, (avail - first.width) / (cards.length - 1));
+  const reduce = step - wantStep;                  // 每张需要多叠的屏幕像素
+  const zf = first.width / (cards[0].offsetWidth || first.width) || 1; // zoom 系数
+  const apply = (px) => cards.slice(1).forEach(c => { c.style.marginLeft = `${px}px`; });
+  let m = -reduce / zf;
+  apply(m);
+  // 校验一次：不同浏览器对 zoom 下 margin 的换算不同
+  const realStep = cards[1].getBoundingClientRect().left - cards[0].getBoundingClientRect().left;
+  if (Math.abs(realStep - wantStep) > 1) {
+    const perUnit = (step - realStep) / -m;       // 每 1px margin 实际移动多少屏幕像素
+    if (perUnit > 0) { m = -reduce / perUnit; apply(m); }
+  }
 }
 
 /**

@@ -17,9 +17,9 @@ import { startTurn } from './engine/state.js';
 import { HeuristicBot, executeBotTurnAsync } from './bot/heuristicBot.js';
 import { HostSyncManager, ClientSyncManager } from './network/syncProtocol.js';
 
-import { InteractionController } from './ui/interaction.js';
+import { InteractionController, explainAttackError } from './ui/interaction.js';
 import { NetworkModalController } from './ui/networkModal.js';
-import { renderBoard, renderResourceHUD } from './ui/boardRenderer.js';
+import { renderBoard, renderResourceHUD, fitHandStrip } from './ui/boardRenderer.js';
 import { CardInspector, renderHandCard, escapeHtml, getCardDescription } from './ui/cardRenderer.js';
 import { CombatLogController } from './ui/combatLog.js';
 import FX from './ui/fx.js';
@@ -31,6 +31,7 @@ import { TurnClock } from './ui/turnClock.js';
 import { HQ_CARDS } from './data/terrains.js';
 import { KINGDOMS } from './data/cardDB.js';
 import { setSeatKingdoms, seatArmy } from './ui/seats.js';
+import { preloadAssets } from './ui/preloader.js';
 
 const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb'];
 const randomOther = k => { const o = KINGDOM_KEYS.filter(x => x !== k); return o[Math.floor(Math.random() * o.length)]; };
@@ -127,7 +128,9 @@ export class AppCoordinator {
     this.cardEditor = new CardEditor(this.cardPack, pack => { this.cardPack = pack; });
     this.audio = new AudioDirector();
     this.audio.setScene('lobby');
-    doc.addEventListener('pointerdown', () => this.audio.unlock(), { once: true });
+    this.audio.armUnlock(doc);
+    this._runPreloader(doc);
+    this._bindTouchControls(doc);
 
     // 5. Wire Drawer & Global Controls
     this._bindGlobalControls();
@@ -153,6 +156,103 @@ export class AppCoordinator {
     } catch { /* ignore */ }
   }
 
+  /** 手机：取消按钮、全屏、竖屏提示 */
+  _bindTouchControls(doc) {
+    const on = (id, fn) => doc.getElementById(id)?.addEventListener('click', fn);
+    on('touch-cancel', (e) => { e.stopPropagation(); this.interaction?.cancelAll?.(); });
+    const isIOS = /iPhone|iPad|iPod/.test(globalThis.navigator?.userAgent || '') || (globalThis.navigator?.platform === 'MacIntel' && globalThis.navigator?.maxTouchPoints > 1);
+    const standalone = globalThis.matchMedia?.('(display-mode: standalone), (display-mode: fullscreen)')?.matches || globalThis.navigator?.standalone;
+    const goFull = async () => {
+      const el = doc.documentElement;
+      const canFs = el.requestFullscreen || el.webkitRequestFullscreen;
+      // iPhone 的 Safari 不支持网页全屏：引导“添加到主屏幕”
+      if (!canFs || (isIOS && !doc.fullscreenElement)) {
+        if (!canFs || isIOS) { doc.getElementById('ios-install')?.classList.remove('hidden'); return; }
+      }
+      try {
+        if (!doc.fullscreenElement) await (el.requestFullscreen?.({ navigationUI: 'hide' }) || el.webkitRequestFullscreen?.());
+        else await doc.exitFullscreen?.();
+      } catch { doc.getElementById('ios-install')?.classList.remove('hidden'); }
+      setTimeout(() => this._fitBoard(), 300);
+    };
+    on('btn-fullscreen', goFull);
+    on('home-btn-install', goFull);
+    on('ios-install-close', () => doc.getElementById('ios-install')?.classList.add('hidden'));
+    if (standalone) doc.body.classList.add('is-standalone');
+    // 手机布局：横屏矮屏 → m-land；竖屏手机 → m-land + m-port
+    // 用实际可见高度（扣掉浏览器地址栏/标签栏）排版
+    const applyLayout = () => {
+      const vv = globalThis.visualViewport;
+      const w = Math.round(vv?.width || globalThis.innerWidth), h = Math.round(vv?.height || globalThis.innerHeight);
+      doc.documentElement.style.setProperty('--app-h', `${h}px`);
+      const port = h > w && w <= 600;
+      const land = (w >= h && h <= 540) || port;
+      doc.body.classList.toggle('m-land', land);
+      doc.body.classList.toggle('m-port', port);
+      setTimeout(() => { this._fitBoard(); fitHandStrip(); }, 50);
+    };
+    this._applyLayout = applyLayout;
+    globalThis.addEventListener?.('resize', applyLayout);
+    globalThis.visualViewport?.addEventListener?.('resize', applyLayout);
+    applyLayout();
+    // 离线缓存：第二次打开秒开
+    try {
+      const loc = globalThis.location;
+      if (globalThis.navigator?.serviceWorker && (loc.protocol === 'https:' || loc.hostname === 'localhost')) {
+        globalThis.navigator.serviceWorker.register('sw.js').catch(() => {});
+      }
+    } catch { /* ignore */ }
+    // 选中/瞄准时显示“取消”按钮
+    setInterval(() => {
+      const busy = Boolean(this.interaction?._isBusySelecting?.()) && !doc.body.classList.contains('at-home');
+      doc.body.classList.toggle('is-selecting', busy);
+    }, 150);
+    const refit = () => { for (const ms of [120, 400, 900]) setTimeout(() => { this._applyLayout?.(); this._fitBoard(); }, ms); };
+    globalThis.addEventListener?.('orientationchange', refit);
+    doc.addEventListener('fullscreenchange', refit);
+  }
+
+  /** 启动时预加载全部卡图/音效/音乐，显示进度；可跳过，剩余在后台继续 */
+  _runPreloader(doc) {
+    const box = doc.getElementById('boot-loader');
+    if (!box) return;
+    const fill = doc.getElementById('boot-bar-fill');
+    const label = doc.getElementById('boot-label');
+    const pct = doc.getElementById('boot-pct');
+    const skip = doc.getElementById('boot-skip');
+    let chip = null;
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      box.classList.add('done');
+      setTimeout(() => box.remove(), 600);
+    };
+    setTimeout(() => skip?.classList.remove('hidden'), 2500);
+    skip?.addEventListener('click', () => {
+      close();
+      this.audio?.loadMusicInBackground?.();
+      chip = doc.createElement('div');
+      chip.className = 'bg-load-chip';
+      doc.body.appendChild(chip);
+    });
+    preloadAssets({
+      audio: this.audio,
+      onProgress: ({ ratio, label: l }) => {
+        const p = Math.round(ratio * 100);
+        if (fill) fill.style.width = `${p}%`;
+        if (pct) pct.textContent = `${p}%`;
+        if (label) label.textContent = ratio >= 1 ? '加载完成' : `正在加载${l}…`;
+        box.setAttribute('aria-valuenow', String(p));
+        if (chip) chip.textContent = `资源加载 ${p}%`;
+      }
+    }).then(() => {
+      this.audio?.loadMusicInBackground?.();
+      if (chip) { chip.textContent = '资源已就绪'; setTimeout(() => chip.remove(), 1500); }
+      setTimeout(close, 250);
+    });
+  }
+
   _bindHomeScreen() {
     const doc = typeof document !== 'undefined' ? document : globalThis.document;
     if (!doc) return;
@@ -170,7 +270,7 @@ export class AppCoordinator {
       for (const id of ids) {
         const tile = doc.createElement('div');
         tile.className = `home-tile ${id.startsWith('wei') ? 'tile-wei' : 'tile-shu'}`;
-        tile.style.backgroundImage = `url('assets/cards/${id}.jpg')`;
+        tile.style.backgroundImage = `url('assets/cards/${id}.webp')`;
         gallery.appendChild(tile);
       }
     }
@@ -258,6 +358,10 @@ export class AppCoordinator {
     fit();
   }
 
+  /**
+   * 战场按可用区域等比缩放（transform 实现，各浏览器表现一致，包括 iOS Safari）；
+   * 缩放后再用实际尺寸校验一遍，保证不会被上下/左右裁掉。
+   */
   _fitBoard() {
     const doc = typeof document !== 'undefined' ? document : globalThis.document;
     const viewport = doc?.getElementById('battlefield-main');
@@ -266,13 +370,27 @@ export class AppCoordinator {
     const cs = getComputedStyle(viewport);
     const availW = viewport.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     const availH = viewport.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-    board.style.setProperty('--board-scale', '1');
+    Object.assign(board.style, { transform: 'none', marginLeft: '0px', marginTop: '0px', marginRight: '0px', marginBottom: '0px', transformOrigin: 'top left' });
     const naturalW = board.offsetWidth;
     const naturalH = board.offsetHeight;
     if (!naturalW || !naturalH || availW <= 0 || availH <= 0) return;
-    const scale = Math.max(0.4, Math.min(availW / naturalW, availH / naturalH, 1.8));
-    board.style.setProperty('--board-scale', scale.toFixed(4));
+    let scale = Math.max(0.25, Math.min(availW / naturalW, availH / naturalH, 1.8));
+    const apply = () => Object.assign(board.style, {
+      transform: `scale(${scale.toFixed(4)})`,
+      marginRight: `${(naturalW * (scale - 1)).toFixed(1)}px`,
+      marginBottom: `${(naturalH * (scale - 1)).toFixed(1)}px`
+    });
+    apply();
+    for (let i = 0; i < 3; i++) {
+      const r = board.getBoundingClientRect();
+      const over = Math.max(r.width / availW, r.height / availH);
+      if (!(over > 1.005)) break;
+      scale = Math.max(0.25, scale / over * 0.995);
+      apply();
+    }
+    this._boardScale = scale;
   }
+
 
   _bindGlobalControls() {
     const doc = typeof document !== 'undefined' ? document : globalThis.document;
@@ -787,7 +905,7 @@ export class AppCoordinator {
       });
 
       this.clientSync.on('actionRejected', ({ reason }) => {
-        FX.showTriggerHint(`⚠️ 行动被主机拒绝：${escapeHtml(reason)}`);
+        FX.showTriggerHint(`⚠️ 行动被主机拒绝：${escapeHtml(explainAttackError(reason))}`);
         this.render();
       });
 
@@ -866,7 +984,7 @@ export class AppCoordinator {
         this._syncTurnClock(true);
         return result;
       } catch (err) {
-        FX.showTriggerHint(`⚠️ 行动失败：${escapeHtml(err.message)}`);
+        FX.showTriggerHint(`⚠️ 行动失败：${escapeHtml(explainAttackError(err.message))}`);
         this.render();
       }
     } else if (this.mode === APP_MODE.P2P_HOST) {
@@ -914,7 +1032,8 @@ export class AppCoordinator {
     const label = doc?.getElementById('turn-timer-text');
     const fill = doc?.getElementById('turn-timer-fill');
     const seconds = this.turnClock.remainingSeconds();
-    if (label) label.textContent = this.turnClock.deadline ? `00:${String(seconds).padStart(2, '0')}` : '--:--';
+    const compact = doc?.body?.classList.contains('m-port');
+    if (label) label.textContent = this.turnClock.deadline ? (compact ? `${seconds}s` : `00:${String(seconds).padStart(2, '0')}`) : (compact ? '--' : '--:--');
     if (fill) fill.style.width = `${(seconds / 30) * 100}%`;
     wrapper?.classList.toggle('warning', this.turnClock.deadline && seconds <= 10);
   }
@@ -1055,6 +1174,7 @@ export class AppCoordinator {
     // 3. Update Interaction Controller Context
     if (this.interaction) {
       this.interaction.setContext(state, this.localPlayerId);
+      this.interaction.refreshSelection?.();
     }
   }
 

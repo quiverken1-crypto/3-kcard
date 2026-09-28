@@ -11,9 +11,10 @@
  */
 
 import { ACTION_TYPES, KEYWORDS, STATUS_TYPES, hasKeyword } from '../engine/constants.js';
-import { getValidTargets } from '../engine/combat.js';
+import { getValidTargets, validateAttack } from '../engine/combat.js';
 import { findUnit, getAllUnits } from '../engine/state.js';
 import { getTacticTargets, getActionCost, actsLikeCavalry as skillActsLikeCavalry } from '../engine/cardSkills.js';
+import { CardInspector } from './cardRenderer.js';
 
 export const INTERACTION_STATE = Object.freeze({
   IDLE: 'IDLE',
@@ -22,6 +23,33 @@ export const INTERACTION_STATE = Object.freeze({
   ACTION_CONFIRMED: 'ACTION_CONFIRMED',
   DISABLED: 'DISABLED'
 });
+
+/** 把引擎的英文校验信息翻译成玩家看得懂的原因 */
+const ATTACK_REASON_CN = [
+  [/protected by adjacent 守护/, '目标旁边有【守护】单位，必须先打掉守护（谋士、攻心可无视）'],
+  [/HQ while protected by 守护/, '敌方支援阵线第1个单位有【守护】，挡住了主城，需先击败它（谋士、攻心可无视）'],
+  [/HQ while enemy frontline zone is occupied/, '你所在前线区域对面有敌军，需先清掉该区域敌军才能打主城'],
+  [/support line cannot attack enemy HQ/, '支援阵线的军事单位不能直接打主城，需先移动到前线（谋士、抛射器械除外）'],
+  [/support line cannot attack opposing support/, '支援阵线的军事单位打不到敌方支援阵线，需先移动到前线'],
+  [/只能攻击相邻前线区域/, '射程不够：前线只能打本区域和左右相邻区域（左↔中↔右，左右两端不相邻）'],
+  [/Strategist must prioritize/, '谋士须优先攻击该区域的敌方谋士'],
+  [/帷幄/, '目标有【帷幄】：它行动前不能被攻击（攻心可无视）'],
+  [/险关/, '险关：该单位本回合已被攻击过'],
+  [/already attacked/, '该单位本回合已攻击过'],
+  [/cannot attack after moving/, '步军移动后不能再攻击（骑兵可以先移后打）'],
+  [/deployed/, '刚部署的单位本回合不能攻击（【突袭】除外）'],
+  [/Suppressed/, '该单位被【压制】，无法攻击'],
+  [/Insufficient provisions for attack \(need (\d+)\)/, m => `粮草不足，攻击需要 ${m[1]} 粮草`],
+  [/Cannot attack friendly/, '不能攻击己方单位'],
+  [/鲁肃·结盟/, '鲁肃·结盟：战力大于3的单位无法攻击']
+];
+export function explainAttackError(msg = '') {
+  for (const [re, text] of ATTACK_REASON_CN) {
+    const m = String(msg).match(re);
+    if (m) return typeof text === 'function' ? text(m) : text;
+  }
+  return String(msg || '无法攻击该目标');
+}
 
 export class InteractionController {
   /**
@@ -90,6 +118,8 @@ export class InteractionController {
     if (!doc) return;
 
     doc.addEventListener('contextmenu', e => this._handleContextMenu(e), true);
+    // 触屏：每次点按先收起上一张卡牌说明
+    doc.addEventListener('pointerdown', e => { if (e.pointerType && e.pointerType !== 'mouse') CardInspector.hide(); }, true);
 
     // 1. Hand Card Pointer Events (Delegated)
     const handContainer = doc.getElementById('hand-container');
@@ -149,6 +179,17 @@ export class InteractionController {
     void doc;
   }
 
+  _isTouch(e) { return Boolean(e?.pointerType) && e.pointerType !== 'mouse'; }
+
+  _showTouchInfo(card, el) {
+    try { CardInspector.show(card, el.getBoundingClientRect()); } catch { /* ignore */ }
+    clearTimeout(this._infoTimer);
+    this._infoTimer = setTimeout(() => CardInspector.hide(), 9000);
+  }
+
+  /** 供“取消”按钮调用 */
+  cancelAll() { this._cancelAll(); CardInspector.hide(); }
+
   _isBusySelecting() {
     return Boolean(this.pendingTactic) || this.state === INTERACTION_STATE.CARD_SELECTED || this.state === INTERACTION_STATE.TARGETING;
   }
@@ -190,6 +231,7 @@ export class InteractionController {
     if (!player) return;
     const card = player.hand?.find(c => c.instanceId === instanceId);
     if (!card) return;
+    if (this._isTouch(e)) this._showTouchInfo(card, cardEl);
 
     // Check provision affordability
     let cost = card.cost ?? 0;
@@ -310,15 +352,18 @@ export class InteractionController {
 
     // Check if clicked an existing targeting goal while in TARGETING mode
     if (this.state === INTERACTION_STATE.TARGETING) {
-      const attackTarget = e.target?.closest?.('.legal-attack-target');
-      if (attackTarget) {
-        const targetId = attackTarget.classList?.contains('slot-opp-hq') || attackTarget.dataset?.targetId === 'HQ' || attackTarget.classList?.contains('hq-slot') || attackTarget.classList?.contains('hq-fortress')
-          ? 'HQ'
-          : (attackTarget.dataset?.instanceId || attackTarget.querySelector?.('.board-unit')?.dataset?.instanceId);
-        if (targetId) {
-          this._dispatchAttack(targetId);
-          return;
+      const targetId = this._attackTargetAt(e.clientX ?? 0, e.clientY ?? 0, e.target);
+      if (targetId) {
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        this._dispatchAttack(targetId);
+        return;
+      }
+      if (this._explainIllegalTarget(e.target)) {
+        if (this._isTouch(e) && e.target?.closest?.('.board-unit')) {
+          const l = findUnit(this.gameState, e.target.closest('.board-unit').dataset.instanceId);
+          if (l?.unit && e.target.closest('.board-unit').dataset?.isFaceDown !== 'true') this._showTouchInfo(l.unit, e.target.closest('.board-unit'));
         }
+        return; // 保留选中，玩家可以换一个目标
       }
 
       const targetZoneEl = e.target?.closest?.('.legal-move-target, .frontline-zone, .line-support');
@@ -346,6 +391,11 @@ export class InteractionController {
     if (!instanceId || !this.gameState) return;
 
     const loc = findUnit(this.gameState, instanceId);
+    // 触屏点按任意单位显示说明（翻面的敌方单位除外）
+    if (this._isTouch(e) && loc?.unit && unitEl.dataset?.isFaceDown !== 'true') {
+      const shown = loc.unit.faction === this.localPlayerId && loc.unit.status?.isFaceDown ? { ...loc.unit, status: { ...loc.unit.status, isFaceDown: false } } : loc.unit;
+      this._showTouchInfo(shown, unitEl);
+    }
     if (!loc || loc.unit?.faction !== this.localPlayerId) return;
 
     const unit = loc.unit;
@@ -372,7 +422,78 @@ export class InteractionController {
     this._computeUnitLegalTargets(unit, loc);
     this._highlightUnitTargets(true);
     unitEl.classList?.add('unit-acting-active');
+    if (!this.legalMoveTargets.length) this._hintNoTargets(unit);
+    else if (!this.legalAttackTargets.length && this._isTouch(e)) this._hintNoTargets(unit);
     this._updateTargetingCurve(e.clientX ?? 0, (e.clientY ?? 0) - 100);
+  }
+
+  /** 手指落点附近最近的合法攻击目标（手指比卡牌缝隙粗，放宽 22px 判定） */
+  _attackTargetAt(x, y, elemBelow = null) {
+    const doc = globalThis.document;
+    const direct = elemBelow?.closest?.('.legal-attack-target');
+    if (direct) return this._targetIdOf(direct);
+    if (!doc || !this.legalAttackTargets?.length) return null;
+    const pad = 22;
+    let best = null; let bestD = Infinity;
+    for (const id of this.legalAttackTargets) {
+      const el = id === 'HQ' ? doc.getElementById('slot-opp-hq') : doc.querySelector(`.board-unit[data-instance-id="${id}"]`);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (x < r.left - pad || x > r.right + pad || y < r.top - pad || y > r.bottom + pad) continue;
+      const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
+      if (d < bestD) { bestD = d; best = id; }
+    }
+    return best;
+  }
+
+  _targetIdOf(el) {
+    if (!el) return null;
+    if (el.id === 'slot-opp-hq' || el.classList?.contains('slot-opp-hq') || el.dataset?.targetId === 'HQ' || el.closest?.('#slot-opp-hq')) return 'HQ';
+    return el.dataset?.instanceId || el.querySelector?.('.board-unit')?.dataset?.instanceId || null;
+  }
+
+  /** 点到不能打的敌军/敌方主城时，说明原因 */
+  _explainIllegalTarget(elemBelow) {
+    if (!this.selectedUnit || !this.gameState || !elemBelow?.closest) return false;
+    let targetId = null;
+    if (elemBelow.closest('#slot-opp-hq')) targetId = 'HQ';
+    else {
+      const uEl = elemBelow.closest('.board-unit');
+      const id = uEl?.dataset?.instanceId;
+      const loc = id ? findUnit(this.gameState, id) : null;
+      if (loc && loc.unit.faction !== this.localPlayerId) targetId = id;
+    }
+    if (!targetId) return false;
+    let reason = '';
+    try {
+      validateAttack(this.gameState, this.selectedUnit.instanceId, targetId);
+      reason = '该目标暂时无法攻击';
+    } catch (err) { reason = explainAttackError(err.message); }
+    this._showToast(`无法攻击：${reason}`);
+    return true;
+  }
+
+  /** 选中单位后，如果一个目标都没有，提示原因（取第一个敌人的原因作代表） */
+  _hintNoTargets(unit) {
+    if (this.legalAttackTargets.length || !this.gameState) return;
+    const opp = this.localPlayerId === 'WEI' ? 'SHU' : 'WEI';
+    const ids = ['HQ', ...getAllUnits(this.gameState, opp).map(u => u.instanceId)];
+    const reasons = new Set();
+    for (const id of ids) {
+      try { validateAttack(this.gameState, unit.instanceId, id); } catch (err) { reasons.add(explainAttackError(err.message)); }
+    }
+    if (reasons.size) this._showToast(`当前没有可攻击目标：${[...reasons].slice(0, 2).join('；')}`);
+  }
+
+  /** 重绘战场后把选中/高亮状态补回去（否则高亮丢失，点目标会没反应） */
+  refreshSelection() {
+    if (this.state !== INTERACTION_STATE.TARGETING || !this.selectedUnit || !this.gameState) return;
+    const loc = findUnit(this.gameState, this.selectedUnit.instanceId);
+    if (!loc || loc.unit.faction !== this.localPlayerId) { this.cancelSelection(); return; }
+    this.selectedUnit = { ...this.selectedUnit, unit: loc.unit, loc };
+    this._computeUnitLegalTargets(loc.unit, loc);
+    this._highlightUnitTargets(true);
+    globalThis.document?.querySelector(`.board-unit[data-instance-id="${loc.unit.instanceId}"]`)?.classList.add('unit-acting-active');
   }
 
   _unitBlockReason(unit, loc, player) {
@@ -411,10 +532,19 @@ export class InteractionController {
     return c ? [...c.querySelectorAll('.board-unit')].filter(el => el.dataset.instanceId !== excludeId) : [];
   }
 
+  /** 竖屏时前线区域的单位上下排列：按纵坐标计算插入位置 */
+  _isVerticalZone(zoneKey) {
+    const c = zoneKey ? this._zoneContainer(zoneKey) : null;
+    if (!c) return false;
+    try { return getComputedStyle(c).flexDirection.startsWith('column'); } catch { return false; }
+  }
+
   _insertIndex(zoneKey, x, excludeId = null) {
+    const vertical = this._isVerticalZone(zoneKey);
+    const y = this._lastPointer?.y ?? 0;
     return this._zoneUnitEls(zoneKey, excludeId).filter(el => {
       const r = el.getBoundingClientRect();
-      return r.left + r.width / 2 < x;
+      return vertical ? r.top + r.height / 2 < y : r.left + r.width / 2 < x;
     }).length;
   }
 
@@ -424,6 +554,28 @@ export class InteractionController {
     if (!doc || !container) { this._hideInsertMarker(); return; }
     const els = this._zoneUnitEls(zoneKey, excludeId);
     const idx = this._insertIndex(zoneKey, x, excludeId);
+    const vertical = this._isVerticalZone(zoneKey);
+    if (!this.insertMarkerEl) {
+      this.insertMarkerEl = doc.createElement('div');
+      this.insertMarkerEl.className = 'insert-marker';
+      doc.body.appendChild(this.insertMarkerEl);
+    }
+    if (vertical) {
+      let py, left, w;
+      if (els.length) {
+        const rects = els.map(el => el.getBoundingClientRect());
+        left = rects[0].left; w = rects[0].width;
+        if (idx === 0) py = rects[0].top - 4;
+        else if (idx >= rects.length) py = rects[rects.length - 1].bottom + 4;
+        else py = (rects[idx - 1].bottom + rects[idx].top) / 2;
+      } else {
+        const r = (container.querySelector('.unit-slot') || container).getBoundingClientRect();
+        py = r.top + r.height / 2; left = r.left; w = r.width;
+      }
+      this.insertMarkerEl.classList.add('horizontal');
+      Object.assign(this.insertMarkerEl.style, { left: `${left}px`, top: `${py - 2}px`, width: `${w}px`, height: '4px', display: 'block' });
+      return;
+    }
     let px, top, h;
     if (els.length) {
       const rects = els.map(el => el.getBoundingClientRect());
@@ -436,12 +588,8 @@ export class InteractionController {
       const r = slot.getBoundingClientRect();
       px = r.left + r.width / 2; top = r.top; h = r.height;
     }
-    if (!this.insertMarkerEl) {
-      this.insertMarkerEl = doc.createElement('div');
-      this.insertMarkerEl.className = 'insert-marker';
-      doc.body.appendChild(this.insertMarkerEl);
-    }
-    Object.assign(this.insertMarkerEl.style, { left: `${px - 2}px`, top: `${top}px`, height: `${h}px`, display: 'block' });
+    this.insertMarkerEl.classList.remove('horizontal');
+    Object.assign(this.insertMarkerEl.style, { left: `${px - 2}px`, top: `${top}px`, width: '', height: `${h}px`, display: 'block' });
   }
 
   _hideInsertMarker() {
@@ -548,8 +696,10 @@ export class InteractionController {
       const dy = (e.clientY ?? 0) - this.dragStartPos.y;
       const dist = Math.hypot(dx, dy);
 
-      if (!this.isDragging && dist > 6) {
+      const threshold = (e.pointerType && e.pointerType !== 'mouse') ? 14 : 6;
+      if (!this.isDragging && dist > threshold) {
         this.isDragging = true;
+        CardInspector.hide();
         globalThis.document?.body?.classList.add('is-dragging');
         if (this.state === INTERACTION_STATE.CARD_SELECTED && this.selectedCard) {
           this._createCardGhost(this.selectedCard.instanceId, e.clientX ?? 0, e.clientY ?? 0);
@@ -557,7 +707,11 @@ export class InteractionController {
       }
 
       if (this.isDragging && this.dragGhostEl) {
-        this.dragGhostEl.style.transform = `translate(${(e.clientX ?? 0) - 45}px, ${(e.clientY ?? 0) - 60}px) scale(0.9)`;
+        const small = globalThis.document?.body?.classList.contains('m-land');
+        this.dragGhostEl.style.transform = small
+          ? `translate(${(e.clientX ?? 0) - 35}px, ${(e.clientY ?? 0) - 95}px) scale(0.6)`
+          : `translate(${(e.clientX ?? 0) - 45}px, ${(e.clientY ?? 0) - 60}px) scale(0.9)`;
+        this.dragGhostEl.style.transformOrigin = 'top left';
       }
     }
 
@@ -623,7 +777,7 @@ export class InteractionController {
 
     // Identify hover element under pointer
     const elemBelow = typeof doc.elementFromPoint === 'function' ? doc.elementFromPoint(pointerX, pointerY) : null;
-    const attackTarget = !isHandCard && elemBelow?.closest?.('.legal-attack-target');
+    const attackTarget = !isHandCard && this._attackTargetAt(pointerX, pointerY, elemBelow);
     const moveTarget = elemBelow?.closest?.(isHandCard ? '.legal-drop-highlight' : '.legal-move-target');
 
     this.targetingCurve.classList?.remove('curve-attack', 'curve-move', 'curve-neutral');
@@ -693,17 +847,12 @@ export class InteractionController {
     // Case B: Unit Target Drop
     if (this.state === INTERACTION_STATE.TARGETING && this.selectedUnit) {
       if (this.isDragging) {
-        const attackTarget = elemBelow?.closest?.('.legal-attack-target');
+        const targetId = this._attackTargetAt(e.clientX ?? 0, e.clientY ?? 0, elemBelow);
         const moveTarget = elemBelow?.closest?.('.legal-move-target');
 
-        if (attackTarget) {
-          const targetId = attackTarget.classList?.contains('slot-opp-hq') || attackTarget.dataset?.targetId === 'HQ'
-            ? 'HQ'
-            : (attackTarget.dataset?.instanceId || attackTarget.querySelector?.('.board-unit')?.dataset?.instanceId);
-          if (targetId) {
-            this._dispatchAttack(targetId);
-            return;
-          }
+        if (targetId) {
+          this._dispatchAttack(targetId);
+          return;
         }
 
         if (moveTarget) {
@@ -716,6 +865,18 @@ export class InteractionController {
           }
         }
         const sel = this.selectedUnit;
+        // 手指抖动/拖回自己身上：保持选中，而不是悄悄取消
+        const selfEl = elemBelow?.closest?.('.board-unit');
+        if (sel && selfEl?.dataset?.instanceId === sel.instanceId) {
+          this.isDragging = false;
+          globalThis.document?.body?.classList.remove('is-dragging');
+          return;
+        }
+        if (this._explainIllegalTarget(elemBelow)) {
+          this.isDragging = false;
+          globalThis.document?.body?.classList.remove('is-dragging');
+          return;
+        }
         this.cancelSelection();
         if (sel) this._tryReposition(sel.instanceId, sel.loc, elemBelow, e.clientX ?? 0);
       }
@@ -728,6 +889,7 @@ export class InteractionController {
 
   _resolveDropZone(elem) {
     if (!elem) return null;
+    if (elem.closest?.('#hand-tray')) return null; // 拖回手牌区 = 取消
     const isOnGameSurface = elem.closest?.('#battlefield-main') || elem.closest?.('#player-dock');
     if (this.selectedCard?.cardDef?.type === 'TACTIC' && isOnGameSurface) return 'BATTLEFIELD';
     if (this.selectedCard?.cardDef?.type === 'COUNTER' && isOnGameSurface) return 'COUNTER';
@@ -981,6 +1143,9 @@ export class InteractionController {
     this.dragGhostEl = orig.cloneNode(true);
     this.dragGhostEl.classList?.add('card-drag-ghost');
     this.dragGhostEl.style.position = 'fixed';
+    this.dragGhostEl.style.left = '0px';
+    this.dragGhostEl.style.top = '0px';
+    this.dragGhostEl.style.margin = '0';
     this.dragGhostEl.style.pointerEvents = 'none';
     this.dragGhostEl.style.zIndex = '9999';
     this.dragGhostEl.style.transform = `translate(${x - 45}px, ${y - 60}px) scale(0.9)`;
@@ -1010,7 +1175,7 @@ export class InteractionController {
     const toast = doc.createElement('div');
     toast.className = 'toast-alert';
     toast.textContent = msg;
-    doc.body.appendChild(toast);
+    (doc.getElementById('game-app') || doc.body).appendChild(toast);
     setTimeout(() => toast.classList?.add('toast-show'), 10);
     setTimeout(() => {
       toast.classList?.remove('toast-show');
