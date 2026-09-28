@@ -1,0 +1,363 @@
+/* ==========================================================================
+   board.css — Responsive 3-Line Battlefield War-Board & Spatial Layout
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Battlefield Viewport & Aspect Ratio Lock (16:9 Anchor)
+   -------------------------------------------------------------------------- */
+.battlefield-viewport {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  padding: 10px 16px;
+}
+
+.board-aspect-wrapper {
+  width: 100%;
+  max-width: 1400px;
+  height: 100%;
+  display: grid;
+  grid-template-rows: 1fr 1.35fr 1fr;
+  gap: 12px;
+  position: relative;
+}
+
+/* --------------------------------------------------------------------------
+   2. Battlefield Lines (Base Structure)
+   -------------------------------------------------------------------------- */
+.battlefield-line {
+  position: relative;
+  background: rgba(22, 26, 34, 0.7);
+  border-radius: 8px;
+  border: 1px solid var(--trim-bronze-dark);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.line-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  padding: 0 4px;
+}
+.line-title {
+  font-family: var(--font-serif-calligraphy);
+  font-size: 12px;
+  color: var(--trim-bronze-light);
+  letter-spacing: 1px;
+}
+.line-capacity-hint {
+  font-size: 10px;
+  color: #718096;
+}
+
+/* Support Lines Row: HQ Slot + 4 Unit Slots */
+.line-slots-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex: 1;
+}
+
+/* Slot Base */
+.slot {
+  width: 110px;
+  height: 154px;
+  border-radius: 6px;
+  border: 1px dashed rgba(200, 160, 90, 0.25);
+  background: rgba(10, 12, 16, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.slot.valid-drop-target, .legal-drop-highlight {
+  border-color: #48bb78 !important;
+  background: rgba(72, 187, 120, 0.15) !important;
+  box-shadow: 0 0 12px rgba(72, 187, 120, 0.4);
+}
+.slot.invalid-drop-target {
+  border-color: #f56565 !important;
+  background: rgba(245, 101, 101, 0.1) !important;
+}
+
+/* Interactive Targeting Indicators */
+.legal-move-target {
+  outline: 2px solid #48bb78 !important;
+  background: rgba(72, 187, 120, 0.12) !important;
+  box-shadow: 0 0 14px rgba(72, 187, 120, 0.5) !important;
+  cursor: pointer;
+}
+.legal-attack-target {
+  outline: 2px solid #f56565 !important;
+  box-shadow: 0 0 16px rgba(245, 101, 101, 0.7) !important;
+  cursor: crosshair !important;
+  animation: pulse-target 1s infinite alternate;
+}
+@keyframes pulse-target {
+  from { outline-color: #e53e3e; box-shadow: 0 0 8px rgba(229, 62, 62, 0.5); }
+  to { outline-color: #fc8181; box-shadow: 0 0 18px rgba(229, 62, 62, 0.9); }
+}
+
+/* HQ Stronghold Slot */
+.hq-slot {
+  border-style: solid;
+  border-width: 2px;
+  border-color: var(--trim-gold-antique);
+  background: radial-gradient(circle, #232a36 0%, #11141a 100%);
+  box-shadow: var(--shadow-card-default);
+}
+.slot-opp-hq {
+  border-color: #4a5568;
+}
+.slot-friendly-hq {
+  border-color: var(--trim-gold-bright);
+}
+
+.hq-card-view, .hq-fortress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+}
+.hq-crest, .fortress-crest {
+  font-size: 32px;
+}
+.hq-title, .fortress-name {
+  font-family: var(--font-serif-calligraphy);
+  font-size: 13px;
+  font-weight: bold;
+}
+.hq-hp-chip, .fortress-hp-readout {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #2b6cb0;
+  color: #fff;
+  font-size: 11px;
+  font-family: var(--font-mono-numbers);
+  font-weight: bold;
+}
+
+/* --------------------------------------------------------------------------
+   3. Frontline 3-Zone Architecture (Left, Center, Right)
+   -------------------------------------------------------------------------- */
+.line-frontline {
+  background: rgba(15, 18, 24, 0.85);
+  border: 2px solid var(--trim-bronze-light);
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  padding: 8px;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.7);
+}
+
+.frontline-zone {
+  display: flex;
+  flex-direction: column;
+  border-radius: 6px;
+  border: 1px solid var(--trim-bronze-dark);
+  background: rgba(24, 28, 38, 0.6);
+  padding: 6px;
+  position: relative;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* Zone Terrain Banners */
+.zone-terrain-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  font-size: 11px;
+}
+.terrain-identity {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-serif-calligraphy);
+  font-weight: bold;
+}
+.zone-occupant-badge {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: bold;
+}
+.zone-occupant-badge.occupant-neutral, .zone-occupant-badge.badge-neutral {
+  background: #2d3748;
+  color: #a0aec0;
+}
+.zone-occupant-badge.occupant-wei, .zone-occupant-badge.badge-wei {
+  background: var(--faction-wei-primary);
+  color: #ebf8ff;
+}
+.zone-occupant-badge.occupant-shu, .zone-occupant-badge.badge-shu {
+  background: var(--faction-shu-primary);
+  color: #fff5f5;
+}
+
+.zone-capacity-tag, .zone-capacity-pill {
+  font-family: var(--font-mono-numbers);
+  font-size: 10px;
+  color: #a0aec0;
+}
+
+/* Terrain Aesthetic Modifiers */
+.terrain-plain {
+  border-color: var(--terrain-plain-border);
+  background: linear-gradient(180deg, rgba(28, 43, 24, 0.6) 0%, rgba(16, 24, 14, 0.8) 100%);
+}
+.terrain-plain .zone-terrain-banner {
+  background: var(--terrain-plain-border);
+  color: #c6f6d5;
+}
+
+.terrain-water {
+  border-color: var(--terrain-water-border);
+  background: linear-gradient(180deg, rgba(18, 37, 54, 0.6) 0%, rgba(10, 20, 30, 0.8) 100%);
+}
+.terrain-water .zone-terrain-banner {
+  background: var(--terrain-water-border);
+  color: #bee3f8;
+}
+
+.terrain-mountain {
+  border-color: var(--terrain-mountain-border);
+  background: linear-gradient(180deg, rgba(43, 33, 24, 0.6) 0%, rgba(24, 18, 14, 0.8) 100%);
+}
+.terrain-mountain .zone-terrain-banner {
+  background: var(--terrain-mountain-border);
+  color: #feebc8;
+}
+
+.terrain-pass {
+  border-color: var(--terrain-pass-border);
+  background: linear-gradient(180deg, rgba(34, 33, 32, 0.6) 0%, rgba(18, 17, 16, 0.8) 100%);
+}
+.terrain-pass .zone-terrain-banner {
+  background: var(--terrain-pass-border);
+  color: #e2e8f0;
+}
+
+/* Zone Slots Container */
+.zone-slots-container, .zone-units-track {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+  min-height: 140px;
+}
+.frontline-slot {
+  width: 95px;
+  height: 135px;
+}
+.zone-empty-placeholder {
+  font-size: 12px;
+  color: #718096;
+  font-style: italic;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   4. Targeting SVG & Interactive Arrows
+   -------------------------------------------------------------------------- */
+.targeting-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 200;
+}
+
+.targeting-curve {
+  fill: none;
+  stroke: #48bb78;
+  stroke-width: 4px;
+  stroke-linecap: round;
+  stroke-dasharray: 8 4;
+  filter: url(#laser-glow);
+  marker-end: url(#arrowhead-legal);
+  animation: dash-flow 0.8s linear infinite;
+}
+.targeting-curve.targeting-attack, .targeting-curve.curve-attack {
+  stroke: #f56565 !important;
+  marker-end: url(#arrowhead-attack) !important;
+}
+.targeting-curve.curve-move {
+  stroke: #48bb78 !important;
+  marker-end: url(#arrowhead-legal) !important;
+}
+.targeting-curve.curve-neutral {
+  stroke: var(--trim-gold-bright) !important;
+  stroke-dasharray: 6 6;
+}
+
+@keyframes dash-flow {
+  from { stroke-dashoffset: 24; }
+  to { stroke-dashoffset: 0; }
+}
+
+/* --------------------------------------------------------------------------
+   5. Floating Text Layer
+   -------------------------------------------------------------------------- */
+.floating-text-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 300;
+  overflow: hidden;
+}
+
+.combat-float-dmg, .floating-combat-text {
+  position: fixed;
+  font-family: var(--font-serif-calligraphy);
+  font-size: 24px;
+  font-weight: 900;
+  color: #e53e3e;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9), 0 0 12px rgba(229, 62, 62, 0.8);
+  pointer-events: none;
+  z-index: 9999;
+  animation: float-rise 1.2s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+}
+.combat-float-immune, .floating-combat-text.fx-immune {
+  color: var(--trim-gold-bright);
+}
+.floating-combat-text.fx-counter {
+  color: #ed8936;
+}
+.floating-combat-text.fx-ambush {
+  color: #9f7aea;
+}
+.floating-combat-text.fx-banish {
+  color: #b794f4;
+}
+.floating-combat-text.fx-fire {
+  color: #f56565;
+}
+
+@keyframes float-rise {
+  0% { transform: translateY(0) scale(0.6); opacity: 0; }
+  20% { transform: translateY(-15px) scale(1.2); opacity: 1; }
+  80% { transform: translateY(-35px) scale(1); opacity: 1; }
+  100% { transform: translateY(-50px) scale(0.9); opacity: 0; }
+}

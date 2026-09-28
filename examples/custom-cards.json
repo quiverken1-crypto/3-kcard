@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "cards": [
+    {
+      "id": "custom_shu_qinglong",
+      "name": "青龙卫",
+      "faction": "SHU",
+      "type": "UNIT",
+      "troopType": "CAVALRY",
+      "cost": 3,
+      "actionCost": 1,
+      "atk": 3,
+      "hp": 3,
+      "keywords": ["突袭"],
+      "audioCue": "cavalry",
+      "description": "部署时摸一张牌；击杀敌军时夺取一点声望。",
+      "abilities": [
+        { "trigger": "ON_DEPLOY", "effects": [{ "type": "DRAW", "target": "OWNER", "amount": 1 }] },
+        { "trigger": "ON_KILL", "effects": [{ "type": "GAIN_PRESTIGE", "target": "OWNER", "amount": 1 }] }
+      ]
+    },
+    {
+      "id": "custom_wei_duanliang",
+      "name": "断粮火计",
+      "faction": "WEI",
+      "type": "TACTIC",
+      "troopType": "NONE",
+      "cost": 2,
+      "actionCost": 0,
+      "atk": 0,
+      "hp": 0,
+      "keywords": [],
+      "audioCue": "fireball",
+      "description": "夺取敌方两点粮草，并对敌方主城造成一点伤害。",
+      "abilities": [
+        { "trigger": "ON_PLAY", "effects": [
+          { "type": "STEAL_PROVISIONS", "target": "OPPONENT", "amount": 2 },
+          { "type": "DAMAGE_HQ", "target": "OPPONENT", "amount": 1 }
+        ] }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1022 @@
+/**
+ * interaction.js — User Interaction Controller, Drag-and-Drop & Targeting State Machine
+ * Three Kingdoms KARDS (Milestone 4)
+ *
+ * Implements:
+ * 1. FSM: IDLE -> CARD_SELECTED -> TARGETING -> ACTION_CONFIRMED -> DISABLED.
+ * 2. PointerEvents Drag-and-Drop & Click-to-Action dual interaction.
+ * 3. Dynamic SVG Bezier Targeting Curve with laser glow.
+ * 4. Keyword-compliant Move & Attack highlighting via combat.getValidTargets.
+ * 5. High-Impact Unused Action End Turn warning prompt.
+ */
+
+import { ACTION_TYPES, KEYWORDS, STATUS_TYPES, hasKeyword } from '../engine/constants.js';
+import { getValidTargets } from '../engine/combat.js';
+import { findUnit, getAllUnits } from '../engine/state.js';
+import { getTacticTargets, getActionCost, actsLikeCavalry as skillActsLikeCavalry } from '../engine/cardSkills.js';
+
+export const INTERACTION_STATE = Object.freeze({
+  IDLE: 'IDLE',
+  CARD_SELECTED: 'CARD_SELECTED',
+  TARGETING: 'TARGETING',
+  ACTION_CONFIRMED: 'ACTION_CONFIRMED',
+  DISABLED: 'DISABLED'
+});
+
+export class InteractionController {
+  /**
+   * @param {object} options
+   * @param {HTMLElement} [options.rootContainer] - #battlefield-main
+   * @param {SVGSVGElement} [options.svgOverlay] - #targeting-svg-layer
+   * @param {SVGPathElement} [options.targetingCurve] - #targeting-curve
+   * @param {Function} [options.onAction] - (actionIntent) => void
+   */
+  constructor(options = {}) {
+    const doc = typeof document !== 'undefined' ? document : globalThis.document;
+
+    this.root = options.rootContainer || (doc?.getElementById('battlefield-main'));
+    this.svgOverlay = options.svgOverlay || (doc?.getElementById('targeting-svg-layer'));
+    this.targetingCurve = options.targetingCurve || (doc?.getElementById('targeting-curve'));
+    this.onAction = options.onAction || (() => {});
+    // The battlefield scroll container clips descendants, including fixed SVGs.
+    // Keep targeting arrows on the page layer so hand-to-board paths stay visible.
+    if (this.svgOverlay && doc?.body && this.svgOverlay.parentElement !== doc.body) {
+      doc.body.appendChild(this.svgOverlay);
+    }
+
+    this.state = INTERACTION_STATE.IDLE;
+    this.localPlayerId = 'WEI';
+    this.gameState = null;
+
+    // Selection contexts
+    this.selectedCard = null; // { instanceId, cardDef, cost }
+    this.selectedUnit = null; // { instanceId, unit, loc }
+    this.legalDropZones = new Set();
+    this.legalMoveTargets = [];
+    this.legalAttackTargets = [];
+
+    // Drag tracking via PointerEvents
+    this.dragPointerId = null;
+    this.dragStartPos = { x: 0, y: 0 };
+    this.isDragging = false;
+    this.dragGhostEl = null;
+
+    // End turn warning suppression flag
+    this.suppressEndTurnWarning = false;
+
+    if (doc) {
+      this._bindGlobalEvents();
+    }
+  }
+
+  setContext(gameState, localPlayerId) {
+    this.gameState = gameState;
+    this.localPlayerId = localPlayerId || 'WEI';
+
+    // Auto-disable if not local player's turn or game over
+    const isLocalTurn = gameState && gameState.activePlayer === this.localPlayerId && gameState.phase === 'ACTION';
+    if (!isLocalTurn && this.state !== INTERACTION_STATE.DISABLED) {
+      if (this.pendingTactic) this._endTacticTargeting();
+      this.cancelSelection();
+      this.state = INTERACTION_STATE.DISABLED;
+    } else if (isLocalTurn && this.state === INTERACTION_STATE.DISABLED) {
+      this.state = INTERACTION_STATE.IDLE;
+    }
+  }
+
+  _bindGlobalEvents() {
+    const doc = typeof document !== 'undefined' ? document : globalThis.document;
+    const win = typeof window !== 'undefined' ? window : globalThis.window;
+    if (!doc) return;
+
+    doc.addEventListener('contextmenu', e => this._handleContextMenu(e), true);
+
+    // 1. Hand Card Pointer Events (Delegated)
+    const handContainer = doc.getElementById('hand-container');
+    if (handContainer) {
+      handContainer.addEventListener('pointerdown', (e) => this._handleHandPointerDown(e));
+    }
+
+    // 2. Battlefield Unit Pointer Events (Delegated)
+    if (this.root) {
+      this.root.addEventListener('pointerdown', (e) => this._handleBoardPointerDown(e));
+    }
+
+    // 3. Document/Window Pointer Move & Up
+    if (win) {
+      win.addEventListener('pointermove', (e) => this._handlePointerMove(e));
+      win.addEventListener('pointerup', (e) => this._handlePointerUp(e));
+      win.addEventListener('pointercancel', (e) => this._handlePointerCancel(e));
+
+      // 4. Keyboard Shortcuts
+      win.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          if (this.pendingTactic) this._endTacticTargeting();
+          this.cancelSelection();
+        } else if (e.code === 'Space' && !e.repeat && this.state !== INTERACTION_STATE.DISABLED) {
+          e.preventDefault();
+          this.handleEndTurnClick();
+        }
+      });
+    }
+
+    // 5. End Turn Button Click
+    const endTurnBtn = doc.getElementById('btn-end-turn');
+    if (endTurnBtn) {
+      endTurnBtn.addEventListener('click', () => this.handleEndTurnClick());
+    }
+  }
+
+  // ==========================================
+  // Hand Card Interaction
+  // ==========================================
+  _handleContextMenu(e) {
+    const doc = typeof document !== 'undefined' ? document : globalThis.document;
+    const inGame = e.target?.closest?.('#game-app');
+    // 游戏界面内一律屏蔽浏览器右键菜单（输入框除外）
+    if (inGame && !e.target?.closest?.('input, textarea, select')) e.preventDefault();
+    if (this._suppressNextContextOpen) {
+      this._suppressNextContextOpen = false;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return;
+    }
+    if (this._isBusySelecting()) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      this._cancelAll();
+    }
+    void doc;
+  }
+
+  _isBusySelecting() {
+    return Boolean(this.pendingTactic) || this.state === INTERACTION_STATE.CARD_SELECTED || this.state === INTERACTION_STATE.TARGETING;
+  }
+
+  _cancelAll() {
+    this.repositionOnly = null;
+    this._hideInsertMarker?.();
+    if (this.pendingTactic) this._endTacticTargeting();
+    this.dragPointerId = null;
+    this.isDragging = false;
+    this._removeCardGhost?.();
+    this.cancelSelection();
+  }
+
+  /** 右键 / 中键：仅用于取消，不触发任何部署或行动 */
+  _isNonPrimary(e) {
+    if (e.button === undefined || e.button === 0) return false;
+    if (e.button === 2 && this._isBusySelecting()) {
+      this._suppressNextContextOpen = true;
+      this._cancelAll();
+    }
+    return true;
+  }
+
+  _handleHandPointerDown(e) {
+    if (this._isNonPrimary(e)) return;
+    if (this.pendingTactic) this._endTacticTargeting();
+    if (this.state === INTERACTION_STATE.DISABLED) return;
+    if (this.state === INTERACTION_STATE.TARGETING) {
+      this.cancelSelection();
+    }
+    const cardEl = e.target?.closest?.('.card-hand');
+    if (!cardEl || cardEl.dataset?.isHidden === 'true') return;
+
+    const instanceId = cardEl.dataset?.instanceId;
+    if (!instanceId || !this.gameState) return;
+
+    const player = this.gameState.players?.[this.localPlayerId];
+    if (!player) return;
+    const card = player.hand?.find(c => c.instanceId === instanceId);
+    if (!card) return;
+
+    // Check provision affordability
+    let cost = card.cost ?? 0;
+    if (card.type === 'UNIT' && !player.prestigeDiscountUsed && player.prestige > 0) {
+      cost = Math.max(0, cost - player.prestige);
+    }
+    if (player.provisions < cost) {
+      this._triggerShake(cardEl);
+      this._showToast(`粮草不足 (需 ${cost} 粮草，当前仅存 ${player.provisions})`);
+      return;
+    }
+
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+    if (this.selectedCard) this.cancelSelection();
+    this.dragPointerId = e.pointerId ?? 1;
+    this.dragStartPos = { x: e.clientX ?? 0, y: e.clientY ?? 0 };
+    this.isDragging = false;
+
+    this.selectedCard = { instanceId, cardDef: card, cost };
+    this.state = INTERACTION_STATE.CARD_SELECTED;
+
+    this._computeLegalDropZones(card);
+    this._highlightLegalDropZones(true);
+    cardEl.classList?.add('selected');
+    this._updateCardTargetingCurve(e.clientX ?? 0, (e.clientY ?? 0) - 120);
+  }
+
+  _computeLegalDropZones(card) {
+    this.legalDropZones.clear();
+    const bf = this.gameState?.battlefield;
+    if (!bf) return;
+
+    if (card.type === 'UNIT') {
+      // Support line capacity check (max 4 units)
+      const supportUnits = bf.support?.[this.localPlayerId]?.slots || [];
+      if (supportUnits.length < 4) {
+        this.legalDropZones.add('SUPPORT');
+      }
+
+      // Frontline deployment (requires 奇袭)
+      if (hasKeyword(card, KEYWORDS.QI_XI)) {
+        for (const zk of ['LEFT', 'CENTER', 'RIGHT']) {
+          const zone = bf.frontline?.[zk];
+          if (zone && (zone.occupant === null || zone.occupant === this.localPlayerId) && zone.units.length < zone.capacity) {
+            this.legalDropZones.add(zk);
+          }
+        }
+      }
+    } else if (card.type === 'TACTIC' || card.type === 'COUNTER') {
+      this.legalDropZones.add('BATTLEFIELD');
+      this.legalDropZones.add('COUNTER');
+    }
+  }
+
+  _highlightLegalDropZones(active) {
+    const doc = typeof document !== 'undefined' ? document : globalThis.document;
+    if (!doc) return;
+
+    const selectorMap = {
+      'SUPPORT': '#line-support-friendly, .line-friendly .line-slots-row',
+      'LEFT': '#zone-left',
+      'CENTER': '#zone-center',
+      'RIGHT': '#zone-right',
+      'BATTLEFIELD': '#line-frontline, .battlefield-viewport',
+      'COUNTER': '#counter-zone, #player-dock'
+    };
+
+    for (const [zoneKey, selector] of Object.entries(selectorMap)) {
+      const els = doc.querySelectorAll(selector);
+      els.forEach(el => {
+        if (active && this.legalDropZones.has(zoneKey)) {
+          el.classList?.add('legal-drop-highlight');
+        } else {
+          el.classList?.remove('legal-drop-highlight');
+        }
+      });
+    }
+  }
+
+  // ==========================================
+  // Battlefield Unit Interaction
+  // ==========================================
+  _handleBoardPointerDown(e) {
+    if (this._isNonPrimary(e)) return;
+    this._lastPointer = { x: e.clientX ?? 0, y: e.clientY ?? 0 };
+    if (this.state === INTERACTION_STATE.DISABLED) return;
+
+    // 战法选择目标
+    if (this.pendingTactic) {
+      const unitEl = e.target?.closest?.('.board-unit');
+      const targetId = unitEl?.dataset?.instanceId;
+      const pending = this.pendingTactic;
+      this._endTacticTargeting();
+      if (targetId && pending.targetIds.includes(targetId)) {
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        this.onAction({
+          type: ACTION_TYPES.PLAY_TACTIC,
+          playerId: this.localPlayerId,
+          payload: { cardInstanceId: pending.instanceId, targetId }
+        });
+      } else {
+        this._showToast('已取消战法');
+      }
+      return;
+    }
+
+    // Click-to-Deploy while in CARD_SELECTED mode
+    if (this.state === INTERACTION_STATE.CARD_SELECTED && this.selectedCard) {
+      const dropZone = this._resolveDropZone(e.target);
+      if (dropZone && this.legalDropZones.has(dropZone)) {
+        this._dispatchDeploy(this.selectedCard.instanceId, dropZone);
+        return;
+      } else {
+        this.cancelSelection();
+        return;
+      }
+    }
+
+    // Check if clicked an existing targeting goal while in TARGETING mode
+    if (this.state === INTERACTION_STATE.TARGETING) {
+      const attackTarget = e.target?.closest?.('.legal-attack-target');
+      if (attackTarget) {
+        const targetId = attackTarget.classList?.contains('slot-opp-hq') || attackTarget.dataset?.targetId === 'HQ' || attackTarget.classList?.contains('hq-slot') || attackTarget.classList?.contains('hq-fortress')
+          ? 'HQ'
+          : (attackTarget.dataset?.instanceId || attackTarget.querySelector?.('.board-unit')?.dataset?.instanceId);
+        if (targetId) {
+          this._dispatchAttack(targetId);
+          return;
+        }
+      }
+
+      const targetZoneEl = e.target?.closest?.('.legal-move-target, .frontline-zone, .line-support');
+      if (targetZoneEl && targetZoneEl.classList?.contains('legal-move-target')) {
+        const zoneKey = targetZoneEl.dataset?.zoneKey ||
+          (targetZoneEl.dataset?.zone ? targetZoneEl.dataset.zone.replace('FRONTLINE_', '') : null) ||
+          (targetZoneEl.classList?.contains('line-support') ? 'SUPPORT' : null);
+        if (zoneKey) {
+          this._dispatchMove(zoneKey);
+          return;
+        }
+      }
+    }
+
+    // Select friendly unit
+    const unitEl = e.target?.closest?.('.board-unit');
+    if (!unitEl) {
+      if (this.state !== INTERACTION_STATE.IDLE) {
+        this.cancelSelection();
+      }
+      return;
+    }
+
+    const instanceId = unitEl.dataset?.instanceId;
+    if (!instanceId || !this.gameState) return;
+
+    const loc = findUnit(this.gameState, instanceId);
+    if (!loc || loc.unit?.faction !== this.localPlayerId) return;
+
+    const unit = loc.unit;
+    const player = this.gameState.players?.[this.localPlayerId];
+
+    // 无法行动的单位仍可拖动调整站位；单击时才提示原因
+    const blockReason = this._unitBlockReason(unit, loc, player);
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+    if (blockReason) {
+      this.dragPointerId = e.pointerId ?? 1;
+      this.dragStartPos = { x: e.clientX ?? 0, y: e.clientY ?? 0 };
+      this.isDragging = false;
+      this.repositionOnly = { instanceId, loc, reason: blockReason, el: unitEl };
+      return;
+    }
+
+    this.dragPointerId = e.pointerId ?? 1;
+    this.dragStartPos = { x: e.clientX ?? 0, y: e.clientY ?? 0 };
+    this.isDragging = false;
+
+    this.selectedUnit = { instanceId, unit, loc };
+    this.state = INTERACTION_STATE.TARGETING;
+
+    this._computeUnitLegalTargets(unit, loc);
+    this._highlightUnitTargets(true);
+    unitEl.classList?.add('unit-acting-active');
+    this._updateTargetingCurve(e.clientX ?? 0, (e.clientY ?? 0) - 100);
+  }
+
+  _unitBlockReason(unit, loc, player) {
+    if (unit.status?.[STATUS_TYPES.SUPPRESSED]) return '该单位受到【压制】，无法主动移动或攻击（可拖动调整站位）';
+    if (unit.status?.[STATUS_TYPES.DEPLOYED_THIS_TURN] && !hasKeyword(unit, KEYWORDS.TU_XI)) return '该单位本回合刚部署，尚在休整（可拖动调整站位）';
+    const liveCost = getActionCost(this.gameState, unit, loc);
+    if (player && player.provisions < liveCost) return `行动粮草不足（需 ${liveCost}，当前 ${player.provisions}；可拖动调整站位）`;
+    const cav = skillActsLikeCavalry(this.gameState, unit, loc);
+    const fen = hasKeyword(unit, KEYWORDS.FEN_ZHAN);
+    if (cav) {
+      if (unit.status?.[STATUS_TYPES.MOVED_THIS_TURN] && unit.status?.[STATUS_TYPES.ATTACKED_THIS_TURN] && (!fen || (unit.status?.attacksThisTurn || 0) >= 2)) return '该骑兵本回合行动力已耗尽（可拖动调整站位）';
+    } else if (unit.status?.[STATUS_TYPES.ACTIONS_USED] > 0 && (!fen || (unit.status?.attacksThisTurn || 0) >= 2)) {
+      return '步军每回合仅能移动或攻击一次（可拖动调整站位）';
+    }
+    return '';
+  }
+
+  _zoneKeyOfElement(el) {
+    if (!el?.closest) return null;
+    if (el.closest('#line-support-friendly')) return 'SUPPORT';
+    if (el.closest('#zone-left')) return 'LEFT';
+    if (el.closest('#zone-center')) return 'CENTER';
+    if (el.closest('#zone-right')) return 'RIGHT';
+    return null;
+  }
+
+  _zoneContainer(zoneKey) {
+    const doc = globalThis.document;
+    if (zoneKey === 'SUPPORT') return doc?.querySelector('#line-support-friendly .line-slots-row');
+    const k = String(zoneKey).toLowerCase();
+    return doc?.querySelector(`#zone-${k} .zone-slots-container, #zone-${k} .zone-units-track`);
+  }
+
+  _zoneUnitEls(zoneKey, excludeId = null) {
+    const c = this._zoneContainer(zoneKey);
+    return c ? [...c.querySelectorAll('.board-unit')].filter(el => el.dataset.instanceId !== excludeId) : [];
+  }
+
+  _insertIndex(zoneKey, x, excludeId = null) {
+    return this._zoneUnitEls(zoneKey, excludeId).filter(el => {
+      const r = el.getBoundingClientRect();
+      return r.left + r.width / 2 < x;
+    }).length;
+  }
+
+  _showInsertMarker(zoneKey, x, excludeId = null) {
+    const doc = globalThis.document;
+    const container = zoneKey ? this._zoneContainer(zoneKey) : null;
+    if (!doc || !container) { this._hideInsertMarker(); return; }
+    const els = this._zoneUnitEls(zoneKey, excludeId);
+    const idx = this._insertIndex(zoneKey, x, excludeId);
+    let px, top, h;
+    if (els.length) {
+      const rects = els.map(el => el.getBoundingClientRect());
+      top = rects[0].top; h = rects[0].height;
+      if (idx === 0) px = rects[0].left - 5;
+      else if (idx >= rects.length) px = rects[rects.length - 1].right + 5;
+      else px = (rects[idx - 1].right + rects[idx].left) / 2;
+    } else {
+      const slot = container.querySelector('.unit-slot') || container;
+      const r = slot.getBoundingClientRect();
+      px = r.left + r.width / 2; top = r.top; h = r.height;
+    }
+    if (!this.insertMarkerEl) {
+      this.insertMarkerEl = doc.createElement('div');
+      this.insertMarkerEl.className = 'insert-marker';
+      doc.body.appendChild(this.insertMarkerEl);
+    }
+    Object.assign(this.insertMarkerEl.style, { left: `${px - 2}px`, top: `${top}px`, height: `${h}px`, display: 'block' });
+  }
+
+  _hideInsertMarker() {
+    if (this.insertMarkerEl) this.insertMarkerEl.style.display = 'none';
+  }
+
+  _tryReposition(instanceId, loc, elemBelow, x) {
+    const own = loc.zoneType === 'SUPPORT' ? 'SUPPORT' : loc.zoneKey;
+    const dropZone = this._zoneKeyOfElement(elemBelow);
+    if (!dropZone || dropZone !== own) return false;
+    const toIndex = this._insertIndex(own, x, instanceId);
+    this.onAction({ type: 'REPOSITION', playerId: this.localPlayerId, payload: { cardInstanceId: instanceId, toIndex } });
+    return true;
+  }
+
+  _computeUnitLegalTargets(unit, loc) {
+    this.legalMoveTargets = [];
+    this.legalAttackTargets = [];
+    const bf = this.gameState?.battlefield;
+    if (!bf) return;
+
+    // 1. Legal Move Destinations
+    const actsLikeCavalry = skillActsLikeCavalry(this.gameState, unit, loc);
+    const canMove = actsLikeCavalry ? !unit.status?.[STATUS_TYPES.MOVED_THIS_TURN] : (unit.status?.[STATUS_TYPES.ACTIONS_USED] || 0) === 0;
+
+    if (canMove) {
+      if (loc.zoneType === 'SUPPORT') {
+        for (const zk of ['LEFT', 'CENTER', 'RIGHT']) {
+          const zone = bf.frontline?.[zk];
+          if (zone && (zone.occupant === null || zone.occupant === this.localPlayerId) && zone.units.length < zone.capacity) {
+            this.legalMoveTargets.push(`FRONTLINE_${zk}`);
+          }
+        }
+      } else if (loc.zoneType === 'FRONTLINE') {
+        const cur = loc.zoneKey;
+        const adj = cur === 'CENTER' ? ['LEFT', 'RIGHT'] : ['CENTER'];
+        for (const zk of adj) {
+          const zone = bf.frontline?.[zk];
+          if (zone && (zone.occupant === null || zone.occupant === this.localPlayerId) && zone.units.length < zone.capacity) {
+            this.legalMoveTargets.push(`FRONTLINE_${zk}`);
+          }
+        }
+        // 游击 (Guerilla) retreat
+        if (hasKeyword(unit, KEYWORDS.YOU_JI) && (bf.support?.[this.localPlayerId]?.slots?.length || 0) < 4) {
+          this.legalMoveTargets.push('SUPPORT');
+        }
+      }
+    }
+
+    // 2. Legal Attack Targets via Authoritative combat.getValidTargets
+    const hasDoubleStrike = hasKeyword(unit, KEYWORDS.FEN_ZHAN);
+    const maxAttacks = hasDoubleStrike ? 2 : 1;
+    const canAttack = !unit.status?.[STATUS_TYPES.ATTACKED_THIS_TURN] || (unit.status?.attacksThisTurn || 0) < maxAttacks;
+
+    if (canAttack) {
+      this.legalAttackTargets = getValidTargets(this.gameState, unit.instanceId);
+    }
+  }
+
+  _highlightUnitTargets(active) {
+    const doc = typeof document !== 'undefined' ? document : globalThis.document;
+    if (!doc) return;
+
+    doc.querySelectorAll('.legal-move-target, .legal-attack-target').forEach(el => {
+      el.classList?.remove('legal-move-target', 'legal-attack-target');
+    });
+
+    if (!active) return;
+
+    // Highlight moves
+    for (const targetZone of this.legalMoveTargets) {
+      if (targetZone === 'SUPPORT') {
+        const sup = doc.getElementById('line-support-friendly');
+        if (sup) sup.classList.add('legal-move-target');
+      } else {
+        const zk = targetZone.replace('FRONTLINE_', '').toLowerCase();
+        const zoneEl = doc.getElementById(`zone-${zk}`) || doc.querySelector(`[data-zone="FRONTLINE_${targetZone.replace('FRONTLINE_', '')}"]`);
+        if (zoneEl) zoneEl.classList.add('legal-move-target');
+      }
+    }
+
+    // Highlight attacks
+    for (const targetId of this.legalAttackTargets) {
+      if (targetId === 'HQ') {
+        const oppHq = doc.getElementById('slot-opp-hq') || doc.querySelector('.line-opp .hq-slot, .slot-opp-hq');
+        if (oppHq) oppHq.classList.add('legal-attack-target');
+      } else {
+        const uEl = doc.querySelector(`.board-unit[data-instance-id="${targetId}"]`);
+        if (uEl) {
+          uEl.classList?.add('legal-attack-target');
+          const parentSlot = uEl.closest('.unit-slot');
+          if (parentSlot) parentSlot.classList?.add('legal-attack-target');
+        }
+      }
+    }
+  }
+
+  // ==========================================
+  // Pointer Movement & SVG Targeting Curve
+  // ==========================================
+  _handlePointerMove(e) {
+    if (this.dragPointerId !== null && (e.pointerId === undefined || e.pointerId === this.dragPointerId)) {
+      const dx = (e.clientX ?? 0) - this.dragStartPos.x;
+      const dy = (e.clientY ?? 0) - this.dragStartPos.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (!this.isDragging && dist > 6) {
+        this.isDragging = true;
+        globalThis.document?.body?.classList.add('is-dragging');
+        if (this.state === INTERACTION_STATE.CARD_SELECTED && this.selectedCard) {
+          this._createCardGhost(this.selectedCard.instanceId, e.clientX ?? 0, e.clientY ?? 0);
+        }
+      }
+
+      if (this.isDragging && this.dragGhostEl) {
+        this.dragGhostEl.style.transform = `translate(${(e.clientX ?? 0) - 45}px, ${(e.clientY ?? 0) - 60}px) scale(0.9)`;
+      }
+    }
+
+    this._lastPointer = { x: e.clientX ?? 0, y: e.clientY ?? 0 };
+    if (this.isDragging) {
+      const doc = globalThis.document;
+      const below = doc?.elementFromPoint?.(e.clientX ?? 0, e.clientY ?? 0);
+      const zk = this._zoneKeyOfElement(below);
+      if (this.repositionOnly || (this.state === INTERACTION_STATE.TARGETING && this.selectedUnit)) {
+        const u = this.repositionOnly || this.selectedUnit;
+        const own = u.loc.zoneType === 'SUPPORT' ? 'SUPPORT' : u.loc.zoneKey;
+        const moveOk = zk && zk !== own && this.legalMoveTargets?.some(t => t === `FRONTLINE_${zk}` || t === zk);
+        if (zk === own || moveOk) this._showInsertMarker(zk, e.clientX ?? 0, u.instanceId); else this._hideInsertMarker();
+      } else if (this.state === INTERACTION_STATE.CARD_SELECTED && this.selectedCard?.cardDef?.type === 'UNIT') {
+        if (zk && this.legalDropZones.has(zk)) this._showInsertMarker(zk, e.clientX ?? 0); else this._hideInsertMarker();
+      }
+    }
+    if (this.repositionOnly) return;
+    if (this.state === INTERACTION_STATE.CARD_SELECTED && this.selectedCard) this._updateCardTargetingCurve(e.clientX ?? 0, e.clientY ?? 0);
+    else if (this.state === INTERACTION_STATE.TARGETING && this.selectedUnit) this._updateTargetingCurve(e.clientX ?? 0, e.clientY ?? 0);
+  }
+
+  _updateCardTargetingCurve(pointerX, pointerY) {
+    const doc = typeof document !== 'undefined' ? document : globalThis.document;
+    const cardEl = doc?.querySelector(`.card-hand[data-instance-id="${this.selectedCard?.instanceId}"]`);
+    this._drawPointerCurve(cardEl, pointerX, pointerY, true);
+  }
+
+  _updateTargetingCurve(pointerX, pointerY) {
+    const doc = typeof document !== 'undefined' ? document : globalThis.document;
+    const unitEl = doc?.querySelector(`.board-unit[data-instance-id="${this.selectedUnit?.instanceId}"]`);
+    this._drawPointerCurve(unitEl, pointerX, pointerY, false);
+  }
+
+  _drawPointerCurve(sourceEl, pointerX, pointerY, isHandCard) {
+    if (!this.svgOverlay || !this.targetingCurve) return;
+    const doc = typeof document !== 'undefined' ? document : globalThis.document;
+    if (!doc || !sourceEl) return;
+
+    const sourceRect = typeof sourceEl.getBoundingClientRect === 'function'
+      ? sourceEl.getBoundingClientRect()
+      : { left: 100, top: 400, width: 90, height: 130 };
+    const svgRect = typeof this.svgOverlay.getBoundingClientRect === 'function'
+      ? this.svgOverlay.getBoundingClientRect()
+      : { left: 0, top: 0 };
+
+    const startX = sourceRect.left + sourceRect.width / 2 - svgRect.left;
+    const startY = sourceRect.top + sourceRect.height / 2 - svgRect.top;
+    const endX = pointerX - svgRect.left;
+    const endY = pointerY - svgRect.top;
+
+    const dx = endX - startX;
+    const dy = endY - startY;
+
+    // Cubic Bezier curve control points
+    const c1x = startX + dx * 0.25;
+    const c1y = startY + dy * 0.75 - Math.min(60, Math.abs(dx) * 0.3);
+    const c2x = startX + dx * 0.75;
+    const c2y = startY + dy * 0.9 - Math.min(30, Math.abs(dx) * 0.15);
+
+    const d = `M ${startX.toFixed(1)} ${startY.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${endX.toFixed(1)} ${endY.toFixed(1)}`;
+    this.targetingCurve.setAttribute('d', d);
+
+    // Identify hover element under pointer
+    const elemBelow = typeof doc.elementFromPoint === 'function' ? doc.elementFromPoint(pointerX, pointerY) : null;
+    const attackTarget = !isHandCard && elemBelow?.closest?.('.legal-attack-target');
+    const moveTarget = elemBelow?.closest?.(isHandCard ? '.legal-drop-highlight' : '.legal-move-target');
+
+    this.targetingCurve.classList?.remove('curve-attack', 'curve-move', 'curve-neutral');
+    if (attackTarget) {
+      this.targetingCurve.classList?.add('curve-attack');
+      this.targetingCurve.setAttribute('marker-end', 'url(#arrowhead-attack)');
+    } else if (moveTarget) {
+      this.targetingCurve.classList?.add('curve-move');
+      this.targetingCurve.setAttribute('marker-end', 'url(#arrowhead-legal)');
+    } else {
+      this.targetingCurve.classList?.add('curve-neutral');
+      this.targetingCurve.removeAttribute('marker-end');
+    }
+  }
+
+  _clearTargetingCurve() {
+    if (this.targetingCurve) {
+      this.targetingCurve.setAttribute('d', '');
+      this.targetingCurve.removeAttribute('marker-end');
+      if (this.targetingCurve.className?.baseVal !== undefined) {
+        this.targetingCurve.className.baseVal = 'targeting-curve';
+      } else if (this.targetingCurve.classList) {
+        this.targetingCurve.className = 'targeting-curve';
+      }
+    }
+  }
+
+  // ==========================================
+  // Pointer Up & Action Execution
+  // ==========================================
+  _handlePointerUp(e) {
+    if (e.button !== undefined && e.button !== 0) return;
+    if (this.dragPointerId === null || (e.pointerId !== undefined && e.pointerId !== this.dragPointerId)) return;
+
+    this.dragPointerId = null;
+    this._removeCardGhost();
+    this._hideInsertMarker();
+    this._lastPointer = { x: e.clientX ?? 0, y: e.clientY ?? 0 };
+
+    const doc = typeof document !== 'undefined' ? document : globalThis.document;
+    const elemBelow = typeof doc?.elementFromPoint === 'function' ? doc.elementFromPoint(e.clientX ?? 0, e.clientY ?? 0) : null;
+
+    if (this.repositionOnly) {
+      const r = this.repositionOnly;
+      this.repositionOnly = null;
+      const dragged = this.isDragging;
+      this.isDragging = false;
+      doc?.body?.classList.remove('is-dragging');
+      if (!dragged) { this._showToast(r.reason); this._triggerShake(r.el); }
+      else this._tryReposition(r.instanceId, r.loc, elemBelow, e.clientX ?? 0);
+      return;
+    }
+
+    // Case A: Hand Card Drop
+    if (this.state === INTERACTION_STATE.CARD_SELECTED && this.selectedCard) {
+      if (this.isDragging) {
+        const dropZone = this._resolveDropZone(elemBelow);
+        if (dropZone && this.legalDropZones.has(dropZone)) {
+          this._dispatchDeploy(this.selectedCard.instanceId, dropZone);
+        } else {
+          this.cancelSelection();
+        }
+      }
+      return;
+    }
+
+    // Case B: Unit Target Drop
+    if (this.state === INTERACTION_STATE.TARGETING && this.selectedUnit) {
+      if (this.isDragging) {
+        const attackTarget = elemBelow?.closest?.('.legal-attack-target');
+        const moveTarget = elemBelow?.closest?.('.legal-move-target');
+
+        if (attackTarget) {
+          const targetId = attackTarget.classList?.contains('slot-opp-hq') || attackTarget.dataset?.targetId === 'HQ'
+            ? 'HQ'
+            : (attackTarget.dataset?.instanceId || attackTarget.querySelector?.('.board-unit')?.dataset?.instanceId);
+          if (targetId) {
+            this._dispatchAttack(targetId);
+            return;
+          }
+        }
+
+        if (moveTarget) {
+          const zoneKey = moveTarget.dataset?.zoneKey ||
+            (moveTarget.dataset?.zone ? moveTarget.dataset.zone.replace('FRONTLINE_', '') : null) ||
+            (moveTarget.classList?.contains('line-support') ? 'SUPPORT' : null);
+          if (zoneKey) {
+            this._dispatchMove(zoneKey);
+            return;
+          }
+        }
+        const sel = this.selectedUnit;
+        this.cancelSelection();
+        if (sel) this._tryReposition(sel.instanceId, sel.loc, elemBelow, e.clientX ?? 0);
+      }
+    }
+  }
+
+  _handlePointerCancel() {
+    this.cancelSelection();
+  }
+
+  _resolveDropZone(elem) {
+    if (!elem) return null;
+    const isOnGameSurface = elem.closest?.('#battlefield-main') || elem.closest?.('#player-dock');
+    if (this.selectedCard?.cardDef?.type === 'TACTIC' && isOnGameSurface) return 'BATTLEFIELD';
+    if (this.selectedCard?.cardDef?.type === 'COUNTER' && isOnGameSurface) return 'COUNTER';
+    if (elem.closest?.('#line-support-friendly, .line-friendly')) return 'SUPPORT';
+    if (elem.closest?.('#zone-left')) return 'LEFT';
+    if (elem.closest?.('#zone-center')) return 'CENTER';
+    if (elem.closest?.('#zone-right')) return 'RIGHT';
+    if (elem.closest?.('#battlefield-main, .battlefield-viewport')) return 'BATTLEFIELD';
+    if (elem.closest?.('#counter-zone, #player-dock')) return 'COUNTER';
+    return null;
+  }
+
+  // ==========================================
+  // Dispatch Actions
+  // ==========================================
+  _dispatchDeploy(cardInstanceId, targetZone) {
+    const card = this.selectedCard?.cardDef;
+    this.state = INTERACTION_STATE.ACTION_CONFIRMED;
+
+    if (card && card.type === 'TACTIC') {
+      const targets = this.gameState ? getTacticTargets(this.gameState, this.localPlayerId, card) : null;
+      if (Array.isArray(targets)) {
+        this.cancelSelection();
+        if (!targets.length) {
+          this._showToast(`【${card.name}】当前没有合法目标`);
+          return;
+        }
+        this._beginTacticTargeting(card, targets.map(t => t.instanceId));
+        return;
+      }
+      this.onAction({
+        type: ACTION_TYPES.PLAY_TACTIC,
+        playerId: this.localPlayerId,
+        payload: { cardInstanceId }
+      });
+    } else if (card && card.type === 'COUNTER') {
+      this.onAction({
+        type: ACTION_TYPES.SET_COUNTER,
+        playerId: this.localPlayerId,
+        payload: { cardInstanceId }
+      });
+    } else {
+      const slotIndex = this._lastPointer ? this._insertIndex(targetZone, this._lastPointer.x) : undefined;
+      this.onAction({
+        type: ACTION_TYPES.DEPLOY,
+        playerId: this.localPlayerId,
+        payload: { cardInstanceId, targetZone, slotIndex }
+      });
+    }
+    this.cancelSelection();
+  }
+
+  _beginTacticTargeting(card, targetIds) {
+    const doc = typeof document !== 'undefined' ? document : globalThis.document;
+    this.pendingTactic = { instanceId: card.instanceId, name: card.name, targetIds };
+    doc?.body?.classList?.add('tactic-targeting');
+    for (const id of targetIds) {
+      doc?.querySelectorAll?.(`.board-unit[data-instance-id="${id}"]`).forEach(el => el.classList.add('legal-tactic-target'));
+    }
+    this._showToast(`选择【${card.name}】的目标（点击空白处取消）`);
+  }
+
+  _endTacticTargeting() {
+    const doc = typeof document !== 'undefined' ? document : globalThis.document;
+    this.pendingTactic = null;
+    doc?.body?.classList?.remove('tactic-targeting');
+    doc?.querySelectorAll?.('.legal-tactic-target').forEach(el => el.classList.remove('legal-tactic-target'));
+  }
+
+  _dispatchMove(targetZoneKey) {
+    if (!this.selectedUnit) return;
+    this.state = INTERACTION_STATE.ACTION_CONFIRMED;
+
+    const targetZone = targetZoneKey === 'SUPPORT' ? 'SUPPORT' : `FRONTLINE_${targetZoneKey.toUpperCase()}`;
+    const slotIndex = this._lastPointer ? this._insertIndex(targetZoneKey.toUpperCase(), this._lastPointer.x, this.selectedUnit.instanceId) : undefined;
+    this.onAction({
+      type: ACTION_TYPES.MOVE,
+      playerId: this.localPlayerId,
+      payload: {
+        cardInstanceId: this.selectedUnit.instanceId,
+        targetZone,
+        slotIndex
+      }
+    });
+    this.cancelSelection();
+  }
+
+  _dispatchAttack(targetId) {
+    if (!this.selectedUnit) return;
+    this.state = INTERACTION_STATE.ACTION_CONFIRMED;
+
+    this.onAction({
+      type: ACTION_TYPES.ATTACK,
+      playerId: this.localPlayerId,
+      payload: {
+        attackerId: this.selectedUnit.instanceId,
+        targetId
+      }
+    });
+    this.cancelSelection();
+  }
+
+  // ==========================================
+  // End Turn Action with Smart Warnings
+  // ==========================================
+  handleEndTurnClick() {
+    if (this.state === INTERACTION_STATE.DISABLED) return;
+    if (!this.gameState || this.gameState.activePlayer !== this.localPlayerId || this.gameState.phase !== 'ACTION') {
+      return;
+    }
+
+    if (this.suppressEndTurnWarning) {
+      this._confirmEndTurn();
+      return;
+    }
+
+    const warnings = this._checkHighImpactActionsRemaining();
+    if (warnings.length > 0) {
+      this._showEndTurnWarningModal(warnings);
+    } else {
+      this._confirmEndTurn();
+    }
+  }
+
+  _checkHighImpactActionsRemaining() {
+    const warnings = [];
+    if (!this.gameState) return warnings;
+
+    const player = this.gameState.players?.[this.localPlayerId];
+    if (!player) return warnings;
+
+    const units = getAllUnits(this.gameState, this.localPlayerId);
+
+    // 1. Can Attack Check
+    const canAttackUnits = units.filter(u => {
+      if (u.status?.[STATUS_TYPES.SUPPRESSED] || player.provisions < (u.actionCost ?? 1)) return false;
+      const targets = getValidTargets(this.gameState, u.instanceId);
+      return targets.length > 0;
+    });
+
+    if (canAttackUnits.length > 0) {
+      warnings.push(`尚有 ${canAttackUnits.length} 个单位具备进攻能力 (可对敌军或主城发起攻击)`);
+    }
+
+    // 2. Prestige Discount Check
+    if (!player.prestigeDiscountUsed && player.prestige > 0) {
+      const hasUnitInHand = player.hand?.some(c => c.type === 'UNIT');
+      if (hasUnitInHand) {
+        warnings.push(`本回合【声望减免】尚未利用 (首单部署可减免 ${player.prestige} 粮草)`);
+      }
+    }
+
+    // 3. Excess Provisions Check
+    if (player.provisions >= 3) {
+      const playableCards = player.hand?.filter(c => (c.cost ?? 0) <= player.provisions) || [];
+      if (playableCards.length > 0) {
+        warnings.push(`剩余粮草充沛 (余粮 ${player.provisions}，手牌尚有可打出卡牌)`);
+      }
+    }
+
+    return warnings;
+  }
+
+  _showEndTurnWarningModal(warnings) {
+    const doc = typeof document !== 'undefined' ? document : globalThis.document;
+    if (!doc || !doc.body) {
+      this._confirmEndTurn();
+      return;
+    }
+
+    const modal = doc.createElement('div');
+    modal.className = 'modal-overlay warning-overlay';
+    modal.innerHTML = `
+      <div class="modal-box warning-box">
+        <h3 class="modal-title">军师谏言</h3>
+        <p class="modal-subtitle">战机稍纵即逝，确认此刻鸣金休整吗？</p>
+        <ul class="warning-list">
+          ${warnings.map(w => `<li>⚠️ ${w}</li>`).join('')}
+        </ul>
+        <label class="warning-checkbox-row">
+          <input type="checkbox" id="chk-suppress-turn-warn">
+          <span>本次对局不再提示</span>
+        </label>
+        <div class="modal-actions">
+          <button id="btn-warn-confirm" class="modal-btn btn-danger">坚决结束回合</button>
+          <button id="btn-warn-cancel" class="modal-btn btn-secondary">继续思考行动</button>
+        </div>
+      </div>
+    `;
+
+    doc.body.appendChild(modal);
+
+    modal.querySelector('#btn-warn-confirm')?.addEventListener('click', () => {
+      const chk = modal.querySelector('#chk-suppress-turn-warn');
+      if (chk && chk.checked) this.suppressEndTurnWarning = true;
+      modal.remove();
+      this._confirmEndTurn();
+    });
+
+    modal.querySelector('#btn-warn-cancel')?.addEventListener('click', () => {
+      modal.remove();
+    });
+  }
+
+  _confirmEndTurn() {
+    this.cancelSelection();
+    this.state = INTERACTION_STATE.DISABLED;
+    this.onAction({
+      type: ACTION_TYPES.END_TURN,
+      playerId: this.localPlayerId,
+      payload: {}
+    });
+  }
+
+  // ==========================================
+  // Cleanup & Ghost Card Helpers
+  // ==========================================
+  cancelSelection() {
+    globalThis.document?.body?.classList.remove('is-dragging');
+    this.selectedCard = null;
+    this.selectedUnit = null;
+    this.legalDropZones.clear();
+    this.legalMoveTargets = [];
+    this.legalAttackTargets = [];
+
+    this._highlightLegalDropZones(false);
+    this._highlightUnitTargets(false);
+    this._clearTargetingCurve();
+    this._removeCardGhost();
+
+    const doc = typeof document !== 'undefined' ? document : globalThis.document;
+    if (doc) {
+      doc.querySelectorAll('.card-hand.selected, .board-unit.unit-acting-active').forEach(el => {
+        el.classList?.remove('selected', 'unit-acting-active');
+      });
+    }
+
+    if (this.state !== INTERACTION_STATE.DISABLED) {
+      this.state = INTERACTION_STATE.IDLE;
+    }
+  }
+
+  _createCardGhost(instanceId, x, y) {
+    this._removeCardGhost();
+    const doc = typeof document !== 'undefined' ? document : globalThis.document;
+    if (!doc || !doc.body) return;
+
+    const orig = doc.querySelector(`.card-hand[data-instance-id="${instanceId}"]`);
+    if (!orig || typeof orig.cloneNode !== 'function') return;
+
+    this.dragGhostEl = orig.cloneNode(true);
+    this.dragGhostEl.classList?.add('card-drag-ghost');
+    this.dragGhostEl.style.position = 'fixed';
+    this.dragGhostEl.style.pointerEvents = 'none';
+    this.dragGhostEl.style.zIndex = '9999';
+    this.dragGhostEl.style.transform = `translate(${x - 45}px, ${y - 60}px) scale(0.9)`;
+    doc.body.appendChild(this.dragGhostEl);
+  }
+
+  _removeCardGhost() {
+    globalThis.document?.body?.classList.remove('is-dragging');
+    if (this.dragGhostEl) {
+      this.dragGhostEl.remove();
+      this.dragGhostEl = null;
+    }
+  }
+
+  _triggerShake(el) {
+    if (!el || !el.classList) return;
+    el.classList.remove('anim-shake');
+    if (typeof el.offsetWidth !== 'undefined') void el.offsetWidth;
+    el.classList.add('anim-shake');
+    setTimeout(() => el.classList.remove('anim-shake'), 400);
+  }
+
+  _showToast(msg) {
+    const doc = typeof document !== 'undefined' ? document : globalThis.document;
+    if (!doc || !doc.body) return;
+
+    const toast = doc.createElement('div');
+    toast.className = 'toast-alert';
+    toast.textContent = msg;
+    doc.body.appendChild(toast);
+    setTimeout(() => toast.classList?.add('toast-show'), 10);
+    setTimeout(() => {
+      toast.classList?.remove('toast-show');
+      setTimeout(() => toast.remove(), 300);
+    }, 2200);
+  }
+}
+
+export default InteractionController;

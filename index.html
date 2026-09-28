@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>三国KARDS — 纯前端局域网对战</title>
+  
+  <!-- Modular Stylesheets -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/board.css">
+  <link rel="stylesheet" href="css/cards.css">
+  <link rel="stylesheet" href="css/animations.css">
+  <link rel="stylesheet" href="css/usability.css">
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/fx.css">
+</head>
+<body class="theme-martial">
+
+  <!-- Root App Shell -->
+  <div id="game-app" class="game-container">
+
+    <!-- 主页 -->
+    <section id="home-screen" class="home-screen" aria-label="主页">
+      <div class="home-bg-art" aria-hidden="true"></div>
+      <div class="home-panel">
+        <div class="home-seal">三国</div>
+        <h1 class="home-title">三国 <span>KARDS</span></h1>
+        <p class="home-subtitle">魏 · 蜀 · 吴 · 吕　战线卡牌对决</p>
+        <div class="home-actions">
+          <button id="home-btn-pve" class="home-btn home-btn-mode home-btn-shu"><span class="hb-char">人</span><span class="hb-text">人机对战<small>选势力与主城，挑战 AI</small></span></button>
+          <button id="home-btn-pvp" class="home-btn home-btn-mode home-btn-wei"><span class="hb-char">联</span><span class="hb-text">人人对战<small>先建/加入房间，再各选势力</small></span></button>
+          <button id="home-btn-eve" class="home-btn home-btn-mode"><span class="hb-char">机</span><span class="hb-text">机机对战<small>观摩 AI 随机对决</small></span></button>
+        </div>
+        <div class="home-sub-actions">
+          <button id="home-btn-rules" class="home-link">📜 规则与词条</button>
+          <button id="home-btn-editor" class="home-link">✍️ 自定义卡牌</button>
+          <button id="home-btn-audio" class="home-link">🔊 音乐开启</button>
+        </div>
+      </div>
+      <div class="home-gallery" id="home-gallery" aria-hidden="true"></div>
+    </section>
+
+    <!-- ================================================================ -->
+    <!-- TOP BAR: Opponent Status & Match Header                           -->
+    <!-- ================================================================ -->
+    <header id="top-bar" class="hud-top-bar" role="banner">
+      <!-- Left: Opponent Faction & Stronghold HQ -->
+      <div class="hud-group opponent-meta">
+        <div id="opp-faction-badge" class="faction-emblem faction-wei" title="魏国阵营">
+          <span class="faction-char">魏</span>
+        </div>
+        <div class="hq-status-group">
+          <div class="hq-label-row">
+            <span id="opp-hq-name" class="hq-name">许昌</span>
+            <span id="opp-hq-hp-text" class="hq-hp-numeric">30 / 30</span>
+          </div>
+          <div class="progress-bar-track hq-hp-bar">
+            <div id="opp-hp-fill" class="progress-bar-fill hp-fill" style="width: 100%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center: Match Information & Phase Banner -->
+      <div class="hud-group match-status">
+        <div id="turn-phase-indicator" class="phase-badge phase-opponent">
+          <span id="turn-number-text" class="turn-num">第 1 回合</span>
+          <span class="phase-divider">·</span>
+          <span id="phase-name-text" class="phase-name">敌方行动</span>
+        </div>
+      </div>
+
+      <!-- Right: Opponent Resources & Latency Badge -->
+      <div class="hud-group opponent-resources">
+        <!-- Opponent Granary -->
+        <div class="resource-badge provisions-badge" title="敌方可用粮草 / 粮仓上限">
+          <span class="resource-icon icon-granary">🌾</span>
+          <span id="opp-provisions-text" class="resource-val">0 / 0</span>
+        </div>
+        <!-- Opponent Dynamic Prestige -->
+        <div class="resource-badge prestige-badge" title="敌方声望 (0-2点，争夺制)">
+          <span class="resource-icon icon-prestige">🎖️</span>
+          <span id="opp-prestige-text" class="resource-val">0</span>
+          <div id="opp-prestige-pips" class="prestige-pips">
+            <span class="pip pip-0">☆</span>
+            <span class="pip pip-1">☆</span>
+          </div>
+        </div>
+        <!-- Opponent Hand Count -->
+        <div class="resource-badge hand-count-badge" title="敌方手牌数量 (上限9张)">
+          <span class="resource-icon icon-hand">🂠</span>
+          <span id="opp-hand-count" class="resource-val">0 / 9</span>
+        </div>
+        <!-- Opponent Deck & Discard -->
+        <div class="resource-badge deck-count-badge" title="敌方牌库剩余">
+          <span class="resource-icon icon-deck">🎴</span>
+          <span id="opp-deck-count" class="resource-val">40</span>
+        </div>
+        <div class="resource-badge discard-count-badge" title="敌方弃牌堆">
+          <span class="resource-icon icon-discard">🪦</span>
+          <span id="opp-discard-count" class="resource-val">0</span>
+        </div>
+        <!-- Network RTT Latency Badge -->
+        <div id="network-rtt-badge" class="latency-badge rtt-good" title="局域网 P2P 延迟">
+          <span class="rtt-dot">●</span>
+          <span id="rtt-val-text" class="rtt-text">24ms</span>
+        </div>
+      </div>
+
+      <!-- 局内功能入口 -->
+      <div class="hud-group hud-actions">
+        <button id="btn-open-log" class="hud-action-btn" title="战报（L）"><span>📜</span>战报</button>
+        <button id="btn-open-menu" class="hud-action-btn hud-menu-btn" title="军令菜单（Esc）"><span>☰</span>军令</button>
+      </div>
+    </header>
+
+
+    <!-- ================================================================ -->
+    <!-- BATTLEFIELD MAIN: 3-Line Tactical War-Board                      -->
+    <!-- ================================================================ -->
+    <main id="battlefield-main" class="battlefield-viewport" role="main">
+      <div class="board-aspect-wrapper">
+
+        <!-- Line 1: Opponent Support Line (North) -->
+        <section id="line-support-opp" class="battlefield-line line-support line-opp" data-line="SUPPORT_OPP" aria-label="敌方支援阵线">
+          <div class="line-header">
+            <span class="line-title">敌方支援阵线</span>
+            <span class="line-capacity-hint">上限: 1主城 + 4单位</span>
+          </div>
+          <div class="line-slots-row">
+            <!-- Opponent HQ Fortress Slot -->
+            <div id="slot-opp-hq" class="slot hq-slot slot-opp-hq" data-zone="SUPPORT_OPP" data-slot="hq" title="敌方主城要塞">
+              <div class="hq-card-view hq-opp-view">
+                <div class="hq-crest">🏯</div>
+                <div class="hq-info">
+                  <div class="hq-title">许昌大本营</div>
+                  <div class="hq-hp-chip">HP 30</div>
+                </div>
+              </div>
+            </div>
+            <!-- Opponent Support Unit Slots (4 slots) -->
+            <div id="slot-opp-sup-0" class="slot unit-slot" data-zone="SUPPORT_OPP" data-slot="0"></div>
+            <div id="slot-opp-sup-1" class="slot unit-slot" data-zone="SUPPORT_OPP" data-slot="1"></div>
+            <div id="slot-opp-sup-2" class="slot unit-slot" data-zone="SUPPORT_OPP" data-slot="2"></div>
+            <div id="slot-opp-sup-3" class="slot unit-slot" data-zone="SUPPORT_OPP" data-slot="3"></div>
+          </div>
+        </section>
+
+        <!-- Line 2: The Frontline (Divided into 3 Parallel Zones) -->
+        <section id="line-frontline" class="battlefield-line line-frontline" data-line="FRONTLINE" aria-label="中央交战前线">
+          
+          <!-- LEFT FRONTLINE ZONE -->
+          <div id="zone-left" class="frontline-zone terrain-plain" data-zone="FRONTLINE_LEFT">
+            <div class="zone-terrain-banner">
+              <div class="terrain-identity">
+                <span class="terrain-icon">🌾</span>
+                <span class="terrain-name">平原</span>
+              </div>
+              <div class="zone-occupant-badge occupant-neutral" title="区域占领状态">
+                <span class="occupant-text">中立空置</span>
+              </div>
+              <div class="zone-capacity-tag" title="区域容量上限">
+                <span class="cap-current">0</span>/<span class="cap-max">3</span>
+              </div>
+            </div>
+            <div class="zone-slots-container">
+              <div class="slot unit-slot frontline-slot" data-zone="FRONTLINE_LEFT" data-slot="0"></div>
+              <div class="slot unit-slot frontline-slot" data-zone="FRONTLINE_LEFT" data-slot="1"></div>
+              <div class="slot unit-slot frontline-slot" data-zone="FRONTLINE_LEFT" data-slot="2"></div>
+            </div>
+          </div>
+
+          <!-- CENTER FRONTLINE ZONE -->
+          <div id="zone-center" class="frontline-zone terrain-water" data-zone="FRONTLINE_CENTER">
+            <div class="zone-terrain-banner">
+              <div class="terrain-identity">
+                <span class="terrain-icon">🌊</span>
+                <span class="terrain-name">水域</span>
+              </div>
+              <div class="zone-occupant-badge occupant-neutral" title="区域占领状态">
+                <span class="occupant-text">中立空置</span>
+              </div>
+              <div class="zone-capacity-tag" title="区域容量上限">
+                <span class="cap-current">0</span>/<span class="cap-max">3</span>
+              </div>
+            </div>
+            <div class="zone-slots-container">
+              <div class="slot unit-slot frontline-slot" data-zone="FRONTLINE_CENTER" data-slot="0"></div>
+              <div class="slot unit-slot frontline-slot" data-zone="FRONTLINE_CENTER" data-slot="1"></div>
+              <div class="slot unit-slot frontline-slot" data-zone="FRONTLINE_CENTER" data-slot="2"></div>
+            </div>
+          </div>
+
+          <!-- RIGHT FRONTLINE ZONE -->
+          <div id="zone-right" class="frontline-zone terrain-mountain" data-zone="FRONTLINE_RIGHT">
+            <div class="zone-terrain-banner">
+              <div class="terrain-identity">
+                <span class="terrain-icon">⛰️</span>
+                <span class="terrain-name">山地</span>
+              </div>
+              <div class="zone-occupant-badge occupant-neutral" title="区域占领状态">
+                <span class="occupant-text">中立空置</span>
+              </div>
+              <div class="zone-capacity-tag" title="区域容量上限">
+                <span class="cap-current">0</span>/<span class="cap-max">2</span>
+              </div>
+            </div>
+            <div class="zone-slots-container">
+              <div class="slot unit-slot frontline-slot" data-zone="FRONTLINE_RIGHT" data-slot="0"></div>
+              <div class="slot unit-slot frontline-slot" data-zone="FRONTLINE_RIGHT" data-slot="1"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- Line 3: Friendly Support Line (South) -->
+        <section id="line-support-friendly" class="battlefield-line line-support line-friendly" data-line="SUPPORT_FRIENDLY" aria-label="己方支援阵线">
+          <div class="line-header">
+            <span class="line-title">己方支援阵线</span>
+            <span class="line-capacity-hint">上限: 1主城 + 4单位</span>
+          </div>
+          <div class="line-slots-row">
+            <!-- Friendly HQ Fortress Slot -->
+            <div id="slot-friendly-hq" class="slot hq-slot slot-friendly-hq" data-zone="SUPPORT_FRIENDLY" data-slot="hq" title="己方主城要塞">
+              <div class="hq-card-view hq-friendly-view">
+                <div class="hq-crest">🏯</div>
+                <div class="hq-info">
+                  <div id="friendly-hq-name" class="hq-title">成都大本营</div>
+                  <div id="friendly-hq-hp-badge" class="hq-hp-chip">HP 30</div>
+                </div>
+              </div>
+            </div>
+            <!-- Friendly Support Unit Slots (4 slots) -->
+            <div id="slot-friendly-sup-0" class="slot unit-slot" data-zone="SUPPORT_FRIENDLY" data-slot="0"></div>
+            <div id="slot-friendly-sup-1" class="slot unit-slot" data-zone="SUPPORT_FRIENDLY" data-slot="1"></div>
+            <div id="slot-friendly-sup-2" class="slot unit-slot" data-zone="SUPPORT_FRIENDLY" data-slot="2"></div>
+            <div id="slot-friendly-sup-3" class="slot unit-slot" data-zone="SUPPORT_FRIENDLY" data-slot="3"></div>
+          </div>
+        </section>
+
+        <!-- SVG Interaction Overlay for Targeting Arrows & Paths -->
+        <svg id="targeting-svg-layer" class="targeting-overlay" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowhead-legal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#48bb78" />
+            </marker>
+            <marker id="arrowhead-attack" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#f56565" />
+            </marker>
+            <filter id="laser-glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          </defs>
+          <path id="targeting-curve" class="targeting-curve" d="" />
+        </svg>
+
+        <!-- Floating Damage / Text Container -->
+        <div id="floating-combat-layer" class="floating-text-container" aria-hidden="true"></div>
+
+      </div>
+    </main>
+
+
+    <!-- ================================================================ -->
+    <!-- PLAYER DOCK: Hand Fan & Resource Command HUD                      -->
+    <!-- ================================================================ -->
+    <footer id="player-dock" class="dock-bottom-bar" role="region" aria-label="玩家操作台">
+      
+      <!-- Player Hand Cards Fan Tray -->
+      <div id="hand-tray" class="hand-fan-tray" aria-label="手牌区域">
+        <div id="hand-container" class="hand-card-fan">
+          <!-- Dynamic Hand Cards injected here (up to 9 cards) -->
+        </div>
+      </div>
+
+      <!-- 回合倒计时（我方栏上方） -->
+      <div id="turn-timer" class="turn-timer-display dock-timer" title="无操作 30 秒后自动结束回合">
+        <span class="turn-timer-track"><span id="turn-timer-fill"></span></span>
+        <span class="turn-timer-chip">⏳ <span id="turn-timer-text">--:--</span></span>
+      </div>
+
+      <!-- Player Resource HUD Bar -->
+      <div id="player-resource-hud" class="player-hud-bar">
+
+        <!-- Left Column: Friendly HQ HP & Faction -->
+        <div class="hud-subgroup player-hq-meta">
+          <div id="friendly-faction-badge" class="faction-emblem faction-shu" title="蜀国阵营">
+            <span class="faction-char">蜀</span>
+          </div>
+          <div class="hq-status-group">
+            <div class="hq-label-row">
+              <span class="hq-label">主城气魄</span>
+              <span id="friendly-hq-hp-text" class="hq-hp-numeric">30 / 30</span>
+            </div>
+            <div class="progress-bar-track hq-hp-bar">
+              <div id="friendly-hp-fill" class="progress-bar-fill hp-fill" style="width: 100%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Center Column: Double Granary & Dynamic Prestige -->
+        <div class="hud-subgroup player-resources">
+          
+          <!-- Double Granary -->
+          <div class="granary-cluster" title="可用粮草 / 主粮仓上限 (+额外粮仓)">
+            <div class="granary-header">
+              <span class="granary-title">🌾 粮草储备</span>
+              <span id="granary-numeric-text" class="granary-numbers">1 / 1</span>
+            </div>
+            <div class="granary-gauge">
+              <div id="main-granary-pips" class="granary-pips-row" title="主城粮仓 (自然成长 0-10)">
+                <!-- 10 Pips injected or styled via CSS -->
+                <div class="grain-pip active"></div>
+                <div class="grain-pip"></div>
+                <div class="grain-pip"></div>
+                <div class="grain-pip"></div>
+                <div class="grain-pip"></div>
+                <div class="grain-pip"></div>
+                <div class="grain-pip"></div>
+                <div class="grain-pip"></div>
+                <div class="grain-pip"></div>
+                <div class="grain-pip"></div>
+              </div>
+              <div id="extra-granary-chip" class="extra-granary-chip hidden" title="额外粮仓 (技能扩充，无上限，优先消耗)">
+                +<span id="extra-granary-val">0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dynamic Prestige Tug-of-War -->
+          <div class="prestige-cluster" title="天下声望 (0-2点，争夺削弱对手；每回合首单部署减费)">
+            <div class="prestige-header">
+              <span class="prestige-title">🎖️ 天下声望</span>
+              <span id="prestige-numeric-text" class="prestige-numbers">0 / 2</span>
+            </div>
+            <div class="prestige-display">
+              <div id="player-prestige-pips" class="prestige-medals">
+                <span class="medal-pip pip-0">☆</span>
+                <span class="medal-pip pip-1">☆</span>
+              </div>
+              <div id="prestige-discount-badge" class="prestige-discount-chip ready" title="本回合首个部署单位可抵扣粮草">
+                首单减费可用
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right Column: Card Deck, Discard Button, End Turn Command -->
+        <div class="hud-subgroup player-deck-actions">
+          
+          <!-- Draw Pile Counter -->
+          <div class="deck-pile-widget" title="己方牌库剩余卡牌">
+            <div class="deck-icon">🎴</div>
+            <div class="deck-text">
+              <span class="deck-label">牌库</span>
+              <span id="friendly-deck-count" class="deck-val">36</span>
+            </div>
+          </div>
+
+          <!-- Graveyard / Discard Button -->
+          <button id="btn-open-discard" class="dock-btn btn-graveyard" title="查看弃牌堆">
+            <span class="btn-icon">🪦</span>
+            <span class="btn-text">弃牌 (<span id="friendly-discard-count">0</span>)</span>
+          </button>
+
+          <!-- Big End Turn Action Button -->
+          <button id="btn-end-turn" class="dock-btn btn-end-turn state-active" title="结束当前行动阶段 (快捷键: Space)">
+            <span class="seal-glow"></span>
+            <span id="end-turn-text" class="seal-text">结束回合</span>
+          </button>
+
+        </div>
+
+      </div>
+    </footer>
+
+
+    <!-- ================================================================ -->
+    <!-- SIDEBAR DRAWER: Combat Log & Tactical Utilities                   -->
+    <!-- ================================================================ -->
+    <aside id="side-drawer" class="tactical-drawer collapsed" aria-label="战报与战术抽屉">
+
+      <div class="drawer-inner-content">
+        <!-- Drawer Header -->
+        <div class="drawer-header">
+          <h2 class="drawer-title">📜 军情战报</h2>
+          <div class="drawer-tools">
+            <button id="btn-clear-log" class="icon-tool-btn" title="清空战报">🗑️</button>
+            <button id="btn-close-drawer" class="icon-tool-btn" title="关闭面板">✕</button>
+          </div>
+        </div>
+
+        <!-- Real-Time Scrolling Combat Feed -->
+        <div id="combat-log-feed" class="combat-log-stream" role="log" aria-live="polite">
+
+        </div>
+      </div>
+    </aside>
+
+
+    <!-- ================================================================ -->
+    <!-- MODAL LAYERS & DIALOGS                                           -->
+    <!-- ================================================================ -->
+
+    <!-- 1. Mulligan Opening Hand Overlay -->
+    <div id="overlay-mulligan" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="起始手牌调度">
+      <div class="modal-box mulligan-box">
+        <h2 class="modal-title">开局手牌调度 (Mulligan)</h2>
+        <p class="modal-subtitle">点击选择需要放回卡组洗混重抽的手牌（仅限1次机会）：</p>
+        <div id="mulligan-cards-container" class="mulligan-cards-row">
+          <!-- 4 or 5 opening cards rendered here -->
+        </div>
+        <div class="modal-actions">
+          <button id="btn-confirm-mulligan" class="modal-btn btn-primary">确认调度 (<span id="mulligan-selected-count">0</span> 张)</button>
+          <button id="btn-keep-mulligan" class="modal-btn btn-secondary">保留全部手牌</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. WebRTC P2P LAN Connection Modal -->
+    <div id="modal-network" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="P2P局域网对战设置">
+      <div class="modal-box network-box">
+        <div class="modal-header">
+          <h2 class="modal-title">联机对战</h2>
+          <button class="modal-close-btn" data-close="modal-network">✕</button>
+        </div>
+        <div id="net-room-panel" class="net-room-panel">
+          <div class="net-mode-tabs" role="tablist">
+            <button class="net-mode-tab" data-mode="cloud">🌐 公网联机</button>
+            <button class="net-mode-tab" data-mode="lan">🏠 局域网</button>
+          </div>
+          <div id="net-server-status" class="net-server-status">正在检测联机服务…</div>
+          <div id="net-room-actions" class="net-room-actions">
+            <button id="net-create-room" class="modal-btn btn-primary net-big-btn">创建房间</button>
+            <div class="net-join-row">
+              <input id="net-room-code-input" class="net-code-input" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="输入房间号">
+              <button id="net-join-room" class="modal-btn btn-primary">加入</button>
+            </div>
+            <div id="net-room-list" class="net-room-list"></div>
+          </div>
+          <div id="net-waiting" class="net-waiting hidden">
+            <div class="net-waiting-label">房间号</div>
+            <div id="net-room-code" class="net-room-code">----</div>
+            <div class="net-waiting-hint">把房间号告诉朋友，对方在「人人对战」里输入即可加入。<span class="net-dots">等待对手加入</span></div>
+            <button id="net-cancel-room" class="modal-btn btn-secondary">取消房间</button>
+          </div>
+          <div id="net-lan-share" class="net-lan-share hidden"></div>
+          <details class="net-server-config">
+            <summary>联机服务器地址</summary>
+            <p class="tab-desc">留空表示使用当前网址所在的服务器。游戏页面与服务器分开部署时才需要填写，例如 https://game.example.com</p>
+            <div class="net-join-row">
+              <input id="net-server-input" class="net-code-input" placeholder="留空 = 当前网站" autocomplete="off">
+              <button id="net-server-save" class="modal-btn btn-secondary">保存并检测</button>
+            </div>
+          </details>
+        </div>
+        <details id="net-advanced" class="net-advanced">
+          <summary>无服务器直连（互换连接码，高级）</summary>
+        <div class="network-tabs">
+          <button class="tab-btn active" data-tab="tab-local-pairing">同机/局域网快联</button>
+          <button class="tab-btn" data-tab="tab-host">创建房间 (Host)</button>
+          <button class="tab-btn" data-tab="tab-join">加入房间 (Client)</button>
+          
+        </div>
+
+        <!-- Tab 1: Local Tab Discovery -->
+        <div id="tab-local-pairing" class="tab-pane active">
+          <p class="tab-desc">基于同浏览器多标签 BroadcastChannel 自动握手：</p>
+          <button id="btn-auto-pair" class="modal-btn btn-primary">开启同机双标签对战</button>
+        </div>
+
+        <!-- Tab 2: Host Room -->
+        <div id="tab-host" class="tab-pane">
+          <p class="tab-desc">生成连接信令代码，发送给局域网好友：</p>
+          <button id="btn-generate-offer" class="modal-btn btn-primary">生成对战连接码 (Offer)</button>
+          <textarea id="text-offer-token" class="token-textarea" readonly placeholder="点击上方按钮生成连接码..."></textarea>
+          <button id="btn-copy-offer" class="modal-btn btn-secondary">一键复制连接码</button>
+          <hr class="tab-divider">
+          <p class="tab-desc">粘贴好友返回的应答码 (Answer)：</p>
+          <textarea id="text-answer-token-input" class="token-textarea" placeholder="在此粘贴客机的应答码..."></textarea>
+          <button id="btn-apply-answer" class="modal-btn btn-primary">完成握手直连</button>
+        </div>
+
+        <!-- Tab 3: Join Room -->
+        <div id="tab-join" class="tab-pane">
+          <p class="tab-desc">粘贴房主发给你的对战连接码 (Offer)：</p>
+          <textarea id="text-offer-token-input" class="token-textarea" placeholder="在此粘贴主机的连接码..."></textarea>
+          <button id="btn-generate-answer" class="modal-btn btn-primary">生成应答码 (Answer)</button>
+          <textarea id="text-answer-token-output" class="token-textarea" readonly placeholder="应答码将在此生成..."></textarea>
+          <button id="btn-copy-answer" class="modal-btn btn-secondary">一键复制应答码</button>
+        </div>
+
+        </details>
+
+        <!-- Tab 4: Bot Sandbox -->
+        <div id="tab-bot" class="tab-pane">
+          <p class="tab-desc">无需网络，直接与启发式 AI 对弈或观战 Bot 互掐：</p>
+          <div class="bot-options">
+            <button id="btn-start-vs-bot" class="modal-btn btn-primary">执魏 · 人机对弈</button>
+            <button id="btn-start-vs-bot-shu" class="modal-btn btn-primary">执蜀 · 人机对弈</button>
+            <button id="btn-start-bot-vs-bot" class="modal-btn btn-secondary">Bot vs Bot 沙盒演练</button>
+            <button id="btn-open-card-editor-start" class="modal-btn btn-secondary">✍️ 自定义卡牌</button>
+            <button id="btn-audio-toggle-lobby" class="modal-btn btn-secondary" title="切换背景音乐与音效">🔊 音乐开启</button>
+          </div>
+          <p class="audio-credit">默认配乐：连接页《长安》、对局《三国杀主题曲》（取自你指定的两条视频）。音频来源见 assets/audio/LICENSES.md。</p>
+          <div class="local-music-inputs">
+            <label>连接页本地配乐 <input id="music-file-lobby" type="file" accept="audio/*"></label>
+            <label>对局本地配乐 <input id="music-file-match" type="file" accept="audio/*"></label>
+          </div>
+          <p id="local-music-status" class="audio-credit" role="status">所选文件只在当前浏览器会话播放，不会进入分享包。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card pack editor: declarative data only, no script execution. -->
+    <div id="modal-card-editor" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="自定义卡牌编辑器">
+      <div class="modal-box card-editor-box">
+        <div class="modal-header">
+          <div><h2 class="modal-title">自定义卡牌工坊</h2><p class="modal-subtitle">保存后从下一局起加入对应势力牌组。可导出 JSON，方便交给 AI 继续编辑。</p></div>
+          <button id="btn-close-card-editor" class="modal-close-btn" aria-label="关闭编辑器">✕</button>
+        </div>
+        <div class="card-editor-content">
+          <aside class="card-editor-list-pane">
+            <button id="btn-new-custom-card" class="modal-btn btn-primary" type="button">＋ 新卡牌</button>
+            <div id="custom-card-list" class="custom-card-list" aria-label="自定义卡牌列表"></div>
+            <div class="editor-import-actions">
+              <label class="modal-btn btn-secondary" for="custom-card-import">导入 JSON 文件</label>
+              <input id="custom-card-import" type="file" accept=".json,application/json">
+              <button id="btn-export-custom-cards" class="modal-btn btn-secondary" type="button">导出卡包 JSON</button>
+            </div>
+          </aside>
+          <div class="card-editor-main">
+            <form id="custom-card-form">
+              <div class="editor-form-grid">
+                <label>卡牌 ID <input name="id" required pattern="[a-z][a-z0-9_-]{2,48}" placeholder="custom_wei_001"></label>
+                <label>名称 <input name="name" required maxlength="32" placeholder="例如：青龙卫"></label>
+                <label>势力 <select name="faction"><option value="WEI">魏</option><option value="SHU">蜀</option></select></label>
+                <label>类型 <select name="type"><option value="UNIT">角色/单位</option><option value="TACTIC">战法</option><option value="COUNTER">反制</option></select></label>
+                <label>兵种 <select name="troopType"><option value="INFANTRY">步兵</option><option value="CAVALRY">骑兵</option><option value="ARCHER">弓兵</option><option value="NAVY">水兵</option><option value="STRATEGIST">谋士</option></select></label>
+                <label>音效 <select name="audioCue"><option value="auto">自动匹配</option><option value="sword">刀剑</option><option value="fireball">火球</option><option value="footstep">脚步</option><option value="cavalry">马蹄</option><option value="water">入水</option><option value="spell">法术</option><option value="none">无</option></select></label>
+                <label>部署费用 <input name="cost" type="number" min="0" max="10" value="2" required></label>
+                <label>行动费用 <input name="actionCost" type="number" min="0" max="10" value="1" required></label>
+                <label>战力 <input name="atk" type="number" min="0" max="20" value="2" required></label>
+                <label>生命 <input name="hp" type="number" min="1" max="30" value="3" required></label>
+                <label>词条（逗号分隔）<input name="keywords" placeholder="突袭, 守护"></label>
+              </div>
+              <label class="editor-wide-label">技能说明 <textarea name="description" rows="2" required maxlength="300" placeholder="说明触发时机和实际效果"></textarea></label>
+              <div class="editor-abilities-header"><h3>触发时机与效果</h3><button id="btn-add-ability" type="button" class="modal-btn btn-secondary">＋ 添加效果</button></div>
+              <div id="editor-ability-rows"></div>
+              <p class="editor-help">多条效果按顺序结算。复杂条件和一个时机下的多个效果可在下方 JSON 中编辑；只接受白名单动作，不运行代码。</p>
+              <div class="editor-form-actions"><button type="submit" class="modal-btn btn-primary">保存卡牌</button><button id="btn-delete-custom-card" type="button" class="modal-btn btn-secondary">删除当前卡牌</button></div>
+            </form>
+            <details class="editor-json-panel"><summary>AI / 高级 JSON 编辑</summary>
+              <p>整个卡包的可导入格式。请让 AI 按当前 JSON 的 schemaVersion、cards、abilities、trigger、effects 字段生成内容。</p>
+              <textarea id="editor-pack-json" spellcheck="false" aria-label="卡包 JSON"></textarea>
+              <button id="btn-apply-card-json" class="modal-btn btn-primary" type="button">校验并应用 JSON</button>
+            </details>
+            <p id="card-editor-status" class="card-editor-status" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Card Inspector Modal (Right Click / Long Press) -->
+    <div id="modal-card-inspector" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="卡牌详情监视器">
+      <div class="modal-box inspector-box">
+        <button class="modal-close-btn" data-close="modal-card-inspector">✕</button>
+        <div class="inspector-card-preview" id="inspector-card-preview-slot">
+          <!-- Full-size card rendered here -->
+        </div>
+        <div class="inspector-details-pane">
+          <h2 id="inspector-card-name" class="inspector-title">卡牌名称</h2>
+          <div class="inspector-meta-row">
+            <span id="inspector-faction-badge" class="meta-badge">势力: 魏</span>
+            <span id="inspector-troop-badge" class="meta-badge">兵种: 马军</span>
+            <span id="inspector-cost-badge" class="meta-badge">粮草: 5</span>
+            <span id="inspector-action-cost-badge" class="meta-badge">行动: 1</span>
+          </div>
+          <div class="inspector-section">
+            <h3 class="section-title">卡面技能与战法</h3>
+            <p id="inspector-skill-text" class="skill-description">技能描述文本...</p>
+          </div>
+          <div class="inspector-section">
+            <h3 class="section-title">词条解释</h3>
+            <div id="inspector-keywords-glossary" class="keywords-glossary-list">
+              <!-- Keyword glossary definition chips -->
+            </div>
+          </div>
+          <div class="inspector-section">
+            <h3 class="section-title">卡牌背景</h3>
+            <p id="inspector-flavor-text" class="flavor-quote">暂无卡牌背景</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Discard Pile Browser Modal -->
+    <div id="modal-discard" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="弃牌堆查看">
+      <div class="modal-box discard-box">
+        <div class="modal-header">
+          <h2 class="modal-title">弃牌堆历史查看 (<span id="discard-viewer-count">0</span> 张)</h2>
+          <button class="modal-close-btn" data-close="modal-discard">✕</button>
+        </div>
+        <div id="discard-cards-grid" class="discard-cards-grid">
+          <!-- Cards in graveyard rendered in grid -->
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Rulebook & Keyword Reference Modal -->
+    <div id="modal-rulebook" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="三国KARDS核心规则速查">
+      <div class="modal-box rulebook-box">
+        <div class="modal-header">
+          <h2 class="modal-title">《三国KARDS》战法规则速查宝典</h2>
+          <button class="modal-close-btn" data-close="modal-rulebook">✕</button>
+        </div>
+        <div class="rulebook-content-scroll">
+          <section class="rule-chapter">
+            <h3>一、三线阵地与推进占领</h3>
+            <p><strong>支援阵线</strong>：双方各容纳1张主城及最多4名单位。单位默认部署在此。主城无反击。</p>
+            <p><strong>前线三区</strong>：划分左、中、右三个独立区域，每区域同时间仅允许单方独占。进入前线需消耗行动费用进驻空置区域；若有敌军驻守必须完全歼灭后方可占领。</p>
+            <p><strong>地形</strong>：双方主城各含地形牌，开局洗混随机抽3张置于前线，剩余1张备用。</p>
+            <p><strong>平原</strong>（容量3）：无特殊效果。</p>
+            <p><strong>水域</strong>（容量4）：只有水军可以同时移动和攻击——水军如鱼得水。</p>
+            <p><strong>林地</strong>（容量2）：此处单位获得【先登】；此处单位受到的火攻伤害翻倍——埋伏一手，但是怕火。</p>
+            <p><strong>山地</strong>（容量2）：此处所有单位视为步兵，并获得【矢石】——行路艰难，但是居高临下。</p>
+            <p><strong>险关</strong>（容量2）：此处单位每回合最多被攻击1次——易守难攻。</p>
+            <p><strong>主城</strong>：魏·许昌（平原、平原）、魏·洛阳（平原、险关）；蜀·新野（平原、林地）、蜀·零陵（山地、林地）。主城生命20。</p>
+          </section>
+          <section class="rule-chapter">
+            <h3>二、粮草与声望资源</h3>
+            <p><strong>双粮仓机制</strong>：主城粮仓上限每回合+1自然增长至10；额外粮仓无上限，优先消耗与扣减。</p>
+            <p><strong>声望拔河</strong>：声望上限2点，动态争夺。己方获得声望时若对手有则偷扣对手，无则自增。每回合首次部署按当前声望直接减免费用！</p>
+            <p><strong>士气透支</strong>：牌库抽空后，第N次透支扣除N点主城生命值。</p>
+          </section>
+          <section class="rule-chapter">
+            <h3>站位与相邻</h3>
+            <p>部署或移动时，单位插入到你松手的位置；己方行动阶段内可随时<strong>拖动己方单位</strong>在同一阵线/区域内调整站位（不耗粮草、不占行动）。</p>
+            <p>【督战】【守护】【护卫】只作用于左右紧挨的单位；主城位于支援阵线最左侧，与第一个单位相邻。</p>
+          </section>
+          <section class="rule-chapter">
+            <h3>三、四大兵种机动体系</h3>
+            <p><strong>步军</strong>：每回合移动或攻击（二选一）。</p>
+            <p><strong>马军</strong>：每回合可移动并攻击（顺序不限）。</p>
+            <p><strong>水军</strong>：水域中等同马军，非水域等同步军。</p>
+            <p><strong>谋士</strong>：全图无视距离攻击！只受谋士反击且只反击谋士。若所在区域有敌谋必须强制优先攻击！</p>
+          </section>
+          <section class="rule-chapter">
+            <h3>四、25+核心战斗词条</h3>
+            <p><strong>【奋战】</strong>：每回合可攻击2次。<strong>【斩将】</strong>：攻击战力低于己方直接移除。<strong>【冲阵】</strong>：首击免反击。<strong>【先登】</strong>：先攻且击杀免反击。<strong>【矢石】</strong>：仅受矢石反击。<strong>【攻心】</strong>：无视一切防御词条。<strong>【火攻】</strong>：击杀相邻传递伤害并穿透坚阵。<strong>【守护】</strong>：阻挡对相邻友军和主城的攻击。<strong>【伏击】</strong>：首被攻击先手反击杀敌无伤。<strong>【潜袭】</strong>：背面进场免战法。<strong>【游击】</strong>：可撤退支援线，首被攻击可脱离。</p>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主城选择 -->
+    <div id="modal-hq-pick" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="选择主城">
+      <div class="modal-box hq-pick-box">
+        <h2 class="hq-pick-title">选择主城</h2>
+        <p class="hq-pick-sub">双方主城各带2张地形，开局洗混后随机抽3张置于前线，余1张备用。</p>
+        <div class="hq-pick-enemy">我方势力：<span id="hq-pick-self-options"></span></div>
+        <div class="hq-pick-enemy" id="hq-pick-enemy-row">对手势力：<span id="hq-pick-enemy-options"></span></div>
+        <div id="hq-pick-options" class="hq-pick-options"></div>
+        <div class="modal-actions">
+          <button id="hq-pick-random" class="modal-btn btn-secondary">随机主城</button>
+          <button id="hq-pick-cancel" class="modal-btn btn-secondary">返回</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 军令菜单（局内暂停层） -->
+    <div id="modal-game-menu" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="军令菜单">
+      <div class="modal-box game-menu-box">
+        <div class="game-menu-seal">军令</div>
+        <div class="game-menu-list">
+          <button id="menu-resume" class="menu-item menu-primary">继续作战</button>
+          <button id="menu-restart" class="menu-item">重新开始</button>
+          <button id="menu-surrender" class="menu-item menu-danger">俯首认输</button>
+          <button id="menu-rules" class="menu-item">规则与词条</button>
+          <button id="menu-home" class="menu-item">返回主页</button>
+        </div>
+        <div class="game-menu-audio">
+          <button id="btn-audio-toggle" class="menu-audio-btn" title="开启或关闭音频" aria-label="关闭音频">🔊</button>
+          <input id="audio-volume" type="range" min="0" max="100" value="65" aria-label="音量" title="音量">
+        </div>
+        <p class="game-menu-hint">Esc 开关菜单 · 右键取消选择 · 空格结束回合 · 悬停卡牌查看技能</p>
+      </div>
+    </div>
+
+    <!-- 二次确认 -->
+    <div id="modal-confirm" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="确认">
+      <div class="modal-box confirm-box">
+        <h3 id="confirm-title" class="confirm-title">确认</h3>
+        <p id="confirm-text" class="confirm-text"></p>
+        <div class="modal-actions">
+          <button id="confirm-yes" class="modal-btn btn-primary">确定</button>
+          <button id="confirm-no" class="modal-btn btn-secondary">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. Match Concluded / Game Over Modal -->
+    <div id="modal-game-over" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="对局结算">
+      <div class="modal-box game-over-box">
+        <div id="game-over-banner" class="game-over-banner banner-victory">
+          <h1 id="game-over-title" class="game-over-title">大捷 · 统一天下</h1>
+          <p id="game-over-reason" class="game-over-reason">敌方主城陷落，蜀汉光复汉室！</p>
+        </div>
+        <div class="game-over-stats">
+          <div class="stat-item"><span class="stat-label">总历回合</span><span id="stat-turns" class="stat-val">12</span></div>
+          <div class="stat-item"><span class="stat-label">击破敌军</span><span id="stat-kills" class="stat-val">8</span></div>
+          <div class="stat-item"><span class="stat-label">粮草总耗</span><span id="stat-provisions" class="stat-val">58</span></div>
+        </div>
+        <div class="modal-actions">
+          <button id="btn-restart-game" class="modal-btn btn-primary">再战一局</button>
+          <button id="btn-game-over-home" class="modal-btn btn-secondary">返回主页</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Entry Script -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

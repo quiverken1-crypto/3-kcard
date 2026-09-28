@@ -1,0 +1,160 @@
+/* ==========================================================================
+   fx.css — 战斗特效（飘血、弹道、冲锋残影、阵亡、战法）
+   ========================================================================== */
+.bfx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 70; overflow: hidden; }
+.bfx-layer > * { position: fixed; pointer-events: none; }
+
+/* ---------- 伤害飘字 ---------- */
+.bfx-float {
+  transform: translate(-50%, -50%);
+  font: 900 30px/1 "Impact", "Arial Black", var(--font-mono-numbers);
+  color: #ff3b2f;
+  -webkit-text-stroke: 1.5px #2a0703;
+  text-shadow: 0 3px 0 #2a0703, 0 0 14px rgba(255, 60, 40, .55);
+  animation: bfxFloat 1.25s cubic-bezier(.2,.8,.3,1) forwards;
+  white-space: nowrap;
+  z-index: 3;
+}
+.bfx-crit { font-size: 40px; color: #ff6a1a; text-shadow: 0 3px 0 #2a0703, 0 0 20px rgba(255,140,40,.8); animation-name: bfxFloatCrit; }
+.bfx-counter { font-size: 24px; color: #ff8a70; }
+.bfx-hq { font-size: 36px; color: #ffd24a; -webkit-text-stroke: 1.5px #3a2400; text-shadow: 0 3px 0 #3a2400, 0 0 18px rgba(255,200,60,.7); }
+.bfx-heal { color: #7dff8a; }
+.bfx-block { font: 700 18px var(--font-serif-calligraphy); color: #d8e6ff; -webkit-text-stroke: 0; text-shadow: 0 2px 4px #000; }
+@keyframes bfxFloat {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(.6); }
+  15% { opacity: 1; transform: translate(-50%, -70%) scale(1.25); }
+  30% { transform: translate(-50%, -80%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -190%) scale(.95); }
+}
+@keyframes bfxFloatCrit {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(.5) rotate(-8deg); }
+  18% { opacity: 1; transform: translate(-50%, -70%) scale(1.5) rotate(4deg); }
+  35% { transform: translate(-50%, -85%) scale(1.1) rotate(0); }
+  100% { opacity: 0; transform: translate(-50%, -200%) scale(1); }
+}
+
+/* ---------- 血滴 ---------- */
+.bfx-blood {
+  width: var(--s, 5px); height: var(--s, 5px);
+  border-radius: 50% 50% 50% 0;
+  background: radial-gradient(circle at 35% 35%, #ff5a4a, #8a0d06);
+  transform: translate(-50%, -50%);
+  animation: bfxBlood .75s cubic-bezier(.2,.6,.4,1) forwards;
+}
+@keyframes bfxBlood {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.5); }
+}
+
+/* ---------- 命中 ---------- */
+.bfx-impact { width: 110px; height: 110px; transform: translate(-50%, -50%); }
+.bfx-impact svg { width: 100%; height: 100%; animation: bfxSlash .45s ease-out forwards; filter: drop-shadow(0 0 6px rgba(255,90,60,.8)); }
+@keyframes bfxSlash { 0% { opacity: 0; transform: scale(.4) rotate(-20deg); } 30% { opacity: 1; transform: scale(1.1) rotate(0); } 100% { opacity: 0; transform: scale(1.2); } }
+.bfx-impact-hit, .bfx-impact-pierce, .bfx-impact-magic, .bfx-impact-boom {
+  border-radius: 50%;
+  animation: bfxRing .5s ease-out forwards;
+}
+.bfx-impact-hit { background: radial-gradient(circle, rgba(255,240,210,.95) 0 12%, rgba(255,90,60,.6) 30%, transparent 62%); }
+.bfx-impact-pierce { background: radial-gradient(circle, rgba(255,255,255,.95) 0 8%, rgba(200,220,255,.5) 26%, transparent 55%); }
+.bfx-impact-magic { background: radial-gradient(circle, rgba(255,255,255,.95) 0 10%, rgba(181,108,255,.75) 32%, transparent 64%); width: 130px; height: 130px; }
+.bfx-impact-boom { background: radial-gradient(circle, rgba(255,250,220,1) 0 10%, rgba(255,150,40,.8) 30%, rgba(90,50,20,.5) 50%, transparent 68%); width: 160px; height: 160px; }
+@keyframes bfxRing { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.2); } 25% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.3); } }
+
+/* ---------- 弹道 ---------- */
+.bfx-proj { transform-origin: 0 50%; }
+.bfx-proj-arrow { width: 34px; height: 3px; margin-top: -1.5px; background: linear-gradient(90deg, rgba(210,190,150,.2), #e8d7b0 60%, #fff 100%); border-radius: 2px; box-shadow: 0 0 4px rgba(255,255,255,.6); }
+.bfx-proj-arrow::after { content: ""; position: absolute; right: -6px; top: -3px; border-left: 8px solid #fff; border-top: 4.5px solid transparent; border-bottom: 4.5px solid transparent; }
+.bfx-proj-stone { width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #b9a58a, #4a3b2a); box-shadow: 0 0 8px rgba(0,0,0,.6), 0 0 16px rgba(255,160,60,.35); transform-origin: 50% 50%; }
+.bfx-proj-orb { width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: radial-gradient(circle, #fff 0 18%, #c38bff 45%, rgba(120,60,200,0) 72%); box-shadow: 0 0 22px rgba(181,108,255,.9); transform-origin: 50% 50%; }
+.bfx-proj-fire { width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; background: radial-gradient(circle, #fff6c0 0 15%, #ff9a2a 45%, rgba(220,50,20,0) 72%); box-shadow: 0 0 24px rgba(255,120,30,.9); transform-origin: 50% 50%; }
+
+/* ---------- 冲锋残影 / 阵亡 ---------- */
+.bfx-ghost { position: fixed !important; margin: 0 !important; z-index: 2; filter: drop-shadow(0 0 10px rgba(255,220,150,.6)); animation: none !important; }
+.bfx-ghost.bfx-dying { animation: bfxDie .95s ease-in forwards !important; filter: none; }
+@keyframes bfxDie {
+  0% { opacity: 1; transform: none; filter: none; }
+  25% { opacity: 1; transform: translateX(-3px) rotate(-2deg); filter: brightness(1.6) saturate(0); }
+  100% { opacity: 0; transform: translateY(26px) rotate(7deg) scale(.9); filter: grayscale(1) brightness(.4) blur(1px); }
+}
+
+/* ---------- 印章 ---------- */
+.bfx-stamp {
+  transform: translate(-50%, -50%);
+  font: 900 44px var(--font-serif-calligraphy);
+  color: #fff3e6;
+  padding: 2px 10px;
+  border: 3px solid currentColor;
+  border-radius: 6px;
+  background: rgba(142, 42, 32, .88);
+  box-shadow: 0 6px 18px rgba(0,0,0,.6);
+  animation: bfxStamp .85s cubic-bezier(.2,1.4,.4,1) forwards;
+  z-index: 4;
+}
+.bfx-stamp-banish { background: rgba(160, 10, 10, .92); font-size: 56px; }
+.bfx-stamp-dead { background: rgba(20, 20, 20, .85); font-size: 34px; color: #d9d1c4; }
+.bfx-stamp-trap { background: rgba(110, 40, 150, .9); }
+.bfx-stamp-skill { background: rgba(160, 110, 20, .9); font-size: 22px; }
+@keyframes bfxStamp {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(2.2) rotate(-12deg); }
+  30% { opacity: 1; transform: translate(-50%, -50%) scale(.95) rotate(-6deg); }
+  75% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(-6deg); }
+  100% { opacity: 0; transform: translate(-50%, -60%) scale(1) rotate(-6deg); }
+}
+
+/* ---------- 爆发（火、魅惑、烟、酒、金光） ---------- */
+.bfx-burst { width: 150px; height: 150px; border-radius: 50%; animation: bfxRing .8s ease-out forwards; }
+.bfx-burst-fire { background: radial-gradient(circle, #fff3b0 0 10%, #ff9a2a 30%, rgba(210,40,20,.6) 50%, transparent 70%); }
+.bfx-burst-charm { background: radial-gradient(circle, #fff 0 8%, rgba(200,120,255,.8) 30%, rgba(120,40,200,.3) 55%, transparent 72%); }
+.bfx-burst-smoke { background: radial-gradient(circle, rgba(230,230,230,.85) 0 20%, rgba(160,160,160,.5) 45%, transparent 72%); }
+.bfx-burst-wine { background: radial-gradient(circle, #ffd9d0 0 8%, rgba(190,30,50,.8) 32%, rgba(90,0,20,.35) 55%, transparent 72%); }
+.bfx-burst-gold { background: radial-gradient(circle, #fffbe0 0 10%, rgba(243,216,146,.85) 30%, rgba(217,179,106,.3) 55%, transparent 72%); width: 190px; height: 190px; }
+.bfx-ember { width: 6px; height: 6px; border-radius: 50%; background: #ffb347; box-shadow: 0 0 6px #ff7a1a; animation: bfxEmber .8s ease-out forwards; }
+@keyframes bfxEmber { 0% { opacity: 1; transform: translate(-50%, -50%); } 100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.3); } }
+
+/* 箭雨 */
+.bfx-rain-arrow { width: 3px; height: 38px; margin-left: -1.5px; background: linear-gradient(180deg, rgba(220,200,160,0), #efe0bd 70%, #fff); border-radius: 2px; opacity: 0; animation: bfxRain .45s ease-in forwards; }
+@keyframes bfxRain { 0% { opacity: 0; transform: translateY(0); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(150px); } }
+
+/* ---------- 横幅（战法 / 反制） ---------- */
+.bfx-banner {
+  left: 50%; top: 42%;
+  transform: translate(-50%, -50%);
+  padding: 10px 46px;
+  font: 700 30px var(--font-serif-calligraphy);
+  letter-spacing: 6px;
+  color: #fff3d6;
+  background: linear-gradient(90deg, transparent, rgba(40,28,14,.92) 18%, rgba(40,28,14,.92) 82%, transparent);
+  border-top: 1px solid rgba(243,216,146,.7);
+  border-bottom: 1px solid rgba(243,216,146,.7);
+  text-shadow: 0 2px 8px rgba(0,0,0,.8);
+  animation: bfxBanner 1.25s ease forwards;
+  z-index: 5;
+  white-space: nowrap;
+}
+.bfx-banner-counter { color: #f1d6ff; background: linear-gradient(90deg, transparent, rgba(60,20,80,.92) 18%, rgba(60,20,80,.92) 82%, transparent); border-color: rgba(200,140,255,.7); }
+@keyframes bfxBanner {
+  0% { opacity: 0; clip-path: inset(0 50% 0 50%); }
+  18% { opacity: 1; clip-path: inset(0 0 0 0); }
+  75% { opacity: 1; clip-path: inset(0 0 0 0); }
+  100% { opacity: 0; transform: translate(-50%, -60%); }
+}
+
+/* ---------- 作用在单位节点上的临时效果 ---------- */
+.board-unit.bfx-deploy { animation: bfxDeploy .6s cubic-bezier(.2,1.3,.4,1); }
+@keyframes bfxDeploy { 0% { transform: translateY(-26px) scale(1.12); opacity: 0; filter: brightness(1.8); } 60% { opacity: 1; } 100% { transform: none; filter: none; } }
+.board-unit.bfx-dust { animation: bfxLand .5s ease-out; box-shadow: 0 10px 0 -4px rgba(190,160,110,.45), 0 12px 18px rgba(190,160,110,.35) !important; }
+.board-unit.bfx-splash { animation: bfxLand .5s ease-out; box-shadow: 0 0 0 3px rgba(140,200,255,.6), 0 0 26px rgba(120,190,255,.7) !important; }
+@keyframes bfxLand { 0% { transform: translateY(-10px); } 60% { transform: translateY(2px); } 100% { transform: none; } }
+.board-unit.bfx-heal { box-shadow: 0 0 0 3px rgba(125,255,138,.8), 0 0 26px rgba(125,255,138,.7) !important; filter: brightness(1.15); }
+.board-unit.bfx-buff { box-shadow: 0 0 0 3px rgba(243,216,146,.9), 0 0 26px rgba(243,216,146,.7) !important; filter: brightness(1.15); }
+.board-unit.bfx-rage { box-shadow: 0 0 0 3px rgba(255,80,50,.85), 0 0 26px rgba(255,60,30,.7) !important; filter: saturate(1.4); }
+.bfx-hq-shake { animation: bfxShake .45s linear; }
+@keyframes bfxShake { 0%,100% { transform: none; } 20% { transform: translate(-5px, 2px); } 40% { transform: translate(5px, -2px); } 60% { transform: translate(-3px, 1px); } 80% { transform: translate(3px, 0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .bfx-float, .bfx-stamp, .bfx-banner, .bfx-burst, .bfx-impact { animation-duration: .01s !important; }
+}
+.bfx-ghost-wrap { z-index: 2; }
+.bfx-ghost-wrap .bfx-ghost { margin: 0 !important; animation: none !important; transition: none !important; }
+.bfx-ghost-wrap.bfx-dash { filter: drop-shadow(0 0 12px rgba(255,220,150,.7)); }
+.bfx-ghost-wrap.bfx-dying { animation: bfxDie .95s ease-in forwards; }

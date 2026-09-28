@@ -1,0 +1,88 @@
+/* Playable space on both wide monitors and small windows. */
+.game-container { height: 100dvh; }
+.hud-top-bar { flex: 0 0 var(--top-bar-height); min-width: 0; overflow-x: auto; overflow-y: hidden; gap: 20px; }
+.hud-top-bar .hud-group { flex-shrink: 0; }
+.battlefield-viewport { min-height: 0; justify-content: flex-start; align-items: flex-start; overflow: auto; padding: 10px 48px 10px 12px; }
+.targeting-overlay { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 90; pointer-events: none; }
+.turn-timer-display { display: flex; flex-direction: column; gap: 2px; min-width: 57px; color: #e8d8ad; text-align: center; }
+.turn-timer-track { display: block; width: 57px; height: 4px; background: #3a404c; border-radius: 4px; overflow: hidden; }
+#turn-timer-fill { display: block; height: 100%; width: 100%; background: #d9ae57; transition: width .2s linear; }
+.turn-timer-display.warning { color: #ffb2a0; }
+.turn-timer-display.warning #turn-timer-fill { background: #e85c4b; }
+.board-aspect-wrapper { flex: 0 0 auto; min-width: 1020px; min-height: 520px; height: max(100%, 520px); gap: 8px; }
+.dock-bottom-bar { flex: 0 0 218px; height: 218px; min-height: 0; }
+.hand-fan-tray { flex: 1 1 auto; min-height: 0; height: 154px; justify-content: flex-start; overflow-x: auto; overflow-y: hidden; padding: 4px 12px; }
+.hand-card-fan { position: relative; display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: max-content; min-width: 100%; height: 100%; }
+.hand-card-fan .card-hand { position: relative; bottom: auto; flex: 0 0 102px; width: 102px; height: 142px; margin: 0; transform: none !important; cursor: pointer; }
+.hand-card-fan .card-hand:hover,
+.hand-card-fan .card-hand.selected { transform: none !important; outline: 3px solid var(--trim-gold-bright); border-color: var(--trim-gold-bright); box-shadow: 0 0 0 3px rgba(240,201,120,.22), 0 8px 18px rgba(0,0,0,.7); }
+.hand-card-fan .card-hand.selected { transform: translateY(-6px) !important; }
+.player-hud-bar { flex: 0 0 62px; height: 62px; min-height: 62px; overflow-x: auto; gap: 24px; padding: 0 14px; }
+.player-hud-bar .hud-subgroup { flex-shrink: 0; }
+.tactical-drawer { bottom: 218px !important; width: min(320px, calc(100vw - 48px)); }
+.tactical-drawer.collapsed { pointer-events: none; }
+.tactical-drawer.collapsed .drawer-toggle-handle { pointer-events: auto; }
+.skill-trigger-panel { bottom: 224px; width: min(620px, calc(100vw - 24px)); }
+.hud-top-bar, .battlefield-viewport, .hand-fan-tray, .player-hud-bar { scrollbar-width: thin; scrollbar-color: var(--trim-bronze-light) #161922; }
+.hud-top-bar::-webkit-scrollbar, .battlefield-viewport::-webkit-scrollbar, .hand-fan-tray::-webkit-scrollbar, .player-hud-bar::-webkit-scrollbar { width: 6px; height: 6px; }
+.hud-top-bar::-webkit-scrollbar-thumb, .battlefield-viewport::-webkit-scrollbar-thumb, .hand-fan-tray::-webkit-scrollbar-thumb, .player-hud-bar::-webkit-scrollbar-thumb { background: var(--trim-bronze-light); border-radius: 9px; }
+
+.card-info-button { position: absolute; z-index: 15; right: 3px; top: 26px; width: 23px; height: 23px; padding: 0; border-radius: 50%; border: 1px solid var(--trim-gold-antique); background: #151b26; color: #fff1cb; font: 700 12px var(--font-serif-calligraphy); cursor: pointer; touch-action: manipulation; }
+.card-info-button:hover, .card-info-button:focus-visible { background: #735328; outline: 2px solid #fff1cb; }
+.prestige-discount-chip.pending, .prestige-discount-chip.inactive { color: #bac3d1; border-color: #6c7586; background: rgba(80, 88, 102, .18); }
+.board-unit .card-info-button { top: 23px; }
+.inspector-box { position: relative; }
+.inspector-box > .modal-close-btn { position: absolute; top: 8px; right: 8px; z-index: 2; }
+.keywords-glossary-list p { padding: 5px 8px; margin: 3px 0; background: rgba(255,255,255,.05); border-radius: 4px; font-size: 12px; }
+
+@media (max-width: 700px) {
+  .hud-top-bar { padding: 0 10px; }
+  .player-hud-bar { justify-content: flex-start; }
+  .player-hud-bar { padding-right: 112px; }
+  #btn-end-turn { position: fixed; bottom: 5px; right: 6px; z-index: 90; width: 102px; height: 50px; }
+  .inspector-box { flex-direction: column; align-items: center; overflow-y: auto; }
+  .inspector-details-pane { width: 100%; max-height: none; }
+  .inspector-card-preview { display: none; }
+}
+
+/* Card pack editor */
+#modal-card-editor { z-index: 1100; }
+.card-editor-box { width: min(1120px, 96vw); max-width: 96vw; height: min(760px, 94vh); max-height: 94vh; }
+.card-editor-content { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 0; flex: 1; }
+.card-editor-list-pane { padding: 14px; border-right: 1px solid var(--trim-bronze-dark); display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.custom-card-list { flex: 1; min-height: 0; overflow-y: auto; font-size: 12px; }
+.custom-card-list-item { width: 100%; padding: 8px; margin: 3px 0; text-align: left; background: #202735; border: 1px solid #475064; border-radius: 5px; color: #eee7d8; cursor: pointer; }
+.custom-card-list-item.active, .custom-card-list-item:hover { border-color: var(--trim-gold-bright); background: #393328; }
+.editor-import-actions { display: flex; flex-direction: column; gap: 7px; }
+.editor-import-actions .modal-btn { text-align: center; cursor: pointer; }
+#custom-card-import { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.card-editor-main { padding: 14px 18px 24px; overflow-y: auto; min-width: 0; }
+.editor-form-grid { display: grid; grid-template-columns: repeat(5, minmax(115px, 1fr)); gap: 9px; }
+.card-editor-main label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #d6c59f; }
+.card-editor-main input, .card-editor-main select, .card-editor-main textarea { min-width: 0; width: 100%; padding: 7px 8px; color: #f8f3e8; background: #1b2230; border: 1px solid #5c6471; border-radius: 4px; font: 12px var(--font-sans-ui); }
+.card-editor-main input:focus, .card-editor-main select:focus, .card-editor-main textarea:focus { outline: 2px solid var(--trim-gold-bright); outline-offset: 1px; }
+.editor-wide-label { margin-top: 10px; }
+.editor-abilities-header, .editor-form-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 14px 0 8px; }
+.editor-abilities-header h3 { font: bold 14px var(--font-serif-calligraphy); color: var(--trim-gold-bright); }
+.editor-ability-row { display: grid; grid-template-columns: 1fr 1.25fr 1.25fr 66px 1fr 1fr 28px; gap: 6px; align-items: end; padding: 8px 0; border-top: 1px solid #39404d; }
+.editor-remove-ability { height: 30px; color: #f6adad; border: 1px solid #764b4b; border-radius: 4px; background: #322226; cursor: pointer; }
+.editor-help, .editor-json-panel p { font-size: 11px; color: #aeb9c8; line-height: 1.5; }
+.editor-json-panel { border-top: 1px solid var(--trim-bronze-dark); padding-top: 12px; margin-top: 12px; }
+.editor-json-panel summary { color: var(--trim-gold-bright); cursor: pointer; }
+#editor-pack-json { height: 200px; font: 12px Consolas, monospace; margin: 8px 0; }
+.card-editor-status { min-height: 20px; margin-top: 10px; font-size: 12px; color: #a6e0bc; }
+.card-editor-status.error { color: #ffb0a6; }
+.drawer-tools #audio-volume { width: 72px; accent-color: var(--trim-gold-bright); }
+.audio-credit { margin-top: 12px; font-size: 10px; line-height: 1.5; color: #aeb8c9; }
+.local-music-inputs { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 9px; }
+.local-music-inputs label { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #d7c8a8; }
+.local-music-inputs input { max-width: 185px; font-size: 10px; }
+@media (max-width: 900px) {
+  .editor-form-grid { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
+  .editor-ability-row { grid-template-columns: repeat(3, minmax(80px, 1fr)); }
+}
+@media (max-width: 650px) {
+  .card-editor-content { grid-template-columns: 1fr; overflow-y: auto; }
+  .card-editor-list-pane { border-right: 0; border-bottom: 1px solid var(--trim-bronze-dark); max-height: 170px; }
+  .card-editor-main { overflow-y: visible; }
+}
