@@ -182,7 +182,8 @@ export class AppCoordinator {
     // 手机布局：横屏矮屏 → m-land；竖屏手机 → m-land + m-port
     // 用实际可见高度（扣掉浏览器地址栏/标签栏）排版
     const applyLayout = () => {
-      const w = globalThis.innerWidth, h = globalThis.innerHeight;
+      const vv = globalThis.visualViewport;
+      const w = Math.round(vv?.width || globalThis.innerWidth), h = Math.round(vv?.height || globalThis.innerHeight);
       doc.documentElement.style.setProperty('--app-h', `${h}px`);
       const port = h > w && w <= 600;
       const land = (w >= h && h <= 540) || port;
@@ -206,7 +207,7 @@ export class AppCoordinator {
       const busy = Boolean(this.interaction?._isBusySelecting?.()) && !doc.body.classList.contains('at-home');
       doc.body.classList.toggle('is-selecting', busy);
     }, 150);
-    const refit = () => setTimeout(() => this._fitBoard(), 250);
+    const refit = () => { for (const ms of [120, 400, 900]) setTimeout(() => { this._applyLayout?.(); this._fitBoard(); }, ms); };
     globalThis.addEventListener?.('orientationchange', refit);
     doc.addEventListener('fullscreenchange', refit);
   }

@@ -79,7 +79,7 @@ export class BattleFx {
   }
 
   blood(at, amount = 3, delay = 0) {
-    if (!at || reduced()) return;
+    if (!at) return;
     const d = doc();
     setTimeout(() => {
       const n = Math.min(12, 4 + amount);

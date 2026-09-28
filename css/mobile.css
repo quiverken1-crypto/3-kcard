@@ -6,7 +6,7 @@
 html:has(body.m-land), body.m-land, body.m-land { height: 100%; overscroll-behavior: none; }
 body.m-land #game-app.game-container {
     display: grid !important;
-    width: 100vw; height: 100vh; height: 100dvh; height: var(--app-h, 100dvh);
+    width: 100vw; height: 100vh; height: 100dvh; height: min(var(--app-h, 100dvh), 100dvh);
     grid-template-columns: minmax(0, 1fr) 118px;
     grid-template-rows: 32px auto auto auto minmax(0, 1fr) auto 92px;
     background: #120e0a !important;
@@ -161,9 +161,13 @@ body.m-port #top-bar .hud-action-btn { padding: 0 6px; }
 
 body.m-port #battlefield-main.battlefield-viewport { grid-column: 1 / -1; grid-row: 2; padding: 2px !important; }
 body.m-port .board-aspect-wrapper { width: 600px !important; grid-template-rows: auto auto auto !important; height: auto !important; aspect-ratio: auto !important; }
-body.m-port .line-frontline { display: flex !important; flex-direction: column !important; gap: 4px !important; }
+body.m-port .line-frontline { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 4px !important; align-items: stretch !important; }
 body.m-port .zone-terrain-banner .terrain-effect-line { white-space: nowrap; }
-body.m-port .frontline-zone { width: 100% !important; max-width: none !important; flex: 0 0 auto !important; }
+body.m-port .frontline-zone { width: auto !important; max-width: none !important; min-width: 0 !important; display: flex !important; flex-direction: column !important; }
+body.m-port .frontline-zone .zone-slots-container { flex-direction: column !important; justify-content: flex-start !important; gap: 4px !important; flex: 1 1 auto; }
+body.m-port .zone-terrain-banner { flex-wrap: wrap !important; justify-content: center !important; gap: 2px 6px !important; text-align: center; }
+body.m-port .zone-terrain-banner .terrain-effect-line { flex-basis: 100% !important; order: 5 !important; margin: 0 !important; font-size: 12px !important; white-space: normal !important; }
+body.m-port .zone-terrain-banner .zone-occupant-badge { margin-left: 0 !important; }
 body.m-port .frontline-zone .zone-slots-container { justify-content: center; }
 
 body.m-port #player-dock .player-hq-meta { grid-column: 1 / 4; grid-row: 3; margin: 4px 2px 4px 4px; }
@@ -222,4 +226,33 @@ body.m-port #player-dock .hand-card-fan .card-hand { position: relative; }
 @media (max-width: 400px) {
   body.m-port #top-bar .prestige-badge { display: none !important; }
   body.m-port #top-bar .hq-status-group { width: 52px !important; }
+}
+
+.insert-marker.horizontal { background: linear-gradient(90deg, transparent, #f3d892 15%, #f3d892 85%, transparent); }
+
+/* 固定定位的浮层也避开刘海/底部横条 */
+body.m-land .card-inspector-tooltip { left: calc(6px + env(safe-area-inset-left, 0px)) !important; }
+body.m-land .toast-stack, body.m-land .toast-alert { left: calc(10px + env(safe-area-inset-left, 0px)) !important; }
+body.m-land .tactical-drawer { right: env(safe-area-inset-right, 0px) !important; }
+
+/* ===== 手机上的主页与弹窗：不换行、不被裁掉 ===== */
+.touch-only { display: none; }
+@media (pointer: coarse) { .touch-only { display: block; } .desktop-only { display: none !important; } }
+.home-sub-actions { flex-wrap: wrap; row-gap: 6px; }
+.home-link { white-space: nowrap; }
+.modal-box { max-height: calc(100dvh - 16px); overflow-y: auto; }
+@media (max-width: 420px) {
+  .home-sub-actions { gap: 4px 10px !important; }
+  .game-over-title { font-size: 24px !important; letter-spacing: 2px !important; }
+}
+@media (max-height: 540px) {
+  .home-panel { max-height: calc(100dvh - 12px); overflow-y: auto; padding-top: 12px !important; padding-bottom: 12px !important; }
+  .home-panel .home-seal { display: none; }
+  .home-title { font-size: 30px !important; margin: 0 !important; }
+  .home-subtitle { margin: 2px 0 8px !important; }
+  .home-btn { padding-top: 6px !important; padding-bottom: 6px !important; }
+  .home-sub-actions { margin-top: 8px !important; }
+  #modal-game-menu .modal-box { padding-top: 10px !important; padding-bottom: 10px !important; }
+  #modal-game-menu .modal-box button { padding-top: 6px !important; padding-bottom: 6px !important; }
+  .game-over-title { font-size: 26px !important; }
 }

@@ -157,7 +157,7 @@ export class InteractionController {
   _showTouchInfo(card, el) {
     try { CardInspector.show(card, el.getBoundingClientRect()); } catch { /* ignore */ }
     clearTimeout(this._infoTimer);
-    this._infoTimer = setTimeout(() => CardInspector.hide(), 3500);
+    this._infoTimer = setTimeout(() => CardInspector.hide(), 9000);
   }
 
   /** 供“取消”按钮调用 */
@@ -431,10 +431,19 @@ export class InteractionController {
     return c ? [...c.querySelectorAll('.board-unit')].filter(el => el.dataset.instanceId !== excludeId) : [];
   }
 
+  /** 竖屏时前线区域的单位上下排列：按纵坐标计算插入位置 */
+  _isVerticalZone(zoneKey) {
+    const c = zoneKey ? this._zoneContainer(zoneKey) : null;
+    if (!c) return false;
+    try { return getComputedStyle(c).flexDirection.startsWith('column'); } catch { return false; }
+  }
+
   _insertIndex(zoneKey, x, excludeId = null) {
+    const vertical = this._isVerticalZone(zoneKey);
+    const y = this._lastPointer?.y ?? 0;
     return this._zoneUnitEls(zoneKey, excludeId).filter(el => {
       const r = el.getBoundingClientRect();
-      return r.left + r.width / 2 < x;
+      return vertical ? r.top + r.height / 2 < y : r.left + r.width / 2 < x;
     }).length;
   }
 
@@ -444,6 +453,28 @@ export class InteractionController {
     if (!doc || !container) { this._hideInsertMarker(); return; }
     const els = this._zoneUnitEls(zoneKey, excludeId);
     const idx = this._insertIndex(zoneKey, x, excludeId);
+    const vertical = this._isVerticalZone(zoneKey);
+    if (!this.insertMarkerEl) {
+      this.insertMarkerEl = doc.createElement('div');
+      this.insertMarkerEl.className = 'insert-marker';
+      doc.body.appendChild(this.insertMarkerEl);
+    }
+    if (vertical) {
+      let py, left, w;
+      if (els.length) {
+        const rects = els.map(el => el.getBoundingClientRect());
+        left = rects[0].left; w = rects[0].width;
+        if (idx === 0) py = rects[0].top - 4;
+        else if (idx >= rects.length) py = rects[rects.length - 1].bottom + 4;
+        else py = (rects[idx - 1].bottom + rects[idx].top) / 2;
+      } else {
+        const r = (container.querySelector('.unit-slot') || container).getBoundingClientRect();
+        py = r.top + r.height / 2; left = r.left; w = r.width;
+      }
+      this.insertMarkerEl.classList.add('horizontal');
+      Object.assign(this.insertMarkerEl.style, { left: `${left}px`, top: `${py - 2}px`, width: `${w}px`, height: '4px', display: 'block' });
+      return;
+    }
     let px, top, h;
     if (els.length) {
       const rects = els.map(el => el.getBoundingClientRect());
@@ -456,12 +487,8 @@ export class InteractionController {
       const r = slot.getBoundingClientRect();
       px = r.left + r.width / 2; top = r.top; h = r.height;
     }
-    if (!this.insertMarkerEl) {
-      this.insertMarkerEl = doc.createElement('div');
-      this.insertMarkerEl.className = 'insert-marker';
-      doc.body.appendChild(this.insertMarkerEl);
-    }
-    Object.assign(this.insertMarkerEl.style, { left: `${px - 2}px`, top: `${top}px`, height: `${h}px`, display: 'block' });
+    this.insertMarkerEl.classList.remove('horizontal');
+    Object.assign(this.insertMarkerEl.style, { left: `${px - 2}px`, top: `${top}px`, width: '', height: `${h}px`, display: 'block' });
   }
 
   _hideInsertMarker() {

@@ -1,7 +1,7 @@
 /* ==========================================================================
    fx.css — 战斗特效（飘血、弹道、冲锋残影、阵亡、战法）
    ========================================================================== */
-.bfx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 70; overflow: hidden; }
+.bfx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 850; overflow: hidden; }
 .bfx-layer > * { position: fixed; pointer-events: none; }
 
 /* ---------- 伤害飘字 ---------- */
@@ -151,9 +151,6 @@
 .bfx-hq-shake { animation: bfxShake .45s linear; }
 @keyframes bfxShake { 0%,100% { transform: none; } 20% { transform: translate(-5px, 2px); } 40% { transform: translate(5px, -2px); } 60% { transform: translate(-3px, 1px); } 80% { transform: translate(3px, 0); } }
 
-@media (prefers-reduced-motion: reduce) {
-  .bfx-float, .bfx-stamp, .bfx-banner, .bfx-burst, .bfx-impact { animation-duration: .01s !important; }
-}
 .bfx-ghost-wrap { z-index: 2; }
 .bfx-ghost-wrap .bfx-ghost { margin: 0 !important; animation: none !important; transition: none !important; }
 .bfx-ghost-wrap.bfx-dash { filter: drop-shadow(0 0 12px rgba(255,220,150,.7)); }
