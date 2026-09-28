@@ -1,0 +1,283 @@
+/* ==========================================================================
+   animations.css — Combat FX, Attack Trajectory, Impact, Deploy & Skill Flash
+   Three Kingdoms KARDS — Enhanced Effects
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Floating Combat Text
+   -------------------------------------------------------------------------- */
+@keyframes float-rise {
+  0%   { transform: translateY(0) scale(0.5); opacity: 0; }
+  15%  { transform: translateY(-12px) scale(1.35); opacity: 1; }
+  75%  { transform: translateY(-40px) scale(1.05); opacity: 1; }
+  100% { transform: translateY(-62px) scale(0.85); opacity: 0; }
+}
+
+.floating-combat-text {
+  position: fixed;
+  font-family: var(--font-serif-calligraphy, serif);
+  font-size: 26px;
+  font-weight: 900;
+  pointer-events: none;
+  z-index: 9999;
+  animation: float-rise 1.25s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+  text-shadow: 0 0 8px rgba(0,0,0,0.95), 2px 2px 4px rgba(0,0,0,0.7);
+}
+.floating-combat-text.fx-damage  { color: #f56565; }
+.floating-combat-text.fx-counter { color: #ed8936; text-shadow: 0 0 10px rgba(237,137,54,0.9); }
+.floating-combat-text.fx-immune  { color: #f6e05e; font-size: 18px; }
+.floating-combat-text.fx-fire    { color: #fc8181; font-size: 28px; }
+.floating-combat-text.fx-ambush  { color: #9f7aea; font-size: 22px; }
+.floating-combat-text.fx-banish  { color: #b794f4; font-size: 20px; }
+.floating-combat-text.fx-skill   { color: #48bb78; font-size: 18px; letter-spacing: 1px; }
+.floating-combat-text.fx-heal    { color: #68d391; }
+.floating-combat-text.fx-hq      { color: #fc8181; font-size: 32px; }
+
+/* --------------------------------------------------------------------------
+   2. Screen & Element Shakes
+   -------------------------------------------------------------------------- */
+.anim-shake {
+  animation: element-shake 0.35s ease-in-out;
+}
+@keyframes element-shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-7px); }
+  40%       { transform: translateX(7px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
+
+.anim-impact-shake {
+  animation: impact-shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+@keyframes impact-shake {
+  10%, 90% { transform: translate3d(-3px, -1px, 0); }
+  20%, 80% { transform: translate3d(4px,  2px, 0); }
+  30%, 50%, 70% { transform: translate3d(-5px, -2px, 0); }
+  40%, 60% { transform: translate3d(5px,  2px, 0); }
+}
+
+/* --------------------------------------------------------------------------
+   3. Fire Attack FX (火攻)
+   -------------------------------------------------------------------------- */
+.anim-burn {
+  animation: burn-glow 0.9s ease-out;
+}
+@keyframes burn-glow {
+  0%   { box-shadow: 0 0 0 rgba(237,137,54,0);   filter: brightness(1); }
+  35%  { box-shadow: 0 0 28px rgba(252,129,74,0.95); filter: brightness(1.6) saturate(2); }
+  100% { box-shadow: 0 0 0 rgba(237,137,54,0);   filter: brightness(1); }
+}
+
+/* Fire shockwave burst */
+.fx-fire-shockwave {
+  position: fixed;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  border: 3px solid #f6ad55;
+  background: radial-gradient(circle, rgba(252,129,74,0.7) 0%, rgba(237,137,54,0.3) 40%, transparent 70%);
+  pointer-events: none;
+  z-index: 9995;
+  transform: translate(-50%, -50%);
+  animation: fire-expand 0.65s ease-out forwards;
+}
+@keyframes fire-expand {
+  0%   { transform: translate(-50%,-50%) scale(0.15); opacity: 1; }
+  60%  { opacity: 0.9; }
+  100% { transform: translate(-50%,-50%) scale(2.8); opacity: 0; }
+}
+
+/* Fire ember particles */
+.fx-ember {
+  position: fixed;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f6ad55;
+  pointer-events: none;
+  z-index: 9994;
+  animation: ember-float var(--dur, 0.8s) ease-out forwards;
+}
+@keyframes ember-float {
+  0%   { transform: translate(0, 0) scale(1);   opacity: 1; }
+  100% { transform: translate(var(--dx,20px), var(--dy,-60px)) scale(0); opacity: 0; }
+}
+
+/* --------------------------------------------------------------------------
+   4. Slash / Strike Attack FX
+   -------------------------------------------------------------------------- */
+@keyframes dash-slash {
+  from { stroke-dashoffset: 120; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes fade-slash {
+  0%   { opacity: 0; }
+  15%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Impact flash overlay on attacked unit */
+.fx-impact-flash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(245, 101, 101, 0.55);
+  pointer-events: none;
+  z-index: 10;
+  animation: impact-flash 0.38s ease-out forwards;
+}
+@keyframes impact-flash {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Slash mark (sword arc) — positioned via JS */
+.fx-slash-mark {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9993;
+  width: 80px;
+  height: 80px;
+  transform: translate(-50%, -50%);
+  animation: slash-mark-appear 0.45s ease-out forwards;
+}
+.fx-slash-mark svg {
+  width: 100%;
+  height: 100%;
+}
+@keyframes slash-mark-appear {
+  0%   { transform: translate(-50%,-50%) scale(0.3) rotate(-30deg); opacity: 0; }
+  30%  { transform: translate(-50%,-50%) scale(1.2) rotate(5deg);   opacity: 1; }
+  100% { transform: translate(-50%,-50%) scale(1)   rotate(0deg);   opacity: 0; }
+}
+
+/* Sword arc trajectory drawn in SVG */
+.targeting-curve {
+  fill: none;
+  stroke: #48bb78;
+  stroke-width: 4px;
+  stroke-linecap: round;
+  stroke-dasharray: 8 4;
+  filter: url(#laser-glow);
+  marker-end: url(#arrowhead-legal);
+  animation: dash-flow 0.7s linear infinite;
+}
+.targeting-curve.targeting-attack, .targeting-curve.curve-attack {
+  stroke: #f56565 !important;
+  marker-end: url(#arrowhead-attack) !important;
+  stroke-width: 5px;
+  filter: drop-shadow(0 0 6px rgba(245,101,101,0.8));
+}
+.targeting-curve.curve-move {
+  stroke: #48bb78 !important;
+  marker-end: url(#arrowhead-legal) !important;
+}
+@keyframes dash-flow {
+  from { stroke-dashoffset: 24; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* --------------------------------------------------------------------------
+   5. Skill Trigger Flash (技能触发光效)
+   -------------------------------------------------------------------------- */
+.fx-skill-trigger {
+  position: absolute;
+  inset: -4px;
+  border-radius: 8px;
+  border: 2px solid #48bb78;
+  pointer-events: none;
+  z-index: 12;
+  animation: skill-ring 0.6s ease-out forwards;
+}
+.fx-skill-trigger.fx-skill-attack  { border-color: #f6e05e; box-shadow: 0 0 14px rgba(246,224,94,0.8); }
+.fx-skill-trigger.fx-skill-defense { border-color: #63b3ed; box-shadow: 0 0 14px rgba(99,179,237,0.8); }
+.fx-skill-trigger.fx-skill-fire    { border-color: #f6ad55; box-shadow: 0 0 16px rgba(246,173,85,0.9); }
+.fx-skill-trigger.fx-skill-ambush  { border-color: #9f7aea; box-shadow: 0 0 14px rgba(159,122,234,0.8); }
+.fx-skill-trigger.fx-skill-vanguard{ border-color: #68d391; box-shadow: 0 0 14px rgba(104,211,145,0.8); }
+@keyframes skill-ring {
+  0%   { opacity: 1; transform: scale(1); }
+  60%  { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 0; transform: scale(1.2); }
+}
+
+/* Skill name badge popup (技能名弹出) */
+.fx-skill-badge {
+  position: fixed;
+  padding: 3px 10px;
+  background: rgba(0,0,0,0.82);
+  border: 1px solid #f6e05e;
+  border-radius: 12px;
+  color: #f6e05e;
+  font-family: var(--font-serif-calligraphy, serif);
+  font-size: 13px;
+  font-weight: bold;
+  pointer-events: none;
+  z-index: 9998;
+  transform: translate(-50%, -100%);
+  animation: skill-badge-pop 1.0s ease-out forwards;
+}
+
+.fx-fireball-projectile {
+  position: fixed;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9998;
+  background: radial-gradient(circle at 35% 35%, #fff5a1 0%, #ffb336 28%, #ef5a13 58%, rgba(150, 22, 0, .15) 80%);
+  box-shadow: 0 0 10px #ffdd66, 0 0 24px #f56b1f, 0 0 42px rgba(239, 67, 19, .85);
+}
+@keyframes skill-badge-pop {
+  0%   { opacity: 0; transform: translate(-50%, -80%) scale(0.7); }
+  20%  { opacity: 1; transform: translate(-50%, -110%) scale(1.05); }
+  70%  { opacity: 1; transform: translate(-50%, -120%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -140%) scale(0.9); }
+}
+
+/* --------------------------------------------------------------------------
+   6. Card Draw & Deploy
+   -------------------------------------------------------------------------- */
+.anim-draw-card {
+  animation: card-draw 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+@keyframes card-draw {
+  from { transform: translateY(80px) scale(0.55); opacity: 0; }
+  to   { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.anim-deploy-unit {
+  animation: unit-slam 0.35s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+}
+@keyframes unit-slam {
+  0%   { transform: scale(1.5) translateY(-10px); opacity: 0; }
+  70%  { transform: scale(0.95); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* --------------------------------------------------------------------------
+   7. HQ Damage Pulse (主城受击)
+   -------------------------------------------------------------------------- */
+.anim-hq-hit {
+  animation: hq-damage-pulse 0.6s ease-out;
+}
+@keyframes hq-damage-pulse {
+  0%   { filter: brightness(1); box-shadow: none; }
+  25%  { filter: brightness(2) saturate(2); box-shadow: 0 0 32px rgba(229,62,62,0.9); }
+  100% { filter: brightness(1); box-shadow: none; }
+}
+
+/* --------------------------------------------------------------------------
+   8. Legal Target Pulse Animation
+   -------------------------------------------------------------------------- */
+.legal-attack-target {
+  outline: 2px solid #f56565 !important;
+  box-shadow: 0 0 16px rgba(245,101,101,0.7) !important;
+  cursor: crosshair !important;
+  animation: pulse-target 0.9s infinite alternate;
+}
+@keyframes pulse-target {
+  from { outline-color: #e53e3e; box-shadow: 0 0 8px rgba(229,62,62,0.5); }
+  to   { outline-color: #fc8181; box-shadow: 0 0 22px rgba(229,62,62,0.95); }
+}
