@@ -31,6 +31,7 @@ import { TurnClock } from './ui/turnClock.js';
 import { HQ_CARDS } from './data/terrains.js';
 import { KINGDOMS } from './data/cardDB.js';
 import { setSeatKingdoms, seatArmy } from './ui/seats.js';
+import { preloadAssets } from './ui/preloader.js';
 
 const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb'];
 const randomOther = k => { const o = KINGDOM_KEYS.filter(x => x !== k); return o[Math.floor(Math.random() * o.length)]; };
@@ -127,7 +128,9 @@ export class AppCoordinator {
     this.cardEditor = new CardEditor(this.cardPack, pack => { this.cardPack = pack; });
     this.audio = new AudioDirector();
     this.audio.setScene('lobby');
-    doc.addEventListener('pointerdown', () => this.audio.unlock(), { once: true });
+    this.audio.armUnlock(doc);
+    this._runPreloader(doc);
+    this._bindTouchControls(doc);
 
     // 5. Wire Drawer & Global Controls
     this._bindGlobalControls();
@@ -151,6 +154,84 @@ export class AppCoordinator {
         globalThis.history?.replaceState(null, '', u.toString());
       }
     } catch { /* ignore */ }
+  }
+
+  /** 手机：取消按钮、全屏、竖屏提示 */
+  _bindTouchControls(doc) {
+    const on = (id, fn) => doc.getElementById(id)?.addEventListener('click', fn);
+    on('touch-cancel', (e) => { e.stopPropagation(); this.interaction?.cancelAll?.(); });
+    const goFull = async () => {
+      try {
+        const el = doc.documentElement;
+        if (!doc.fullscreenElement) await (el.requestFullscreen?.({ navigationUI: 'hide' }) || el.webkitRequestFullscreen?.());
+        else await doc.exitFullscreen?.();
+      } catch { /* iOS Safari 不支持网页全屏 */ }
+      try { await globalThis.screen?.orientation?.lock?.('landscape'); } catch { /* 部分浏览器不支持锁定方向 */ }
+      setTimeout(() => this._fitBoard(), 300);
+    };
+    on('btn-fullscreen', goFull);
+    on('rotate-fullscreen', goFull);
+    // 手机布局：横屏矮屏 → m-land；竖屏且选择了“旋转画面” → m-land + m-rot（整体转 90°）
+    const applyLayout = () => {
+      const w = globalThis.innerWidth, h = globalThis.innerHeight;
+      const portraitPhone = h > w && w <= 600;
+      const rot = portraitPhone && doc.body.classList.contains('allow-portrait');
+      const land = (w >= h && h <= 540) || rot;
+      doc.body.classList.toggle('m-land', land);
+      doc.body.classList.toggle('m-rot', rot);
+      setTimeout(() => this._fitBoard(), 50);
+    };
+    this._applyLayout = applyLayout;
+    on('rotate-skip', () => { doc.body.classList.add('allow-portrait'); applyLayout(); });
+    globalThis.addEventListener?.('resize', applyLayout);
+    applyLayout();
+    // 选中/瞄准时显示“取消”按钮
+    setInterval(() => {
+      const busy = Boolean(this.interaction?._isBusySelecting?.()) && !doc.body.classList.contains('at-home');
+      doc.body.classList.toggle('is-selecting', busy);
+    }, 150);
+    const refit = () => setTimeout(() => this._fitBoard(), 250);
+    globalThis.addEventListener?.('orientationchange', refit);
+    doc.addEventListener('fullscreenchange', refit);
+  }
+
+  /** 启动时预加载全部卡图/音效/音乐，显示进度；可跳过，剩余在后台继续 */
+  _runPreloader(doc) {
+    const box = doc.getElementById('boot-loader');
+    if (!box) return;
+    const fill = doc.getElementById('boot-bar-fill');
+    const label = doc.getElementById('boot-label');
+    const pct = doc.getElementById('boot-pct');
+    const skip = doc.getElementById('boot-skip');
+    let chip = null;
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      box.classList.add('done');
+      setTimeout(() => box.remove(), 600);
+    };
+    setTimeout(() => skip?.classList.remove('hidden'), 2500);
+    skip?.addEventListener('click', () => {
+      close();
+      chip = doc.createElement('div');
+      chip.className = 'bg-load-chip';
+      doc.body.appendChild(chip);
+    });
+    preloadAssets({
+      audio: this.audio,
+      onProgress: ({ ratio, label: l }) => {
+        const p = Math.round(ratio * 100);
+        if (fill) fill.style.width = `${p}%`;
+        if (pct) pct.textContent = `${p}%`;
+        if (label) label.textContent = ratio >= 1 ? '加载完成' : `正在加载${l}…`;
+        box.setAttribute('aria-valuenow', String(p));
+        if (chip) chip.textContent = `资源加载 ${p}%`;
+      }
+    }).then(() => {
+      if (chip) { chip.textContent = '资源已就绪'; setTimeout(() => chip.remove(), 1500); }
+      setTimeout(close, 250);
+    });
   }
 
   _bindHomeScreen() {

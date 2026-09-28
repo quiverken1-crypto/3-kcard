@@ -484,7 +484,7 @@ function attachInspectorEvents(el, card) {
       CardInspector.show(card, el.getBoundingClientRect());
     }, 220);
   });
-  el.addEventListener('pointerleave', hide);
+  el.addEventListener('pointerleave', e => { if (!e.pointerType || e.pointerType === 'mouse') hide(); });
   el.addEventListener('pointerdown', hide);
 
 }
@@ -502,7 +502,7 @@ export class CardInspector {
 
     this.tooltipEl = doc.createElement('div');
     this.tooltipEl.className = 'card-inspector-tooltip hidden';
-    doc.body.appendChild(this.tooltipEl);
+    (doc.getElementById('game-app') || doc.body).appendChild(this.tooltipEl);
   }
 
   static show(card, anchorRect) {

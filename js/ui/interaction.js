@@ -14,6 +14,7 @@ import { ACTION_TYPES, KEYWORDS, STATUS_TYPES, hasKeyword } from '../engine/cons
 import { getValidTargets } from '../engine/combat.js';
 import { findUnit, getAllUnits } from '../engine/state.js';
 import { getTacticTargets, getActionCost, actsLikeCavalry as skillActsLikeCavalry } from '../engine/cardSkills.js';
+import { CardInspector } from './cardRenderer.js';
 
 export const INTERACTION_STATE = Object.freeze({
   IDLE: 'IDLE',
@@ -90,6 +91,8 @@ export class InteractionController {
     if (!doc) return;
 
     doc.addEventListener('contextmenu', e => this._handleContextMenu(e), true);
+    // 触屏：每次点按先收起上一张卡牌说明
+    doc.addEventListener('pointerdown', e => { if (e.pointerType && e.pointerType !== 'mouse') CardInspector.hide(); }, true);
 
     // 1. Hand Card Pointer Events (Delegated)
     const handContainer = doc.getElementById('hand-container');
@@ -149,6 +152,17 @@ export class InteractionController {
     void doc;
   }
 
+  _isTouch(e) { return Boolean(e?.pointerType) && e.pointerType !== 'mouse'; }
+
+  _showTouchInfo(card, el) {
+    try { CardInspector.show(card, el.getBoundingClientRect()); } catch { /* ignore */ }
+    clearTimeout(this._infoTimer);
+    this._infoTimer = setTimeout(() => CardInspector.hide(), 3500);
+  }
+
+  /** 供“取消”按钮调用 */
+  cancelAll() { this._cancelAll(); CardInspector.hide(); }
+
   _isBusySelecting() {
     return Boolean(this.pendingTactic) || this.state === INTERACTION_STATE.CARD_SELECTED || this.state === INTERACTION_STATE.TARGETING;
   }
@@ -190,6 +204,7 @@ export class InteractionController {
     if (!player) return;
     const card = player.hand?.find(c => c.instanceId === instanceId);
     if (!card) return;
+    if (this._isTouch(e)) this._showTouchInfo(card, cardEl);
 
     // Check provision affordability
     let cost = card.cost ?? 0;
@@ -346,6 +361,11 @@ export class InteractionController {
     if (!instanceId || !this.gameState) return;
 
     const loc = findUnit(this.gameState, instanceId);
+    // 触屏点按任意单位显示说明（翻面的敌方单位除外）
+    if (this._isTouch(e) && loc?.unit && unitEl.dataset?.isFaceDown !== 'true') {
+      const shown = loc.unit.faction === this.localPlayerId && loc.unit.status?.isFaceDown ? { ...loc.unit, status: { ...loc.unit.status, isFaceDown: false } } : loc.unit;
+      this._showTouchInfo(shown, unitEl);
+    }
     if (!loc || loc.unit?.faction !== this.localPlayerId) return;
 
     const unit = loc.unit;
@@ -550,6 +570,7 @@ export class InteractionController {
 
       if (!this.isDragging && dist > 6) {
         this.isDragging = true;
+        CardInspector.hide();
         globalThis.document?.body?.classList.add('is-dragging');
         if (this.state === INTERACTION_STATE.CARD_SELECTED && this.selectedCard) {
           this._createCardGhost(this.selectedCard.instanceId, e.clientX ?? 0, e.clientY ?? 0);
@@ -557,7 +578,11 @@ export class InteractionController {
       }
 
       if (this.isDragging && this.dragGhostEl) {
-        this.dragGhostEl.style.transform = `translate(${(e.clientX ?? 0) - 45}px, ${(e.clientY ?? 0) - 60}px) scale(0.9)`;
+        const small = globalThis.document?.body?.classList.contains('m-land');
+        this.dragGhostEl.style.transform = small
+          ? `translate(${(e.clientX ?? 0) - 35}px, ${(e.clientY ?? 0) - 95}px) scale(0.6)`
+          : `translate(${(e.clientX ?? 0) - 45}px, ${(e.clientY ?? 0) - 60}px) scale(0.9)`;
+        this.dragGhostEl.style.transformOrigin = 'top left';
       }
     }
 
@@ -728,6 +753,7 @@ export class InteractionController {
 
   _resolveDropZone(elem) {
     if (!elem) return null;
+    if (elem.closest?.('#hand-tray')) return null; // 拖回手牌区 = 取消
     const isOnGameSurface = elem.closest?.('#battlefield-main') || elem.closest?.('#player-dock');
     if (this.selectedCard?.cardDef?.type === 'TACTIC' && isOnGameSurface) return 'BATTLEFIELD';
     if (this.selectedCard?.cardDef?.type === 'COUNTER' && isOnGameSurface) return 'COUNTER';
@@ -981,6 +1007,9 @@ export class InteractionController {
     this.dragGhostEl = orig.cloneNode(true);
     this.dragGhostEl.classList?.add('card-drag-ghost');
     this.dragGhostEl.style.position = 'fixed';
+    this.dragGhostEl.style.left = '0px';
+    this.dragGhostEl.style.top = '0px';
+    this.dragGhostEl.style.margin = '0';
     this.dragGhostEl.style.pointerEvents = 'none';
     this.dragGhostEl.style.zIndex = '9999';
     this.dragGhostEl.style.transform = `translate(${x - 45}px, ${y - 60}px) scale(0.9)`;
@@ -1010,7 +1039,7 @@ export class InteractionController {
     const toast = doc.createElement('div');
     toast.className = 'toast-alert';
     toast.textContent = msg;
-    doc.body.appendChild(toast);
+    (doc.getElementById('game-app') || doc.body).appendChild(toast);
     setTimeout(() => toast.classList?.add('toast-show'), 10);
     setTimeout(() => {
       toast.classList?.remove('toast-show');
