@@ -63,8 +63,8 @@ export function getCardArtUrl(card) {
   const id = String(card?.cardId || '').replace(/_[0-9]+$/, '');
   const m = id.match(/^(wei|shu|wu|lb)_([a-z_]+)$/);
   if (!m || NO_ART.has(id)) return '';
-  if (COMMON_ART.has(m[2])) return `assets/cards/common_${m[2]}.jpg`;
-  return `assets/cards/${id}.jpg`;
+  if (COMMON_ART.has(m[2])) return `assets/cards/common_${m[2]}.webp`;
+  return `assets/cards/${id}.webp`;
 }
 
 function artStyle(card) {

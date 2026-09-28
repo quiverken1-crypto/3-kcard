@@ -2,11 +2,11 @@
    手机横屏适配（高度 ≤ 540 的横屏）：
    顶栏 32px · 左：战场 · 右：我方信息栏 · 底：手牌条
    ========================================================================== */
-/* 手机横屏布局：由 JS 按屏幕设置 body.m-land（横屏矮屏，或竖屏旋转模式） */
+/* 手机布局：由 JS 设置 body.m-land（横屏矮屏）；竖屏手机额外加 body.m-port 改排版 */
 html:has(body.m-land), body.m-land, body.m-land { height: 100%; overscroll-behavior: none; }
 body.m-land #game-app.game-container {
     display: grid !important;
-    width: 100vw; height: 100vh; height: 100dvh;
+    width: 100vw; height: 100vh; height: 100dvh; height: var(--app-h, 100dvh);
     grid-template-columns: minmax(0, 1fr) 118px;
     grid-template-rows: 32px auto auto auto minmax(0, 1fr) auto 92px;
     background: #120e0a !important;
@@ -34,6 +34,7 @@ body.m-land #top-bar .latency-badge { padding: 1px 5px !important; font-size: 10
 body.m-land #top-bar .hud-action-btn { height: 26px; padding: 0 8px; font-size: 0 !important; gap: 0; }
 body.m-land #top-bar .hud-action-btn span { font-size: 15px !important; }
 body.m-land #top-bar #btn-fullscreen { display: inline-flex; }
+body.m-land.is-standalone #top-bar #btn-fullscreen { display: none !important; }
 /* ---- 战场 ---- */
 body.m-land #battlefield-main.battlefield-viewport { grid-column: 1; grid-row: 2 / 7; padding: 2px 4px !important; min-height: 0; min-width: 0; }
 /* ---- 我方栏：拆到右侧竖栏 + 底部手牌条 ---- */
@@ -104,26 +105,6 @@ body.m-land .tactical-drawer { bottom: 0 !important; top: 32px !important; width
 body.m-land .card-inspector-tooltip { max-width: 260px !important; }
 
 
-/* 竖屏手机：提示横屏；选择“旋转画面”后整体转 90° 用横屏布局 */
-.rotate-hint { display: none; }
-body.m-rot #game-app.game-container {
-  position: fixed; top: 0; left: 0;
-  width: 100vh !important; height: 100vw !important;
-  width: 100dvh !important; height: 100dvw !important;
-  transform-origin: top left; transform: rotate(90deg) translateY(-100%);
-}
-@media (orientation: portrait) and (max-width: 600px) {
-  body:not(.at-home):not(.allow-portrait) .rotate-hint {
-    display: flex; position: fixed; inset: 0; z-index: 2500; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-    background: rgba(12,9,6,.96); color: #f3e2b5; text-align: center; padding: 24px;
-  }
-}
-.rotate-hint .rotate-icon { font-size: 54px; animation: rotHint 1.8s ease-in-out infinite; }
-@keyframes rotHint { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(90deg); } }
-.rotate-hint p { margin: 0; font-size: 15px; line-height: 1.7; }
-.rotate-hint button { padding: 9px 18px; border-radius: 8px; border: 1px solid rgba(217,179,106,.5); background: #3a2716; color: #f3e2b5; font-size: 14px; }
-.rotate-hint .rotate-skip { background: transparent; opacity: .7; font-size: 12px; border: none; text-decoration: underline; }
-
 /* 全屏按钮：仅触屏显示 */
 #btn-fullscreen { display: none; }
 
@@ -152,6 +133,93 @@ body.m-land #player-dock .hand-card-fan:has(> :nth-child(7)) .card-hand + .card-
 body.m-land #player-dock .hand-card-fan:has(> :nth-child(8)) .card-hand + .card-hand { margin-left: -22px; }
 body.m-land #player-dock .hand-card-fan:has(> :nth-child(9)) .card-hand + .card-hand { margin-left: -30px; }
 body.m-land #player-dock .hand-card-fan .card-hand.selected { z-index: 30 !important; }
-/* 竖屏旋转模式：卡牌说明固定在左上角（容器已旋转，按容器坐标定位） */
-body.m-rot .card-inspector-tooltip { left: 8px !important; top: 38px !important; right: auto !important; bottom: auto !important; }
-body.m-land .toast-stack { bottom: 100px !important; }
+
+/* 刘海屏/底部横条安全区 */
+body.m-land #game-app.game-container {
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+}
+body.m-land .touch-cancel-btn { top: calc(40px + env(safe-area-inset-top, 0)); }
+
+/* ==========================================================================
+   手机竖屏：顶栏 · 战场（三条前线改为上下排列）· 我方信息一行 · 手牌条
+   ========================================================================== */
+body.m-port #game-app.game-container {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: 34px minmax(0, 1fr) 48px 104px;
+}
+body.m-port #top-bar.hud-top-bar { grid-column: 1 / -1; grid-row: 1; gap: 4px !important; padding: 0 4px !important; }
+body.m-port #top-bar .hq-status-group { width: 64px !important; }
+body.m-port #top-bar .hq-name { display: none; }
+body.m-port #top-bar .phase-badge { padding: 2px 6px !important; height: 22px; }
+body.m-port #top-bar .turn-num, body.m-port #top-bar .phase-divider { display: none; }
+body.m-port #top-bar .phase-badge * { font-size: 11px !important; }
+body.m-port #top-bar .latency-badge, body.m-port #top-bar #btn-fullscreen { display: none !important; }
+body.m-port #top-bar .resource-badge { padding: 1px 4px !important; }
+body.m-port #top-bar .hud-actions { gap: 4px; margin-left: 2px; }
+body.m-port #top-bar .hud-action-btn { padding: 0 6px; }
+
+body.m-port #battlefield-main.battlefield-viewport { grid-column: 1 / -1; grid-row: 2; padding: 2px !important; }
+body.m-port .board-aspect-wrapper { width: 600px !important; grid-template-rows: auto auto auto !important; height: auto !important; aspect-ratio: auto !important; }
+body.m-port .line-frontline { display: flex !important; flex-direction: column !important; gap: 4px !important; }
+body.m-port .zone-terrain-banner .terrain-effect-line { white-space: nowrap; }
+body.m-port .frontline-zone { width: 100% !important; max-width: none !important; flex: 0 0 auto !important; }
+body.m-port .frontline-zone .zone-slots-container { justify-content: center; }
+
+body.m-port #player-dock .player-hq-meta { grid-column: 1 / 4; grid-row: 3; margin: 4px 2px 4px 4px; }
+body.m-port #player-dock .player-hq-meta .faction-emblem { display: none; }
+body.m-port #player-dock .player-resources {
+  grid-column: 4 / 9; grid-row: 3; margin: 4px 2px !important;
+  flex-direction: row !important; align-items: center !important; gap: 6px !important;
+}
+body.m-port #player-dock .granary-cluster { flex: 1 1 60%; }
+body.m-port #player-dock .prestige-cluster { flex: 1 1 40%; }
+body.m-port #player-dock .prestige-display { display: none; }
+body.m-port #player-dock .granary-title::before { content: '🌾'; }
+body.m-port #player-dock .prestige-title::before { content: '🎖️'; }
+body.m-port #player-dock #turn-timer.dock-timer { grid-column: 9 / 11; grid-row: 3; margin: 4px 2px; height: auto; }
+body.m-port #player-dock #turn-timer .turn-timer-chip { font-size: 11px; height: 100%; }
+body.m-port #player-dock .player-deck-actions {
+  grid-column: 11 / 13; grid-row: 3; margin: 4px 4px 4px 2px !important;
+  grid-template-columns: 1fr !important; grid-template-rows: 1fr !important;
+}
+body.m-port #player-dock .deck-pile-widget, body.m-port #player-dock .btn-graveyard { display: none !important; }
+body.m-port #player-dock #btn-end-turn { font-size: 13px !important; letter-spacing: 0; }
+body.m-port #player-dock #hand-tray.hand-fan-tray { grid-column: 1 / -1; grid-row: 4; height: 104px !important; }
+body.m-port #player-dock .hand-card-fan .card-hand { zoom: .6; }
+body.m-port .card-inspector-tooltip { top: auto !important; bottom: 160px !important; left: 6px !important; }
+
+/* iOS 添加到主屏幕引导 */
+.ios-install { position: fixed; inset: 0; z-index: 2600; display: flex; align-items: center; justify-content: center; background: rgba(8,6,4,.8); padding: 16px; }
+.ios-install.hidden { display: none; }
+.ios-install-box { width: min(360px, 92vw); max-height: 92dvh; overflow-y: auto; padding: 18px 20px; border-radius: 14px; background: #221a12; border: 1px solid rgba(217,179,106,.5); color: #f3e2b5; font-size: 14px; line-height: 1.7; }
+.ios-install-title { font-size: 18px; color: #f0cf6a; margin-bottom: 6px; letter-spacing: 2px; }
+.ios-install ol { padding-left: 20px; margin: 8px 0 14px; }
+.ios-share { display: inline-block; padding: 0 5px; border: 1px solid rgba(255,255,255,.4); border-radius: 4px; font-size: 12px; }
+.home-touch-only { display: none; }
+@media (pointer: coarse) { .home-touch-only { display: inline-flex; } body.is-standalone .home-touch-only { display: none; } }
+body.m-land .slot .board-unit { height: 100% !important; max-height: 100% !important; }
+body.m-port .frontline-zone { padding-top: 2px !important; }
+body.m-port .zone-terrain-banner { margin-bottom: 2px !important; }
+body.m-port .zone-slots-container { min-height: 0 !important; padding: 0 !important; }
+body.m-port .line-support .line-header { display: none !important; }
+body.m-port #player-dock #btn-end-turn { font-size: 12px !important; white-space: nowrap; padding: 0 2px !important; }
+/* 很矮的横屏（浏览器地址栏+标签栏占掉高度时）：手牌条和顶栏再压缩 */
+@media (max-height: 360px) {
+  body.m-land:not(.m-port) #game-app.game-container { grid-template-rows: 28px auto auto auto minmax(0, 1fr) auto 74px; }
+  body.m-land:not(.m-port) #top-bar.hud-top-bar { height: 28px !important; }
+  body.m-land:not(.m-port) #player-dock #hand-tray.hand-fan-tray { height: 74px !important; }
+  body.m-land:not(.m-port) #player-dock .hand-card-fan .card-hand { zoom: .46; }
+  body.m-land:not(.m-port) #player-dock .player-resources .prestige-display { display: none; }
+}
+/* 竖屏手牌：牌多时叠压，保证一屏放下 */
+body.m-port #player-dock .hand-card-fan:has(> :nth-child(5)) .card-hand + .card-hand { margin-left: -8px; }
+body.m-port #player-dock .hand-card-fan:has(> :nth-child(6)) .card-hand + .card-hand { margin-left: -22px; }
+body.m-port #player-dock .hand-card-fan:has(> :nth-child(7)) .card-hand + .card-hand { margin-left: -36px; }
+body.m-port #player-dock .hand-card-fan:has(> :nth-child(8)) .card-hand + .card-hand { margin-left: -48px; }
+body.m-port #player-dock .hand-card-fan:has(> :nth-child(9)) .card-hand + .card-hand { margin-left: -58px; }
+body.m-port #player-dock .hand-card-fan .card-hand { position: relative; }
+@media (max-width: 400px) {
+  body.m-port #top-bar .prestige-badge { display: none !important; }
+  body.m-port #top-bar .hq-status-group { width: 52px !important; }
+}

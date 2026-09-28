@@ -160,31 +160,47 @@ export class AppCoordinator {
   _bindTouchControls(doc) {
     const on = (id, fn) => doc.getElementById(id)?.addEventListener('click', fn);
     on('touch-cancel', (e) => { e.stopPropagation(); this.interaction?.cancelAll?.(); });
+    const isIOS = /iPhone|iPad|iPod/.test(globalThis.navigator?.userAgent || '') || (globalThis.navigator?.platform === 'MacIntel' && globalThis.navigator?.maxTouchPoints > 1);
+    const standalone = globalThis.matchMedia?.('(display-mode: standalone), (display-mode: fullscreen)')?.matches || globalThis.navigator?.standalone;
     const goFull = async () => {
+      const el = doc.documentElement;
+      const canFs = el.requestFullscreen || el.webkitRequestFullscreen;
+      // iPhone 的 Safari 不支持网页全屏：引导“添加到主屏幕”
+      if (!canFs || (isIOS && !doc.fullscreenElement)) {
+        if (!canFs || isIOS) { doc.getElementById('ios-install')?.classList.remove('hidden'); return; }
+      }
       try {
-        const el = doc.documentElement;
         if (!doc.fullscreenElement) await (el.requestFullscreen?.({ navigationUI: 'hide' }) || el.webkitRequestFullscreen?.());
         else await doc.exitFullscreen?.();
-      } catch { /* iOS Safari 不支持网页全屏 */ }
-      try { await globalThis.screen?.orientation?.lock?.('landscape'); } catch { /* 部分浏览器不支持锁定方向 */ }
+      } catch { doc.getElementById('ios-install')?.classList.remove('hidden'); }
       setTimeout(() => this._fitBoard(), 300);
     };
     on('btn-fullscreen', goFull);
-    on('rotate-fullscreen', goFull);
-    // 手机布局：横屏矮屏 → m-land；竖屏且选择了“旋转画面” → m-land + m-rot（整体转 90°）
+    on('home-btn-install', goFull);
+    on('ios-install-close', () => doc.getElementById('ios-install')?.classList.add('hidden'));
+    if (standalone) doc.body.classList.add('is-standalone');
+    // 手机布局：横屏矮屏 → m-land；竖屏手机 → m-land + m-port
+    // 用实际可见高度（扣掉浏览器地址栏/标签栏）排版
     const applyLayout = () => {
       const w = globalThis.innerWidth, h = globalThis.innerHeight;
-      const portraitPhone = h > w && w <= 600;
-      const rot = portraitPhone && doc.body.classList.contains('allow-portrait');
-      const land = (w >= h && h <= 540) || rot;
+      doc.documentElement.style.setProperty('--app-h', `${h}px`);
+      const port = h > w && w <= 600;
+      const land = (w >= h && h <= 540) || port;
       doc.body.classList.toggle('m-land', land);
-      doc.body.classList.toggle('m-rot', rot);
+      doc.body.classList.toggle('m-port', port);
       setTimeout(() => this._fitBoard(), 50);
     };
     this._applyLayout = applyLayout;
-    on('rotate-skip', () => { doc.body.classList.add('allow-portrait'); applyLayout(); });
     globalThis.addEventListener?.('resize', applyLayout);
+    globalThis.visualViewport?.addEventListener?.('resize', applyLayout);
     applyLayout();
+    // 离线缓存：第二次打开秒开
+    try {
+      const loc = globalThis.location;
+      if (globalThis.navigator?.serviceWorker && (loc.protocol === 'https:' || loc.hostname === 'localhost')) {
+        globalThis.navigator.serviceWorker.register('sw.js').catch(() => {});
+      }
+    } catch { /* ignore */ }
     // 选中/瞄准时显示“取消”按钮
     setInterval(() => {
       const busy = Boolean(this.interaction?._isBusySelecting?.()) && !doc.body.classList.contains('at-home');
@@ -214,6 +230,7 @@ export class AppCoordinator {
     setTimeout(() => skip?.classList.remove('hidden'), 2500);
     skip?.addEventListener('click', () => {
       close();
+      this.audio?.loadMusicInBackground?.();
       chip = doc.createElement('div');
       chip.className = 'bg-load-chip';
       doc.body.appendChild(chip);
@@ -229,6 +246,7 @@ export class AppCoordinator {
         if (chip) chip.textContent = `资源加载 ${p}%`;
       }
     }).then(() => {
+      this.audio?.loadMusicInBackground?.();
       if (chip) { chip.textContent = '资源已就绪'; setTimeout(() => chip.remove(), 1500); }
       setTimeout(close, 250);
     });
@@ -251,7 +269,7 @@ export class AppCoordinator {
       for (const id of ids) {
         const tile = doc.createElement('div');
         tile.className = `home-tile ${id.startsWith('wei') ? 'tile-wei' : 'tile-shu'}`;
-        tile.style.backgroundImage = `url('assets/cards/${id}.jpg')`;
+        tile.style.backgroundImage = `url('assets/cards/${id}.webp')`;
         gallery.appendChild(tile);
       }
     }

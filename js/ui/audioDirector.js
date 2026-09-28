@@ -96,7 +96,7 @@ export class AudioDirector {
       a = new Audio(src);
       a._src = src;
       a.loop = true;
-      a.preload = 'auto';
+      a.preload = src.startsWith('blob:') ? 'auto' : 'none'; // 网络版等点击后再边下边播，不和卡图抢带宽
       this._tracks[scene] = a;
     }
     return a;
@@ -159,23 +159,29 @@ export class AudioDirector {
     for (const f of new Set(Object.values(SOUND_FILES).flat())) this._loadSfx(f);
   }
 
-  /** 供加载页使用的预加载任务：音效 + 两首背景乐（下载成 Blob，之后切换场景不再联网） */
+  /** 供加载页使用的预加载任务：只含体积小的音效 */
   preloadTasks() {
-    const tasks = [];
-    for (const f of new Set(Object.values(SOUND_FILES).flat())) tasks.push({ weight: 1, label: '音效', run: () => this._loadSfx(f) });
-    if (typeof fetch !== 'undefined' && typeof URL !== 'undefined' && URL.createObjectURL) {
-      this.musicBlobs = this.musicBlobs || {};
-      for (const scene of Object.keys(MUSIC_FILES)) {
-        tasks.push({ weight: 25, label: '背景音乐', run: () => fetch(BASE + musicFile(scene)).then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); })
-          .then(b => {
-            this.musicBlobs[scene] = URL.createObjectURL(b);
-            // 当前场景若还没开始播放，换成本地缓存
-            if (this.scene === scene && this.music?.paused) { this.scene = null; this.setScene(scene); }
-          }) });
-      }
-    }
-    return tasks;
+    return [...new Set(Object.values(SOUND_FILES).flat())].map(f => ({ weight: 1, label: '音效', run: () => this._loadSfx(f) }));
   }
+
+  /** 背景音乐在后台依次下载（不阻塞进入游戏）：先主页乐、再对局乐；下完后切换场景不再联网 */
+  loadMusicInBackground() {
+    if (this._musicLoading || typeof fetch === 'undefined' || !URL.createObjectURL) return;
+    this._musicLoading = true;
+    this.musicBlobs = this.musicBlobs || {};
+    const order = [...Object.keys(MUSIC_FILES)].sort((a, b) => (a === this.scene ? -1 : b === this.scene ? 1 : 0));
+    (async () => {
+      for (const scene of order) {
+        try {
+          const r = await fetch(BASE + musicFile(scene));
+          if (!r.ok) continue;
+          this.musicBlobs[scene] = URL.createObjectURL(await r.blob());
+          if (this.scene === scene && this.music?.paused) { this.scene = null; this.setScene(scene); }
+        } catch { /* 网络失败时仍按原方式边下边播 */ }
+      }
+    })();
+  }
+
 
   setLocalTrack(scene, file) {
     if (!MUSIC_FILES[scene] || !file || !(file.type?.startsWith('audio/') || /\.(mp3|ogg|wav|m4a|flac)$/i.test(file.name))) throw new Error('请选择有效的音频文件');
