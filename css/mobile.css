@@ -171,7 +171,7 @@ body.m-port .frontline-zone .zone-slots-container { justify-content: center; }
 body.m-port #player-dock .player-hq-meta { grid-column: 1 / 4; grid-row: 3; margin: 4px 2px 4px 4px; }
 body.m-port #player-dock .player-hq-meta .faction-emblem { display: none; }
 body.m-port #player-dock .player-resources {
-  grid-column: 4 / 9; grid-row: 3; margin: 4px 2px !important;
+  grid-column: 4 / 10; grid-row: 3; margin: 4px 2px !important; min-width: 0; overflow: hidden;
   flex-direction: row !important; align-items: center !important; gap: 6px !important;
 }
 body.m-port #player-dock .granary-cluster { flex: 1 1 60%; }
@@ -179,8 +179,8 @@ body.m-port #player-dock .prestige-cluster { flex: 1 1 40%; }
 body.m-port #player-dock .prestige-display { display: none; }
 body.m-port #player-dock .granary-title::before { content: '🌾'; }
 body.m-port #player-dock .prestige-title::before { content: '🎖️'; }
-body.m-port #player-dock #turn-timer.dock-timer { grid-column: 9 / 11; grid-row: 3; margin: 4px 2px; height: auto; }
-body.m-port #player-dock #turn-timer .turn-timer-chip { font-size: 11px; height: 100%; }
+body.m-port #player-dock #turn-timer.dock-timer { grid-column: 10 / 11; grid-row: 3; margin: 4px 1px; height: auto; min-width: 0; }
+body.m-port #player-dock #turn-timer .turn-timer-chip { font-size: 11px; height: 100%; padding: 0 !important; flex-direction: column; justify-content: center; gap: 0; line-height: 1.15; }
 body.m-port #player-dock .player-deck-actions {
   grid-column: 11 / 13; grid-row: 3; margin: 4px 4px 4px 2px !important;
   grid-template-columns: 1fr !important; grid-template-rows: 1fr !important;
@@ -249,3 +249,35 @@ body.m-land .tactical-drawer { right: env(safe-area-inset-right, 0px) !important
   #modal-game-menu .modal-box button { padding-top: 6px !important; padding-bottom: 6px !important; }
   .game-over-title { font-size: 26px !important; }
 }
+
+/* ==========================================================================
+   性能：手机上关闭“一直在跑”的阴影呼吸动画。
+   box-shadow / background-position 动画每帧都要重新栅格化整块区域，
+   在 3 倍屏手机上会让 GPU 持续满载 → 发热降频 → 隔一会儿突然掉帧。
+   改为静态发光，视觉提示保留。
+   ========================================================================== */
+@media (hover: none), (pointer: coarse) {
+  .board-unit.status-can-act,
+  .legal-attack-target,
+  .btn-end-turn.state-active,
+  .frontline-zone.terrain-water::after { animation: none !important; }
+  .legal-attack-target { outline-color: #fc8181 !important; box-shadow: 0 0 14px rgba(229, 62, 62, 0.85) !important; }
+  .btn-end-turn.state-active { box-shadow: 0 0 14px rgba(240, 201, 120, 0.6); }
+}
+body.m-land .board-unit.status-can-act,
+body.m-land .legal-attack-target,
+body.m-land .btn-end-turn.state-active,
+body.m-land .frontline-zone.terrain-water::after { animation: none !important; }
+
+/* 竖屏：倒计时只显示秒数、收窄，给粮草/声望让出空间，避免互相遮挡 */
+body.m-port #player-dock .prestige-cluster, body.m-port #player-dock .granary-cluster { min-width: 0; }
+body.m-port #player-dock .prestige-header, body.m-port #player-dock .granary-header { gap: 2px !important; }
+body.m-port #player-dock .prestige-numbers, body.m-port #player-dock .granary-numbers { white-space: nowrap; letter-spacing: -0.5px; }
+/* “取消”按钮放到左下角手牌条上，不再盖住敌方支援阵线（原来会挡住那里的敌军，点了没反应） */
+.touch-cancel-btn,
+body.m-land .touch-cancel-btn {
+  top: auto !important; left: calc(8px + env(safe-area-inset-left, 0px)) !important; transform: none !important;
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important; padding: 7px 14px;
+}
+@media (max-width: 340px) { body.m-port #player-dock #btn-end-turn { font-size: 11px !important; } }
+body.m-port .touch-cancel-btn { padding: 5px 10px !important; font-size: 12px; bottom: calc(112px + env(safe-area-inset-bottom, 0px)) !important; }

@@ -17,7 +17,7 @@ import { startTurn } from './engine/state.js';
 import { HeuristicBot, executeBotTurnAsync } from './bot/heuristicBot.js';
 import { HostSyncManager, ClientSyncManager } from './network/syncProtocol.js';
 
-import { InteractionController } from './ui/interaction.js';
+import { InteractionController, explainAttackError } from './ui/interaction.js';
 import { NetworkModalController } from './ui/networkModal.js';
 import { renderBoard, renderResourceHUD, fitHandStrip } from './ui/boardRenderer.js';
 import { CardInspector, renderHandCard, escapeHtml, getCardDescription } from './ui/cardRenderer.js';
@@ -905,7 +905,7 @@ export class AppCoordinator {
       });
 
       this.clientSync.on('actionRejected', ({ reason }) => {
-        FX.showTriggerHint(`⚠️ 行动被主机拒绝：${escapeHtml(reason)}`);
+        FX.showTriggerHint(`⚠️ 行动被主机拒绝：${escapeHtml(explainAttackError(reason))}`);
         this.render();
       });
 
@@ -984,7 +984,7 @@ export class AppCoordinator {
         this._syncTurnClock(true);
         return result;
       } catch (err) {
-        FX.showTriggerHint(`⚠️ 行动失败：${escapeHtml(err.message)}`);
+        FX.showTriggerHint(`⚠️ 行动失败：${escapeHtml(explainAttackError(err.message))}`);
         this.render();
       }
     } else if (this.mode === APP_MODE.P2P_HOST) {
@@ -1032,7 +1032,8 @@ export class AppCoordinator {
     const label = doc?.getElementById('turn-timer-text');
     const fill = doc?.getElementById('turn-timer-fill');
     const seconds = this.turnClock.remainingSeconds();
-    if (label) label.textContent = this.turnClock.deadline ? `00:${String(seconds).padStart(2, '0')}` : '--:--';
+    const compact = doc?.body?.classList.contains('m-port');
+    if (label) label.textContent = this.turnClock.deadline ? (compact ? `${seconds}s` : `00:${String(seconds).padStart(2, '0')}`) : (compact ? '--' : '--:--');
     if (fill) fill.style.width = `${(seconds / 30) * 100}%`;
     wrapper?.classList.toggle('warning', this.turnClock.deadline && seconds <= 10);
   }
@@ -1173,6 +1174,7 @@ export class AppCoordinator {
     // 3. Update Interaction Controller Context
     if (this.interaction) {
       this.interaction.setContext(state, this.localPlayerId);
+      this.interaction.refreshSelection?.();
     }
   }
 

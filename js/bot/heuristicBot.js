@@ -40,7 +40,17 @@ import { PRNG } from '../engine/prng.js';
  */
 export function fastCloneState(s) {
   if (!s) return null;
+  // 深拷贝：之前的浅拷贝会让 AI 的“模拟推演”改到真实对局
+  // （turnEffects 回合增益、pendingDeaths、单位 keywords 等共享引用），导致凭空加攻、非法行动卡死。
+  try {
+    const { prng, ...rest } = s;
+    const c = structuredClone(rest);
+    if (prng) c.prng = typeof prng.clone === 'function' ? prng.clone() : prng;
+    return c;
+  } catch { /* 含不可克隆字段时退回旧的逐层拷贝 */ }
   const c = { ...s };
+  c.turnEffects = s.turnEffects ? JSON.parse(JSON.stringify(s.turnEffects)) : s.turnEffects;
+  c.pendingDeaths = Array.isArray(s.pendingDeaths) ? [...s.pendingDeaths] : s.pendingDeaths;
 
   c.players = {
     WEI: {
@@ -542,6 +552,7 @@ export async function executeBotTurnAsync(rulesEngine, bot, options = {}) {
   const botFaction = bot.faction;
 
   let actionsTaken = 0;
+  let failures = 0;
   const maxActions = options.maxActions || 15;
 
   while (state.phase === PHASES.ACTION && state.activePlayer === botFaction && actionsTaken < maxActions) {
@@ -553,7 +564,20 @@ export async function executeBotTurnAsync(rulesEngine, bot, options = {}) {
       break;
     }
 
-    const result = rulesEngine.dispatch(action);
+    let result;
+    try {
+      result = rulesEngine.dispatch(action);
+    } catch (err) {
+      // 选出的行动被规则拒绝：不要让整个AI回合崩掉卡死，改为结束回合
+      console.warn('AI 行动被规则拒绝，结束回合：', err?.message, action);
+      failures++;
+      if (failures >= 2 || state.phase !== PHASES.ACTION || state.activePlayer !== botFaction) {
+        try { rulesEngine.dispatch({ type: ACTION_TYPES.END_TURN, playerId: botFaction, payload: {} }); } catch (_) { /* ignore */ }
+        if (onActionCallback) onActionCallback({ type: ACTION_TYPES.END_TURN });
+        break;
+      }
+      continue;
+    }
     actionsTaken++;
     if (onActionCallback) onActionCallback({ action, result });
 
@@ -562,6 +586,10 @@ export async function executeBotTurnAsync(rulesEngine, bot, options = {}) {
     if (stepDelayMs > 0) {
       await new Promise(resolve => setTimeout(resolve, stepDelayMs));
     }
+  }
+  if (state.phase === PHASES.ACTION && state.activePlayer === botFaction) {
+    try { rulesEngine.dispatch({ type: ACTION_TYPES.END_TURN, playerId: botFaction, payload: {} }); } catch (_) { /* ignore */ }
+    if (onActionCallback) onActionCallback({ type: ACTION_TYPES.END_TURN });
   }
 }
 
