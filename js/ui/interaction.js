@@ -13,7 +13,7 @@
 import { ACTION_TYPES, KEYWORDS, STATUS_TYPES, hasKeyword } from '../engine/constants.js';
 import { getValidTargets, validateAttack } from '../engine/combat.js';
 import { findUnit, getAllUnits } from '../engine/state.js';
-import { getTacticTargets, getDeployTargets, getActionCost, actsLikeCavalry as skillActsLikeCavalry } from '../engine/cardSkills.js';
+import { getTacticTargets, getDeployTargets, tacticBlockReason, getActionCost, actsLikeCavalry as skillActsLikeCavalry } from '../engine/cardSkills.js';
 import { CardInspector } from './cardRenderer.js';
 import { getUnitMoveZones, unitHasUsefulAction } from '../engine/unitOptions.js';
 import { previewAction, estimateAttack } from '../engine/preview.js';
@@ -1033,7 +1033,7 @@ export class InteractionController {
       if (Array.isArray(targets)) {
         this.cancelSelection();
         if (!targets.length) {
-          this._showToast(`【${card.name}】当前没有合法目标`);
+          this._showToast(`【${card.name}】${tacticBlockReason(this.gameState, this.localPlayerId, card) || '当前没有合法目标'}`);
           return;
         }
         const ids = targets.map(t => t.instanceId);

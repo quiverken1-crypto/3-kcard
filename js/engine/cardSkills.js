@@ -927,6 +927,8 @@ export const TACTICS = {
   },
   // 策反：控制1个花费不大于3或有二心的敌军至回合结束；若己方声望更高则永久控制
   wei_ce_fan: {
+    precheck: (state, owner) => state.battlefield.support[owner].slots.length < GAME_CONFIG.MAX_SUPPORT_UNITS,
+    precheckMsg: '己方支援阵线已满（4个），无法策反',
     targets: (state, owner) => state.battlefield.support[owner].slots.length >= GAME_CONFIG.MAX_SUPPORT_UNITS ? []
       : getAllUnits(state, opp(owner)).filter(u => canTargetEnemy(u) && ((u.cost ?? 0) <= 3 || hasBadge(u, '二心')) && canBeSuppressed(state, u)),
     autoPick: (state, owner, list) => [...list].sort(byValueDesc)[0],
@@ -1111,6 +1113,16 @@ export function getTacticSpec(card) {
   return ALIASES[key] ? TACTICS[ALIASES[key]] : null;
 }
 
+/** 战法当前无法使用的原因（给界面提示用）；可用时返回空串 */
+export function tacticBlockReason(state, owner, card) {
+  _stateForTarget = state;
+  const spec = getTacticSpec(card);
+  if (!spec) return '';
+  if (spec.precheck && !spec.precheck(state, owner, card)) return spec.precheckMsg || '当前没有可用目标';
+  if (spec.targets && !spec.targets(state, owner, card).length) return '当前没有合法目标';
+  return '';
+}
+
 export function getTacticTargets(state, owner, card) {
   _stateForTarget = state;
   const spec = getTacticSpec(card);
@@ -1123,7 +1135,7 @@ export function prepareTactic(state, owner, card, payload = {}) {
   _stateForTarget = state;
   const spec = getTacticSpec(card);
   if (!spec) return { spec: null, target: null };
-  if (spec.precheck && !spec.precheck(state, owner, card)) throw new Error(`【${card.name}】当前没有可用目标`);
+  if (spec.precheck && !spec.precheck(state, owner, card)) throw new Error(`【${card.name}】${spec.precheckMsg || '当前没有可用目标'}`);
   let target = null;
   if (spec.targets) {
     const list = spec.targets(state, owner, card);
