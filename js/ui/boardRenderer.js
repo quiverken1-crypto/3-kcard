@@ -10,6 +10,7 @@
  * 5. FloatingCombatFX: Damage numbers, counter/immune floats, attack trajectories, fire splash.
  */
 
+import { unitHasUsefulAction } from '../engine/unitOptions.js';
 import {
   renderHandCard,
   renderHiddenCard,
@@ -87,18 +88,16 @@ export function getZoneNameLabel(zoneKey) {
 /**
  * Checks if a unit can legally take an action.
  */
-function checkUnitCanAct(unit, player, activePlayer, viewerFaction) {
+function checkUnitCanAct(unit, player, activePlayer, viewerFaction, state = null) {
   if (!unit || unit.faction !== viewerFaction || activePlayer !== viewerFaction) return false;
+  // 实时判定：还有有效的攻击目标或可移动的位置才亮起
+  if (state) return unitHasUsefulAction(state, unit);
   if (unit.status?.suppressed) return false;
   if (unit.status?.deployedThisTurn && !hasKeyword(unit, KEYWORDS.TU_XI)) return false;
   if (player && player.provisions < (unit.actionCost ?? 1)) return false;
-
-  const hasDoubleStrike = hasKeyword(unit, KEYWORDS.FEN_ZHAN);
-  const maxAttacks = hasDoubleStrike ? 2 : 1;
-  const attacksUsed = unit.status?.attacksThisTurn || 0;
-  const canAttack = !unit.status?.attackedThisTurn || attacksUsed < maxAttacks;
+  const maxAttacks = hasKeyword(unit, KEYWORDS.FEN_ZHAN) ? 2 : 1;
+  const canAttack = !unit.status?.attackedThisTurn || (unit.status?.attacksThisTurn || 0) < maxAttacks;
   const canMove = !unit.status?.movedThisTurn && (unit.status?.actionsUsed === 0 || unit.troopType === 'CAVALRY');
-
   return canAttack || canMove;
 }
 
@@ -220,7 +219,7 @@ export function renderSupportLine(lineEl, supportData, faction, isOpponent, opti
       slotEl.className = 'slot unit-slot slot-occupied';
       const unitEl = renderUnitOnBoard(unit, {
         ...liveStats(options.state, unit),
-        canAct: !isOpponent && checkUnitCanAct(unit, options.player, options.activePlayer, options.viewerFaction),
+        canAct: !isOpponent && checkUnitCanAct(unit, options.player, options.activePlayer, options.viewerFaction, options.state),
         isSelected: options.selectedUnitId === unit.instanceId,
         isValidTarget: options.validTargetIds?.includes(unit.instanceId),
         viewerFaction: options.viewerFaction
@@ -286,7 +285,7 @@ export function renderFrontlineZone(zoneEl, zoneKey, zoneData, options = {}) {
         const isFriendly = units[i].faction === options.viewerFaction;
         const unitEl = renderUnitOnBoard(units[i], {
           ...liveStats(options.state, units[i], zoneKey),
-          canAct: isFriendly && checkUnitCanAct(units[i], options.player, options.activePlayer, options.viewerFaction),
+          canAct: isFriendly && checkUnitCanAct(units[i], options.player, options.activePlayer, options.viewerFaction, options.state),
           isSelected: options.selectedUnitId === units[i].instanceId,
           isValidTarget: options.validTargetIds?.includes(units[i].instanceId),
           viewerFaction: options.viewerFaction

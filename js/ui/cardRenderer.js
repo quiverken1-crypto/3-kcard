@@ -15,6 +15,7 @@ import { cardKingdom, kingdomOf } from './seats.js';
 
 export const KEYWORD_GLOSSARY = Object.freeze({
   '奋战': '【奋战】每回合可以攻击2次。',
+  '掳掠': '【掳掠】击败敌军后二选一：获得“2×本单位行动费”的粮草，或抽1张牌。',
   '斩将': '【斩将】攻击时，若自身战力大于敌军则将其移除；对伏击、潜袭单位无效。',
   '冲阵': '【冲阵】首次攻击敌军时不受反击，而后失去冲阵；对伏击无效。',
   '先登': '【先登】攻击时先造成伤害，若将其击败则自身不受反击；对伏击、潜袭单位无效。',
@@ -467,6 +468,9 @@ function attachInspectorEvents(el, card) {
   });
   el.addEventListener('dblclick', e => {
     e.preventDefault();
+    // 触屏上“再点一次确认”会被浏览器识别为双击：只在鼠标、且没有正在选择目标时打开详情
+    const body = globalThis.document?.body;
+    if (lastPointerType !== 'mouse' || body?.classList.contains('is-selecting') || body?.classList.contains('tactic-targeting')) return;
     showCardDetails(card);
   });
 
@@ -492,6 +496,9 @@ function attachInspectorEvents(el, card) {
 /**
  * Singleton Card Inspector Tooltip
  */
+let lastPointerType = 'mouse';
+globalThis.document?.addEventListener?.('pointerdown', e => { lastPointerType = e.pointerType || 'mouse'; }, true);
+
 export class CardInspector {
   static tooltipEl = null;
 

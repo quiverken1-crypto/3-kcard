@@ -159,6 +159,152 @@ function randomPick(state, arr) {
   return arr[i];
 }
 
+// ==========================================
+// 主动技能（己方回合内由玩家发动，每回合1次）
+// ==========================================
+export const ACTIVE_SKILLS = {
+  // 程昱·捕粮：弃置1张手牌（自选），额外获得2粮草
+  wei_cheng_yu: {
+    name: '捕粮', desc: '弃置1张手牌，额外获得2粮草（每回合1次）', needsHandCard: true,
+    apply(state, unit, payload) {
+      const p = state.players[unit.faction];
+      const idx = p.hand.findIndex(c => c.instanceId === payload?.cardId);
+      if (idx === -1) throw new Error('请选择要弃置的手牌');
+      const [card] = p.hand.splice(idx, 1);
+      p.discard.push(card);
+      p.provisions += 2;
+      log(state, unit.faction, `程昱·捕粮：弃置【${card.name}】，额外获得2粮草`);
+    }
+  }
+};
+
+export function getActiveSkill(unit) {
+  return active(unit) ? ACTIVE_SKILLS[baseId(unit?.cardId)] || null : null;
+}
+
+/** 主动技能当前不能发动的原因；可发动返回空串 */
+export function activeSkillBlockReason(state, unit) {
+  const spec = getActiveSkill(unit);
+  if (!spec) return '该单位没有主动技能';
+  if (state.phase !== PHASES.ACTION || state.activePlayer !== unit.faction) return '只能在己方回合发动';
+  if (!isOnBoard(state, unit)) return '单位不在场上';
+  if (unit.status?.[STATUS_TYPES.IS_FACE_DOWN]) return '潜伏中无法发动';
+  if (unit._skillUsedTurn === state.turnNumber) return `【${spec.name}】本回合已发动过`;
+  if (spec.needsHandCard && !state.players[unit.faction].hand.length) return '没有手牌可弃置';
+  return '';
+}
+
+export function activateSkill(state, pid, payload = {}) {
+  const unit = findUnit(state, payload.unitId)?.unit;
+  if (!unit || unit.faction !== pid) throw new Error('只能发动己方单位的技能');
+  const reason = activeSkillBlockReason(state, unit);
+  if (reason) throw new Error(reason);
+  getActiveSkill(unit).apply(state, unit, payload);
+  unit._skillUsedTurn = state.turnNumber;
+  refreshAuras(state);
+  return { success: true };
+}
+
+// ==========================================
+// 结算中途的目标选择（孙权·御将、法正·谋主）：玩家选，15 秒未选则随机
+// ==========================================
+const CHOICE_SPECS = {
+  sunQuan: {
+    source: '孙权·御将', prompt: '选择1个敌军，造成1点伤害',
+    auto: list => [...list].sort((a, b) => a.hp - b.hp)[0],
+    apply(state, pid, t) { damageUnit(state, t, 1, '孙权·御将'); }
+  },
+  luLue: {
+    source: '掳掠', prompt: '击败敌军：选择获得粮草或抽1张牌', pool: 'option',
+    auto: (list, state, pid) => (state?.players?.[pid]?.hand?.length ?? 0) < 4 ? list.find(o => o.instanceId === 'draw') : list.find(o => o.instanceId === 'grain'),
+    apply(state, pid, opt, choice) {
+      if (opt.instanceId === 'draw') { drawCard(state, pid); log(state, pid, '掳掠：抽1张牌'); }
+      else { const n = choice?.amount ?? 2; state.players[pid].provisions += n; log(state, pid, `掳掠：获得${n}粮草`); }
+    }
+  },
+  chengYu: {
+    source: '程昱·捕粮', prompt: '选择弃置1张最低费手牌，额外获得2粮草', pool: 'hand',
+    auto: list => list[0],
+    apply(state, pid, card) {
+      const p = state.players[pid];
+      const i = p.hand.indexOf(card);
+      if (i === -1) return;
+      p.hand.splice(i, 1);
+      p.discard.push(card);
+      p.provisions += 2;
+      log(state, pid, `程昱·捕粮：弃置【${card.name}】，额外获得2粮草`);
+    }
+  },
+  faZheng: {
+    source: '法正·谋主', prompt: '选择1个友方单位，获得+1+1',
+    auto: list => [...list].filter(isMilitary).sort((a, b) => b.atk - a.atk)[0] || list[0],
+    apply(state, pid, t) { buff(t, 1, 1); log(state, pid, `法正·谋主：【${t.name}】获得+1+1`); }
+  }
+};
+
+let _choiceSeq = 0;
+function queueChoice(state, pid, kind, sourceUnit, candidates, extra = {}) {
+  const list = candidates.filter(Boolean);
+  if (!list.length) return;
+  const spec = CHOICE_SPECS[kind];
+  // 只有1个候选（或手牌候选全是同一张卡）时无需询问
+  const sameCard = spec.pool === 'hand' && list.every(c => baseId(c.cardId) === baseId(list[0].cardId));
+  if (list.length === 1 || sameCard) { spec.apply(state, pid, list[0], extra); return; }
+  const p = state.players[pid];
+  (p.pendingChoices ||= []).push({
+    id: `ch_${state.turnNumber}_${++_choiceSeq}_${Math.floor(Math.random() * 1e6)}`,
+    kind, source: spec.source, prompt: spec.prompt, sourceId: sourceUnit?.instanceId, pool: spec.pool || 'board',
+    labels: Object.fromEntries(list.map(u => [u.instanceId, spec.pool === 'hand' ? `${u.name}（${u.cost ?? 0}费）` : u.name])),
+    ...extra,
+    targetIds: list.map(u => u.instanceId)
+  });
+}
+
+function liveChoiceTargets(state, pid, choice) {
+  if (choice.pool === 'option') return choice.targetIds.map(id => ({ instanceId: id, name: choice.labels?.[id] || id }));
+  if (choice.pool === 'hand') return choice.targetIds.map(id => state.players[pid].hand.find(c => c.instanceId === id)).filter(Boolean);
+  return choice.targetIds.map(id => findUnit(state, id)?.unit).filter(Boolean);
+}
+
+/** 结算队首的选择：targetId=玩家所选；mode='random' 随机（超时）；mode='auto' AI 挑选 */
+export function resolveChoice(state, pid, { choiceId, targetId, mode } = {}) {
+  const p = state.players[pid];
+  const choice = p.pendingChoices?.[0];
+  if (!choice) throw new Error('当前没有待选择的目标');
+  if (choiceId && choiceId !== choice.id) throw new Error('该选择已失效');
+  const spec = CHOICE_SPECS[choice.kind];
+  const live = liveChoiceTargets(state, pid, choice);
+  let t = null;
+  if (targetId) {
+    t = live.find(u => u.instanceId === targetId);
+    if (!t) throw new Error('目标不合法');
+  } else if (mode === 'random') t = randomPick(state, live);
+  else t = spec.auto(live, state, pid);
+  p.pendingChoices.shift();
+  if (t) {
+    const name = t.name;
+    if (mode === 'random') log(state, pid, `${choice.source}：超时，随机选择了【${name}】`);
+    spec.apply(state, pid, t, choice);
+  }
+  processDeaths(state);
+  refreshAuras(state);
+  return t;
+}
+
+export function autoChoiceTarget(state, pid) {
+  const choice = state.players[pid]?.pendingChoices?.[0];
+  if (!choice) return null;
+  return CHOICE_SPECS[choice.kind].auto(liveChoiceTargets(state, pid, choice), state, pid)?.instanceId || null;
+}
+
+/** 选牌超时：随机挑选至多 max 张 */
+export function randomPickCards(state, pick) {
+  const pool = [...(pick?.cards || [])];
+  const out = [];
+  while (pool.length && out.length < (pick?.max ?? 0)) out.push(pool.splice(state.prng.randomInt(0, pool.length - 1), 1)[0].instanceId);
+  return out;
+}
+
 function discardRandom(state, playerId, count = 1, reason = '') {
   const player = state.players[playerId];
   for (let i = 0; i < count && player.hand.length; i++) {
@@ -303,9 +449,9 @@ export function getAttackValue(state, unit, loc = null, foe = null) {
     if (adjacentUnits(state, unit, loc).some(u => u.faction === unit.faction && active(u) && hasKeyword(u, '督战'))) atk += 1;
   }
   if (fx.wangMei && loc.zoneType === 'FRONTLINE') atk += 1;
-  // 突驰冲锋：前线己方马军+3
+  // 突驰冲锋：前线己方骑兵+3
   if (fx.tuChi && loc.zoneType === 'FRONTLINE' && unit.troopType === TROOP_TYPES.CAVALRY) atk += 3;
-  // 以守为攻：本回合步军按防御力（生命）造成伤害
+  // 以守为攻：本回合步兵按防御力（生命）造成伤害
   if (fx.defAsAtk && effectiveTroop(state, unit, loc) === TROOP_TYPES.INFANTRY && unit.faction === state.activePlayer) atk = Math.max(atk, unit.hp);
   // 侯成·献酒（回合内临时加成）
   atk += unit._tempAtk || 0;
@@ -340,7 +486,7 @@ export function getActionCost(state, unit, loc = null) {
   loc ||= findUnit(state, unit.instanceId);
   if (!loc) return cost;
   if (isId(unit, 'shu_wu_dang_fei_jun') && onMountain(state, loc)) cost = 0;
-  // 并州铁骑：场上有己方步军时行动花费-1
+  // 并州铁骑：场上有己方步兵时行动花费-1
   if (isId(unit, 'lb_bing_zhou') && getAllUnits(state, unit.faction).some(u => u !== unit && effectiveTroop(state, u) === TROOP_TYPES.INFANTRY)) cost -= 1;
   // 治军：相同兵种的其他友军行动花费-1
   const friends = getAllUnits(state, unit.faction);
@@ -356,7 +502,7 @@ export function actsLikeCavalry(state, unit, loc = null) {
   loc ||= findUnit(state, unit.instanceId);
   if (onMountain(state, loc)) return false; // 山地：视为步兵
   if (unit.troopType === TROOP_TYPES.CAVALRY) return true;
-  if (isId(unit, 'wu_gan_ning')) return true; // 锦帆：可同时视为马军
+  if (isId(unit, 'wu_gan_ning')) return true; // 锦帆：可同时视为骑兵
   const water = terrainOf(state, loc)?.type === 'WATER';
   const navy = unit.troopType === TROOP_TYPES.NAVY || isId(unit, 'shu_guan_yu');
   return navy && water;
@@ -453,10 +599,43 @@ function searchDeck(state, pid, id, who) {
   return true;
 }
 
+/** 进场技能的目标：玩家选中的优先，其次（AI/超时）自动挑选 */
+function chosenOr(list, unit, fallback) {
+  const id = unit?._skillTargetId;
+  if (unit) delete unit._skillTargetId;
+  return (id && list.find(u => u.instanceId === id)) || fallback(list);
+}
+
+/** 进场时需要选择目标的武将技能：候选列表（部署前计算，不含自身） */
+export const DEPLOY_TARGETS = {
+  shu_jian_yong: { prompt: '说降：选择敌方支援阵线1个目标', list: (state, owner) => state.battlefield.support[opp(owner)].slots.filter(canSkillTarget) },
+  wu_yu_fan: { prompt: '说降：选择敌方支援阵线1个目标', list: (state, owner) => state.battlefield.support[opp(owner)].slots.filter(canSkillTarget) },
+  wei_xu_chu: {
+    prompt: '震慑：选择要压制的敌军',
+    list: (state, owner) => getAllUnits(state, opp(owner)).filter(u => !u.status.suppressed && canBeSuppressed(state, u) && !u.status?.[STATUS_TYPES.IS_FACE_DOWN])
+  },
+  shu_zhang_fei: {
+    prompt: '咆哮：选择1个战力不高于张飞的单位，返回其所有者手牌',
+    list: (state, owner, card) => [...getAllUnits(state, opp(owner)).filter(canSkillTarget), ...getAllUnits(state, owner)]
+      .filter(u => u.instanceId !== card?.instanceId && getAttackValue(state, u) <= (card?.atk ?? 0) && !isSteadfast(u))
+  },
+  lb_zhang_liao: {
+    prompt: '协战：选择1个己方步兵，双方行动花费各-1',
+    list: (state, owner, card) => getAllUnits(state, owner).filter(u => u.instanceId !== card?.instanceId && effectiveTroop(state, u) === TROOP_TYPES.INFANTRY)
+  }
+};
+
+export function getDeployTargets(state, owner, card) {
+  _stateForTarget = state;
+  const spec = DEPLOY_TARGETS[baseId(card?.cardId)];
+  if (!spec || card?.status?.[STATUS_TYPES.INHIBITED]) return null;
+  return { prompt: spec.prompt, targets: spec.list(state, owner, card) };
+}
+
 /** 说降：对敌方支援阵线1个目标造成2伤害，二心翻倍 */
 function persuade(state, unit, who) {
-  const list = state.battlefield.support[opp(unit.faction)].slots.filter(canTargetEnemy);
-  const t = [...list].sort((a, b) => (hasBadge(b, '二心') - hasBadge(a, '二心')) || (a.hp - b.hp))[0];
+  const list = state.battlefield.support[opp(unit.faction)].slots.filter(canSkillTarget);
+  const t = chosenOr(list, unit, l => [...l].sort((a, b) => (hasBadge(b, '二心') - hasBadge(a, '二心')) || (a.hp - b.hp))[0]);
   if (!t) return;
   damageUnit(state, t, hasBadge(t, '二心') ? 4 : 2, who);
 }
@@ -476,8 +655,8 @@ const DEPLOY_SKILLS = {
   wu_jie_fan(state, unit) { searchDeck(state, unit.faction, 'wu_shui_lu', '解烦兵'); },
   lb_wei_xu(state, unit) { searchDeck(state, unit.faction, 'lb_xian_zhen', '魏续·守兵'); },
   lb_zhang_liao(state, unit) {
-    const inf = getAllUnits(state, unit.faction).filter(u => u !== unit && effectiveTroop(state, u) === TROOP_TYPES.INFANTRY)
-      .sort((a, b) => (b.actionCost || 0) - (a.actionCost || 0))[0];
+    const inf = chosenOr(getAllUnits(state, unit.faction).filter(u => u !== unit && effectiveTroop(state, u) === TROOP_TYPES.INFANTRY), unit,
+      l => [...l].sort((a, b) => (b.actionCost || 0) - (a.actionCost || 0))[0]);
     if (!inf) return;
     unit.actionCost = Math.max(0, (unit.actionCost ?? 1) - 1);
     inf.actionCost = Math.max(0, (inf.actionCost ?? 1) - 1);
@@ -487,11 +666,10 @@ const DEPLOY_SKILLS = {
   wei_xu_chu(state, unit) {
     const targets = getAllUnits(state, opp(unit.faction))
       .filter(u => !u.status.suppressed && canBeSuppressed(state, u) && !u.status?.[STATUS_TYPES.IS_FACE_DOWN]);
-    const t = targets.sort((a, b) => b.atk - a.atk)[0];
+    const t = chosenOr(targets, unit, l => [...l].sort((a, b) => b.atk - a.atk)[0]);
     if (t) suppressUnit(state, t, '许褚·震慑');
   },
   wei_man_chong(state, unit) { scout(state, unit, 1); },
-  wei_cheng_yu(state, unit) { scout(state, unit, 1); },
   // 徐庶·举荐
   shu_xu_shu(state, unit) { drawCard(state, unit.faction); log(state, unit.faction, '徐庶·举荐：抽1张牌'); },
   // 连弩营·掩射
@@ -519,10 +697,9 @@ const DEPLOY_SKILLS = {
   // 张飞·大喝：将1个战力不高于自己的单位返回其所有者卡组顶
   shu_zhang_fei(state, unit) {
     const myAtk = getAttackValue(state, unit);
-    const candidates = getAllUnits(state, opp(unit.faction))
-      .filter(u => getAttackValue(state, u) <= myAtk && !isSteadfast(u))
-      .sort((a, b) => (b.cost - a.cost) || (b.atk - a.atk));
-    const t = candidates[0];
+    const enemies = getAllUnits(state, opp(unit.faction)).filter(u => canSkillTarget(u) && getAttackValue(state, u) <= myAtk && !isSteadfast(u));
+    const own = getAllUnits(state, unit.faction).filter(u => u !== unit && getAttackValue(state, u) <= myAtk && !isSteadfast(u));
+    const t = chosenOr([...enemies, ...own], unit, () => [...enemies].sort((a, b) => (b.cost - a.cost) || (b.atk - a.atk))[0]);
     if (!t) return;
     removeUnitFromBoard(state, t.instanceId, true, { silent: true });
     resetCardState(t);
@@ -531,8 +708,10 @@ const DEPLOY_SKILLS = {
   }
 };
 
-export function onUnitEnter(state, unit) {
-  if (!active(unit)) return;
+export function onUnitEnter(state, unit, opts = {}) {
+  // 死亡优先：进场时已被消灭（如被反制击杀）则不再结算进场技能
+  if (!active(unit) || !isOnBoard(state, unit)) return;
+  if (opts.skillTargetId) unit._skillTargetId = opts.skillTargetId;
   // 徐盛·疑兵：己方下个进场单位获得潜袭
   const meta = ensurePlayerMeta(state.players[unit.faction]);
   if (meta.nextStealth && !isId(unit, 'wu_xu_sheng')) {
@@ -544,6 +723,7 @@ export function onUnitEnter(state, unit) {
   if (isId(unit, 'wu_xu_sheng')) meta.nextStealth = true;
   const fn = DEPLOY_SKILLS[baseId(unit.cardId)];
   if (fn) fn(state, unit);
+  delete unit._skillTargetId;
   refreshAuras(state);
 }
 
@@ -619,10 +799,13 @@ export function triggerCounters(state, event, ctx) {
 
 /** 敌方战法/反制能否指向该单位（警戒、背面） */
 let _stateForTarget = null;
+/** 武将技能指向：【警戒】只防战法/反制，技能只排除潜伏(背面)单位 */
+export const canSkillTarget = u => !u?.status?.[STATUS_TYPES.IS_FACE_DOWN];
+
 export const canTargetEnemy = u => {
   if (active(u) && hasKeyword(u, '警戒')) return false;
   if (u.status?.[STATUS_TYPES.IS_FACE_DOWN]) return false;
-  // 高顺·禁酒：己方步军获得警戒
+  // 高顺·禁酒：己方步兵获得警戒
   if (_stateForTarget && effectiveTroop(_stateForTarget, u) === TROOP_TYPES.INFANTRY && getAllUnits(_stateForTarget, u.faction).some(x => isId(x, 'lb_gao_shun'))) return false;
   return true;
 };
@@ -693,7 +876,7 @@ export const TACTICS = {
     play(state, owner, card, t) { const dead = damageUnit(state, t, 1, '突骑掠阵'); if (!dead) suppressUnit(state, t, '突骑掠阵'); }
   }),
   ...commonTactic('tuchi', {
-    play(state, owner) { ensureTurnFx(state)[owner].tuChi = true; log(state, owner, '突驰冲锋：前线己方马军战力+3，行动花费-1'); }
+    play(state, owner) { ensureTurnFx(state)[owner].tuChi = true; log(state, owner, '突驰冲锋：前线己方骑兵战力+3，行动花费-1'); }
   }),
   ...commonTactic('jueshui', {
     play(state, owner) {
@@ -736,7 +919,7 @@ export const TACTICS = {
       log(state, owner, `暗度陈仓：${old.name}改为${bf.frontline[k].terrain.name}`);
     }
   }),
-  shu_yi_shou_wei_gong: { play(state, owner) { ensureTurnFx(state)[owner].defAsAtk = true; log(state, owner, '以守为攻：本回合步军以防御力作战'); } },
+  shu_yi_shou_wei_gong: { play(state, owner) { ensureTurnFx(state)[owner].defAsAtk = true; log(state, owner, '以守为攻：本回合步兵以防御力作战'); } },
   shu_shou_long: {
     targets: (state, owner) => state.battlefield.support[owner].slots,
     autoPick: (state, owner, list) => [...list].sort((a, b) => (b.maxHp - b.hp) - (a.maxHp - a.hp))[0],
@@ -761,8 +944,12 @@ export const TACTICS = {
     play(state, owner, card, t) { t.atk = t.hp; log(state, owner, `水陆并进：【${t.name}】战力变为${t.hp}`); }
   },
   wu_shui_tu: {
-    targets: (state, owner) => getAllUnits(state, opp(owner)).filter(u => canTargetEnemy(u) && u.atk > (u.actionCost ?? 1)),
-    autoPick: (state, owner, list) => [...list].sort((a, b) => b.atk - a.atk)[0],
+    // 卡面：“将1个单位”——己方、敌方均可（敌方需可被指向）
+    targets: (state, owner) => [...getAllUnits(state, owner), ...getAllUnits(state, opp(owner)).filter(canTargetEnemy)],
+    autoPick: (state, owner, list) => {
+      const foes = list.filter(u => u.faction !== owner).sort((a, b) => (b.atk - (b.actionCost ?? 1)) - (a.atk - (a.actionCost ?? 1)));
+      return foes[0] || list[0];
+    },
     play(state, owner, card, t) {
       (ensureTurnFx(state)[owner].swapped ||= []).push({ instanceId: t.instanceId, atk: t.atk, act: t.actionCost });
       const a = t.atk; t.atk = t.actionCost ?? 1; t.actionCost = a;
@@ -818,6 +1005,8 @@ export const TACTICS = {
   },
   // 策反：控制1个花费不大于3或有二心的敌军至回合结束；若己方声望更高则永久控制
   wei_ce_fan: {
+    precheck: (state, owner) => state.battlefield.support[owner].slots.length < GAME_CONFIG.MAX_SUPPORT_UNITS,
+    precheckMsg: '己方支援阵线已满（4个），无法策反',
     targets: (state, owner) => state.battlefield.support[owner].slots.length >= GAME_CONFIG.MAX_SUPPORT_UNITS ? []
       : getAllUnits(state, opp(owner)).filter(u => canTargetEnemy(u) && ((u.cost ?? 0) <= 3 || hasBadge(u, '二心')) && canBeSuppressed(state, u)),
     autoPick: (state, owner, list) => [...list].sort(byValueDesc)[0],
@@ -958,20 +1147,41 @@ export const TACTICS = {
       }
     }
   },
-  // 豪杰归心：摸3+己方声望张牌，选择其中至多2张单位牌加入手中，其余弃置
+  // 豪杰归心：翻看3+己方声望张牌，由玩家自己挑选至多2张加入手中，其余弃置
   shu_hao_jie_gui_xin: {
+    precheck: (state, owner) => state.players[owner].deck.length > 0,
     play(state, owner) {
       const p = state.players[owner];
       const n = 3 + p.prestige;
       const revealed = p.deck.splice(0, n);
-      const keep = revealed.filter(c => c.type === 'UNIT').sort(byValueDesc).slice(0, 2);
-      for (const c of revealed) {
-        if (keep.includes(c)) putInHand(state, owner, c); else p.discard.push(c);
-      }
-      log(state, owner, `豪杰归心：翻看${revealed.length}张，收入${keep.map(c => '【' + c.name + '】').join('') || '无'}`);
+      if (!revealed.length) return;
+      p.pendingPick = { source: '豪杰归心', max: 2, cards: revealed };
+      log(state, owner, `豪杰归心：翻看${revealed.length}张牌，挑选至多2张加入手牌`);
     }
   }
 };
+
+/** 选牌（豪杰归心等）：AI / 超时自动挑选价值最高的 */
+export function autoPickCards(pick) {
+  return [...(pick?.cards || [])].sort(byValueDesc).slice(0, pick?.max ?? 0).map(c => c.instanceId);
+}
+
+/** 结算选牌：选中的进手牌，其余弃置 */
+export function resolvePick(state, owner, cardIds = []) {
+  const p = state.players[owner];
+  const pick = p.pendingPick;
+  if (!pick) throw new Error('当前没有待选择的牌');
+  const ids = [...new Set(cardIds)];
+  if (ids.length > pick.max) throw new Error(`最多只能选择${pick.max}张`);
+  if (ids.some(id => !pick.cards.some(c => c.instanceId === id))) throw new Error('选择的牌不在可选范围内');
+  const keep = [];
+  for (const c of pick.cards) {
+    if (ids.includes(c.instanceId)) { putInHand(state, owner, c); keep.push(c); } else p.discard.push(c);
+  }
+  p.pendingPick = null;
+  log(state, owner, `${pick.source}：收入${keep.map(c => '【' + c.name + '】').join('') || '无'}，其余弃置`);
+  return keep;
+}
 
 const ALIASES = { shengdong: 'shu_sheng_dong_ji_xi', cefan: 'wei_ce_fan', shipo: null };
 export function getTacticSpec(card) {
@@ -979,6 +1189,16 @@ export function getTacticSpec(card) {
   if (TACTICS[id]) return TACTICS[id];
   const key = id.replace(/^[a-z]+_/, '');
   return ALIASES[key] ? TACTICS[ALIASES[key]] : null;
+}
+
+/** 战法当前无法使用的原因（给界面提示用）；可用时返回空串 */
+export function tacticBlockReason(state, owner, card) {
+  _stateForTarget = state;
+  const spec = getTacticSpec(card);
+  if (!spec) return '';
+  if (spec.precheck && !spec.precheck(state, owner, card)) return spec.precheckMsg || '当前没有可用目标';
+  if (spec.targets && !spec.targets(state, owner, card).length) return '当前没有合法目标';
+  return '';
 }
 
 export function getTacticTargets(state, owner, card) {
@@ -993,7 +1213,7 @@ export function prepareTactic(state, owner, card, payload = {}) {
   _stateForTarget = state;
   const spec = getTacticSpec(card);
   if (!spec) return { spec: null, target: null };
-  if (spec.precheck && !spec.precheck(state, owner, card)) throw new Error(`【${card.name}】当前没有可用目标`);
+  if (spec.precheck && !spec.precheck(state, owner, card)) throw new Error(`【${card.name}】${spec.precheckMsg || '当前没有可用目标'}`);
   let target = null;
   if (spec.targets) {
     const list = spec.targets(state, owner, card);
@@ -1024,9 +1244,7 @@ export function resolveTactic(state, owner, card, prepared, payload = {}) {
   }
   // 法正·谋主：己方使用战法时，使1友方单位+1+1
   for (const fz of unitsWith(state, owner, 'shu_fa_zheng')) {
-    const t = [...getAllUnits(state, owner)].filter(isMilitary).sort((a, b) => b.atk - a.atk)[0] || fz;
-    buff(t, 1, 1);
-    log(state, owner, `法正·谋主：【${t.name}】获得+1+1`);
+    queueChoice(state, owner, 'faZheng', fz, getAllUnits(state, owner));
   }
   // 诸葛亮·料敌：敌方使用战法时，对其主城造成等同于其花费的伤害
   for (const zg of unitsWith(state, opp(owner), 'shu_zhu_ge_liang')) {
@@ -1045,6 +1263,12 @@ export function afterAttack(state, attacker, defender, result, targetIsHq) {
   const attackerAlive = isOnBoard(state, attacker);
   const defenderAlive = defender && isOnBoard(state, defender);
   const enemy = opp(attacker.faction);
+
+  // 【掳掠】击败敌军后二选一：获得 2×本单位行动费 的粮草，或抽1张牌
+  if (!targetIsHq && result.defenderDied && attackerAlive && active(attacker) && hasKeyword(attacker, '掳掠')) {
+    const amount = 2 * (attacker.actionCost ?? 1);
+    queueChoice(state, attacker.faction, 'luLue', attacker, [{ instanceId: 'grain', name: `获得${amount}粮草` }, { instanceId: 'draw', name: '抽1张牌' }], { amount });
+  }
 
   // 曹洪·贪吝：每次交战后行动花费+1
   if (!targetIsHq && attackerAlive && isId(attacker, 'wei_cao_hong')) { attacker.actionCost = (attacker.actionCost ?? 1) + 1; }
@@ -1190,19 +1414,11 @@ function afterRefill(state, pid) {
     if (isId(u, 'wei_yu_jin') && u.hp < u.maxHp) { u.hp = u.maxHp; log(state, pid, '于禁·毅重：完全恢复'); }
     // 孙权·御将：若上回合未被攻击，对任意敌军造成1伤害
     if (isId(u, 'wu_sun_quan') && u._attackedOnTurn !== state.turnNumber - 1) {
-      const t = getAllUnits(state, opp(pid)).filter(canTargetEnemy).sort((a, b) => a.hp - b.hp)[0];
-      if (t) damageUnit(state, t, 1, '孙权·御将');
+      _stateForTarget = state;
+      queueChoice(state, pid, 'sunQuan', u, getAllUnits(state, opp(pid)).filter(canSkillTarget));
     }
     // 贾逵·筑城：回合开始时，己方主城+1防
     if (isId(u, 'wei_jia_kui')) { healHq(state, pid, 1, true); log(state, pid, '贾逵·筑城：主城+1'); }
-    // 程昱·捕粮：手牌充裕时弃1张最低费手牌，额外获得2粮草
-    if (isId(u, 'wei_cheng_yu') && p.hand.length >= 6) {
-      const low = [...p.hand].sort((a, b) => (a.cost || 0) - (b.cost || 0))[0];
-      p.hand.splice(p.hand.indexOf(low), 1);
-      p.discard.push(low);
-      p.provisions += 2;
-      log(state, pid, `程昱·捕粮：弃置【${low.name}】，额外获得2粮草`);
-    }
   }
   refreshAuras(state);
 }

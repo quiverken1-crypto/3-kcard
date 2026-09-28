@@ -225,7 +225,10 @@ body.m-port #player-dock .hand-card-fan .card-hand { position: relative; }
 
 /* 固定定位的浮层也避开刘海/底部横条 */
 body.m-land .card-inspector-tooltip { left: calc(6px + env(safe-area-inset-left, 0px)) !important; }
-body.m-land .toast-stack, body.m-land .toast-alert { left: calc(10px + env(safe-area-inset-left, 0px)) !important; }
+body.m-land .toast-stack { left: calc(10px + env(safe-area-inset-left, 0px)) !important; }
+/* 居中提示：保持居中并限制宽度（之前被改成靠左但仍左移 50%，左半截被切掉） */
+.toast-alert { max-width: calc(100vw - 24px); white-space: normal; text-align: center; box-sizing: border-box; }
+body.tactic-targeting .toast-alert { top: auto !important; bottom: calc(6px + env(safe-area-inset-bottom, 0px)) !important; max-width: min(560px, calc(100vw - 24px)); }
 body.m-land .tactical-drawer { right: env(safe-area-inset-right, 0px) !important; }
 
 /* ===== 手机上的主页与弹窗：不换行、不被裁掉 ===== */
@@ -281,3 +284,6 @@ body.m-land .touch-cancel-btn {
 }
 @media (max-width: 340px) { body.m-port #player-dock #btn-end-turn { font-size: 11px !important; } }
 body.m-port .touch-cancel-btn { padding: 5px 10px !important; font-size: 12px; bottom: calc(112px + env(safe-area-inset-bottom, 0px)) !important; }
+body.m-land #player-dock #turn-timer .turn-timer-total { font-size: 10px; }
+body.m-port #player-dock #turn-timer .turn-timer-total { display: none; }
+body.m-port #player-dock #turn-timer.total-warning { outline: 2px solid #ff5a45; border-radius: 8px; }

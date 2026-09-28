@@ -281,7 +281,7 @@ export const WEI_CARDS = Object.freeze([
       "name": "骁勇",
       "trigger": "combat_calculation",
       "description": "【先登】。骁勇：与相同兵种对战时，战力翻倍。",
-      "logic": "Has [先登]. During combat calculation against an enemy unit of the same troop type (infantry 步军), double Zang Ba's attack (from 2 to 4, plus any buffs doubled)."
+      "logic": "Has [先登]. During combat calculation against an enemy unit of the same troop type (infantry 步兵), double Zang Ba's attack (from 2 to 4, plus any buffs doubled)."
     },
     "flavor": "",
     "cardId": "wei_zang_ba",

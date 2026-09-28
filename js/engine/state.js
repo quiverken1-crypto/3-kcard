@@ -654,7 +654,8 @@ export function projectStateForClient(masterState, clientFaction) {
           instanceId: c.instanceId,
           isHidden: true
         })),
-        deck: { count: oppPlayer.deck.length }
+        deck: { count: oppPlayer.deck.length },
+        pendingPick: oppPlayer.pendingPick ? { source: oppPlayer.pendingPick.source, max: oppPlayer.pendingPick.max, count: oppPlayer.pendingPick.cards?.length || 0, cards: [] } : null
       }
     },
     activeCounters: masterState.activeCounters.map(c =>

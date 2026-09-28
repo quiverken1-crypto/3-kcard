@@ -156,6 +156,8 @@ function checkConditions(state, conditions, owner, source, context) {
 
 export function runAbilityTrigger(state, trigger, source, context = {}) {
   if (!source || source.status?.[STATUS_TYPES.INHIBITED]) return [];
+  // 死亡优先于技能结算：已阵亡/离场的单位只结算“阵亡时”技能
+  if (source.type === 'UNIT' && trigger !== 'ON_DEATH' && !findUnit(state, source.instanceId)) return [];
   const owner = source.faction;
   if (!state.players[owner]) return [];
   const emitted = [];

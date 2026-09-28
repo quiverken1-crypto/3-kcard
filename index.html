@@ -312,9 +312,10 @@
       </div>
 
       <!-- 回合倒计时（我方栏上方） -->
-      <div id="turn-timer" class="turn-timer-display dock-timer" title="无操作 30 秒后自动结束回合">
+      <div id="turn-timer" class="turn-timer-display dock-timer" title="每步思考 40 秒，每回合总计 80 秒">
         <span class="turn-timer-track"><span id="turn-timer-fill"></span></span>
         <span class="turn-timer-chip">⏳ <span id="turn-timer-text">--:--</span></span>
+        <span id="turn-timer-total" class="turn-timer-total"></span>
       </div>
 
       <!-- Player Resource HUD Bar -->
@@ -452,6 +453,19 @@
         <div class="modal-actions">
           <button id="btn-confirm-mulligan" class="modal-btn btn-primary">确认调度 (<span id="mulligan-selected-count">0</span> 张)</button>
           <button id="btn-keep-mulligan" class="modal-btn btn-secondary">保留全部手牌</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 选牌（豪杰归心等）：翻看的牌只展示给自己，自己挑选 -->
+    <div id="overlay-card-pick" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="选择加入手牌的牌">
+      <div class="modal-box mulligan-box pick-box">
+        <h2 class="modal-title" id="card-pick-title">选择卡牌</h2>
+        <p class="modal-subtitle" id="card-pick-subtitle">点击选择要加入手牌的牌，其余弃置</p>
+        <div id="card-pick-timer" class="card-pick-timer"></div>
+        <div id="card-pick-container" class="mulligan-cards-row"></div>
+        <div class="modal-actions">
+          <button id="btn-confirm-pick" class="modal-btn btn-primary">收入手牌（<span id="card-pick-count">0</span>/<span id="card-pick-max">2</span>）</button>
         </div>
       </div>
     </div>
@@ -611,7 +625,7 @@
           <h2 id="inspector-card-name" class="inspector-title">卡牌名称</h2>
           <div class="inspector-meta-row">
             <span id="inspector-faction-badge" class="meta-badge">势力: 魏</span>
-            <span id="inspector-troop-badge" class="meta-badge">兵种: 马军</span>
+            <span id="inspector-troop-badge" class="meta-badge">兵种: 骑兵</span>
             <span id="inspector-cost-badge" class="meta-badge">粮草: 5</span>
             <span id="inspector-action-cost-badge" class="meta-badge">行动: 1</span>
           </div>
@@ -679,9 +693,9 @@
           </section>
           <section class="rule-chapter">
             <h3>三、四大兵种机动体系</h3>
-            <p><strong>步军</strong>：每回合移动或攻击（二选一）。</p>
-            <p><strong>马军</strong>：每回合可移动并攻击（顺序不限）。</p>
-            <p><strong>水军</strong>：水域中等同马军，非水域等同步军。</p>
+            <p><strong>步兵</strong>：每回合移动或攻击（二选一）。</p>
+            <p><strong>骑兵</strong>：每回合可移动并攻击（顺序不限）。</p>
+            <p><strong>水军</strong>：水域中等同骑兵，非水域等同步兵。</p>
             <p><strong>谋士</strong>：全图无视距离攻击！只受谋士反击且只反击谋士。若所在区域有敌谋必须强制优先攻击！</p>
           </section>
           <section class="rule-chapter">

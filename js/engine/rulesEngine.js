@@ -56,7 +56,7 @@ import {
 } from '../data/terrains.js';
 import { runAbilityTrigger } from './abilities.js';
 import {
-  applyEnterKeywords, onUnitEnter, onUnitMoved, prepareTactic, resolveTactic, afterAttack,
+  applyEnterKeywords, onUnitEnter, onUnitMoved, prepareTactic, resolveTactic, afterAttack, resolvePick, autoPickCards, randomPickCards, resolveChoice, autoChoiceTarget, activateSkill,
   processDeaths, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getTacticTargets, refreshAuras, baseId, targetSurcharge
 } from './cardSkills.js';
 
@@ -205,7 +205,7 @@ function dispatchBase(state, action) {
       }
 
       state.combatLog.push({ type: 'DEPLOY', playerId: action.playerId, card, cost, discountApplied, targetZone: targetZone === 'SUPPORT' ? 'SUPPORT' : `FRONTLINE_${targetZone}` });
-      onUnitEnter(state, card);
+      onUnitEnter(state, card, { skillTargetId: action.payload?.skillTargetId });
       return { success: true, card, cost, discountApplied };
     }
 
@@ -453,6 +453,28 @@ function dispatchBase(state, action) {
 export function dispatch(state, action) {
   if (state.phase === PHASES.GAME_OVER) throw new Error('Game is already over');
   const player = state.players[action.playerId];
+  // 选牌（豪杰归心等）：先完成选择；结束回合/超时则自动挑选
+  if (action.type === ACTION_TYPES.PICK_CARDS) {
+    if (!player?.pendingPick) throw new Error('当前没有待选择的牌');
+    const ids = action.payload?.random ? randomPickCards(state, player.pendingPick) : (action.payload?.cardIds || []);
+    const kept = resolvePick(state, action.playerId, ids);
+    return { success: true, kept: kept.map(c => c.instanceId) };
+  }
+  if (action.type === ACTION_TYPES.CHOOSE_TARGET) {
+    const t = resolveChoice(state, action.playerId, { choiceId: action.payload?.choiceId, targetId: action.payload?.targetId, mode: action.payload?.random ? 'random' : (action.payload?.targetId ? null : 'auto') });
+    return { success: true, targetId: t?.instanceId || null };
+  }
+  if (player?.pendingPick || player?.pendingChoices?.length) {
+    if (action.type === ACTION_TYPES.END_TURN || action.type === ACTION_TYPES.SURRENDER) {
+      if (player.pendingPick) resolvePick(state, action.playerId, randomPickCards(state, player.pendingPick));
+      while (player.pendingChoices?.length && state.phase !== PHASES.GAME_OVER) resolveChoice(state, action.playerId, { mode: 'random' });
+      if (state.phase === PHASES.GAME_OVER) return { success: true, winner: state.winner };
+    } else throw new Error(player.pendingPick ? '请先完成选牌' : '请先选择技能目标');
+  }
+  if (action.type === ACTION_TYPES.ACTIVATE_SKILL) {
+    if (state.activePlayer !== action.playerId) throw new Error('只能在己方回合发动');
+    return activateSkill(state, action.playerId, action.payload || {});
+  }
   const handId = action.payload?.cardInstanceId;
   const source = action.type === ACTION_TYPES.ATTACK
     ? findUnit(state, action.payload?.attackerId)?.unit
@@ -537,6 +559,8 @@ export function getLegalActions(state, playerId) {
   if (state.phase !== PHASES.ACTION || state.activePlayer !== playerId) return [];
   const actions = [];
   const player = state.players[playerId];
+  if (player?.pendingPick) return [{ type: ACTION_TYPES.PICK_CARDS, playerId, payload: { cardIds: autoPickCards(player.pendingPick) } }];
+  if (player?.pendingChoices?.length) return [{ type: ACTION_TYPES.CHOOSE_TARGET, playerId, payload: { choiceId: player.pendingChoices[0].id, targetId: autoChoiceTarget(state, playerId) } }];
 
   // 1. Legal Deploys
   const noDeploy = player.noDeployNextTurn && player._noDeployActive;
