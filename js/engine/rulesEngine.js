@@ -56,7 +56,7 @@ import {
 } from '../data/terrains.js';
 import { runAbilityTrigger } from './abilities.js';
 import {
-  applyEnterKeywords, onUnitEnter, onUnitMoved, prepareTactic, resolveTactic, afterAttack, resolvePick, autoPickCards, randomPickCards, resolveChoice, autoChoiceTarget,
+  applyEnterKeywords, onUnitEnter, onUnitMoved, prepareTactic, resolveTactic, afterAttack, resolvePick, autoPickCards, randomPickCards, resolveChoice, autoChoiceTarget, activateSkill,
   processDeaths, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getTacticTargets, refreshAuras, baseId, targetSurcharge
 } from './cardSkills.js';
 
@@ -470,6 +470,10 @@ export function dispatch(state, action) {
       while (player.pendingChoices?.length && state.phase !== PHASES.GAME_OVER) resolveChoice(state, action.playerId, { mode: 'random' });
       if (state.phase === PHASES.GAME_OVER) return { success: true, winner: state.winner };
     } else throw new Error(player.pendingPick ? '请先完成选牌' : '请先选择技能目标');
+  }
+  if (action.type === ACTION_TYPES.ACTIVATE_SKILL) {
+    if (state.activePlayer !== action.playerId) throw new Error('只能在己方回合发动');
+    return activateSkill(state, action.playerId, action.payload || {});
   }
   const handId = action.payload?.cardInstanceId;
   const source = action.type === ACTION_TYPES.ATTACK

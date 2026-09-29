@@ -5,7 +5,7 @@
 import { KEYWORDS, STATUS_TYPES, hasKeyword } from './constants.js';
 import { findUnit } from './state.js';
 import { getValidTargets } from './combat.js';
-import { getActionCost, actsLikeCavalry, baseId } from './cardSkills.js';
+import { getActionCost, actsLikeCavalry, baseId, getActiveSkill, activeSkillBlockReason } from './cardSkills.js';
 
 /** 该单位本回合还能移动到的区域：['FRONTLINE_LEFT', ..., 'SUPPORT'] */
 export function getUnitMoveZones(state, unit, loc = null) {
@@ -51,5 +51,6 @@ export function unitHasUsefulAction(state, unit) {
   if (!state || !unit || state.activePlayer !== unit.faction || state.phase !== 'ACTION') return false;
   const loc = findUnit(state, unit.instanceId);
   if (!loc) return false;
+  if (getActiveSkill(unit) && !activeSkillBlockReason(state, unit)) return true;
   return getUnitMoveZones(state, unit, loc).length > 0 || getUnitAttackTargets(state, unit).length > 0;
 }

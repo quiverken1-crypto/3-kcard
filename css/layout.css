@@ -794,3 +794,9 @@ body.tactic-targeting .board-unit:not(.legal-tactic-target) { opacity: .35 !impo
 .card-hand.choice-target { outline: 3px solid #ffd76a !important; outline-offset: 2px; box-shadow: 0 0 18px rgba(255,200,80,.85) !important; z-index: 20; }
 body.choice-hand .card-hand:not(.choice-target) { opacity: .45; }
 body.choice-hand .choice-bar { bottom: auto !important; top: calc(46px + env(safe-area-inset-top, 0px)) !important; }
+/* 主动技能按钮 */
+.skill-activate-btn { position: fixed; z-index: 975; padding: 5px 12px; border-radius: 14px; border: 1px solid #ffd76a;
+  background: linear-gradient(180deg, #7a4a12, #4a2a08); color: #fff3cf; font-size: 12px; font-weight: 700; white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0,0,0,.6); cursor: pointer; touch-action: manipulation; }
+.skill-activate-btn.disabled { background: #2a2622; border-color: #6b6150; color: #b3a88f; font-weight: 500; }
+body.skill-hand-select .card-hand { outline: 3px solid #ffd76a; outline-offset: 2px; box-shadow: 0 0 16px rgba(255,200,80,.8) !important; }

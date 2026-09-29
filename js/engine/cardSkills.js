@@ -160,6 +160,52 @@ function randomPick(state, arr) {
 }
 
 // ==========================================
+// 主动技能（己方回合内由玩家发动，每回合1次）
+// ==========================================
+export const ACTIVE_SKILLS = {
+  // 程昱·捕粮：弃置1张手牌（自选），额外获得2粮草
+  wei_cheng_yu: {
+    name: '捕粮', desc: '弃置1张手牌，额外获得2粮草（每回合1次）', needsHandCard: true,
+    apply(state, unit, payload) {
+      const p = state.players[unit.faction];
+      const idx = p.hand.findIndex(c => c.instanceId === payload?.cardId);
+      if (idx === -1) throw new Error('请选择要弃置的手牌');
+      const [card] = p.hand.splice(idx, 1);
+      p.discard.push(card);
+      p.provisions += 2;
+      log(state, unit.faction, `程昱·捕粮：弃置【${card.name}】，额外获得2粮草`);
+    }
+  }
+};
+
+export function getActiveSkill(unit) {
+  return active(unit) ? ACTIVE_SKILLS[baseId(unit?.cardId)] || null : null;
+}
+
+/** 主动技能当前不能发动的原因；可发动返回空串 */
+export function activeSkillBlockReason(state, unit) {
+  const spec = getActiveSkill(unit);
+  if (!spec) return '该单位没有主动技能';
+  if (state.phase !== PHASES.ACTION || state.activePlayer !== unit.faction) return '只能在己方回合发动';
+  if (!isOnBoard(state, unit)) return '单位不在场上';
+  if (unit.status?.[STATUS_TYPES.IS_FACE_DOWN]) return '潜伏中无法发动';
+  if (unit._skillUsedTurn === state.turnNumber) return `【${spec.name}】本回合已发动过`;
+  if (spec.needsHandCard && !state.players[unit.faction].hand.length) return '没有手牌可弃置';
+  return '';
+}
+
+export function activateSkill(state, pid, payload = {}) {
+  const unit = findUnit(state, payload.unitId)?.unit;
+  if (!unit || unit.faction !== pid) throw new Error('只能发动己方单位的技能');
+  const reason = activeSkillBlockReason(state, unit);
+  if (reason) throw new Error(reason);
+  getActiveSkill(unit).apply(state, unit, payload);
+  unit._skillUsedTurn = state.turnNumber;
+  refreshAuras(state);
+  return { success: true };
+}
+
+// ==========================================
 // 结算中途的目标选择（孙权·御将、法正·谋主）：玩家选，15 秒未选则随机
 // ==========================================
 const CHOICE_SPECS = {
@@ -1356,12 +1402,6 @@ function afterRefill(state, pid) {
     }
     // 贾逵·筑城：回合开始时，己方主城+1防
     if (isId(u, 'wei_jia_kui')) { healHq(state, pid, 1, true); log(state, pid, '贾逵·筑城：主城+1'); }
-    // 程昱·捕粮：己方回合开始时，弃1张最低费手牌，额外获得2粮草
-    if (isId(u, 'wei_cheng_yu') && p.hand.length > 0) {
-      const min = Math.min(...p.hand.map(c => c.cost || 0));
-      // 同为最低费的有多张时由玩家挑选弃哪张
-      queueChoice(state, pid, 'chengYu', u, p.hand.filter(c => (c.cost || 0) === min));
-    }
   }
   refreshAuras(state);
 }

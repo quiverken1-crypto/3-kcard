@@ -29,7 +29,7 @@ import {
 } from '../engine/rulesEngine.js';
 import { getValidTargets, validateAttack, getEffectiveAttack } from '../engine/combat.js';
 import { evaluateBoard, DEFAULT_EVALUATION_WEIGHTS } from './evaluator.js';
-import { autoPickCards, autoChoiceTarget } from '../engine/cardSkills.js';
+import { autoPickCards, autoChoiceTarget, getActiveSkill, activeSkillBlockReason } from '../engine/cardSkills.js';
 import { PRNG } from '../engine/prng.js';
 
 /**
@@ -461,6 +461,16 @@ export class HeuristicBot {
     if (pick) return { type: ACTION_TYPES.PICK_CARDS, playerId: botFaction, payload: { cardIds: autoPickCards(pick) } };
     const choice = state.players?.[botFaction]?.pendingChoices?.[0];
     if (choice) return { type: ACTION_TYPES.CHOOSE_TARGET, playerId: botFaction, payload: { choiceId: choice.id, targetId: autoChoiceTarget(state, botFaction) } };
+    // 程昱·捕粮：手牌较多时弃掉最便宜的一张换2粮草
+    const hand = state.players?.[botFaction]?.hand || [];
+    if (hand.length >= 5) {
+      for (const u of getAllUnits(state, botFaction)) {
+        if (getActiveSkill(u) && !activeSkillBlockReason(state, u)) {
+          const cheap = [...hand].sort((a, b) => (a.cost || 0) - (b.cost || 0))[0];
+          return { type: ACTION_TYPES.ACTIVATE_SKILL, playerId: botFaction, payload: { unitId: u.instanceId, cardId: cheap.instanceId } };
+        }
+      }
+    }
     // 1. Check immediate lethal strike
     const lethalAction = this.checkImmediateLethal(state, botFaction);
     if (lethalAction) return lethalAction;

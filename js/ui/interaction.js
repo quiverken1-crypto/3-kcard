@@ -13,7 +13,7 @@
 import { ACTION_TYPES, KEYWORDS, STATUS_TYPES, hasKeyword } from '../engine/constants.js';
 import { getValidTargets, validateAttack } from '../engine/combat.js';
 import { findUnit, getAllUnits } from '../engine/state.js';
-import { getTacticTargets, getDeployTargets, tacticBlockReason, getActionCost, actsLikeCavalry as skillActsLikeCavalry } from '../engine/cardSkills.js';
+import { getTacticTargets, getDeployTargets, tacticBlockReason, getActiveSkill, activeSkillBlockReason, getActionCost, actsLikeCavalry as skillActsLikeCavalry } from '../engine/cardSkills.js';
 import { CardInspector } from './cardRenderer.js';
 import { getUnitMoveZones, unitHasUsefulAction } from '../engine/unitOptions.js';
 import { previewAction, estimateAttack } from '../engine/preview.js';
@@ -193,11 +193,12 @@ export class InteractionController {
   cancelAll() { this._cancelAll(); CardInspector.hide(); }
 
   _isBusySelecting() {
-    return Boolean(this.pendingTactic) || this.state === INTERACTION_STATE.CARD_SELECTED || this.state === INTERACTION_STATE.TARGETING;
+    return Boolean(this.pendingTactic) || Boolean(this.pendingSkill) || this.state === INTERACTION_STATE.CARD_SELECTED || this.state === INTERACTION_STATE.TARGETING;
   }
 
   _cancelAll() {
     this.repositionOnly = null;
+    this._endSkillMode?.();
     this._hideInsertMarker?.();
     if (this.pendingTactic) this._endTacticTargeting();
     this.dragPointerId = null;
@@ -219,12 +220,22 @@ export class InteractionController {
   _handleHandPointerDown(e) {
     if (this._isNonPrimary(e)) return;
     if (this.pendingTactic) this._endTacticTargeting();
+    this._hideSkillButton();
     if (this.state === INTERACTION_STATE.DISABLED) return;
     if (this.state === INTERACTION_STATE.TARGETING) {
       this.cancelSelection();
     }
     const cardEl = e.target?.closest?.('.card-hand');
     if (!cardEl || cardEl.dataset?.isHidden === 'true') return;
+
+    // 主动技能（程昱·捕粮）：选要弃置的手牌
+    if (this.pendingSkill) {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      const ps = this.pendingSkill;
+      this._endSkillMode();
+      this.onAction({ type: ACTION_TYPES.ACTIVATE_SKILL, playerId: this.localPlayerId, payload: { unitId: ps.unitId, cardId: cardEl.dataset?.instanceId } });
+      return;
+    }
 
     const instanceId = cardEl.dataset?.instanceId;
     if (!instanceId || !this.gameState) return;
@@ -320,8 +331,15 @@ export class InteractionController {
   // ==========================================
   _handleBoardPointerDown(e) {
     if (this._isNonPrimary(e)) return;
+    this._hideSkillButton();
     this._lastPointer = { x: e.clientX ?? 0, y: e.clientY ?? 0 };
     if (this.state === INTERACTION_STATE.DISABLED) return;
+
+    if (this.pendingSkill) {
+      this._endSkillMode();
+      this._showToast('已取消发动');
+      return;
+    }
 
     // 战法选择目标
     if (this.pendingTactic) {
@@ -435,6 +453,7 @@ export class InteractionController {
     // 无法行动的单位仍可拖动调整站位；单击时才提示原因
     const blockReason = this._unitBlockReason(unit, loc, player);
     if (typeof e.preventDefault === 'function') e.preventDefault();
+    this._showSkillButton(unit, unitEl);
     if (blockReason) {
       this.dragPointerId = e.pointerId ?? 1;
       this.dragStartPos = { x: e.clientX ?? 0, y: e.clientY ?? 0 };
@@ -620,6 +639,50 @@ export class InteractionController {
       ? { type: ACTION_TYPES.DEPLOY, playerId: this.localPlayerId, payload: { cardInstanceId: pending.instanceId, targetZone: pending.targetZone, slotIndex: pending.slotIndex, skillTargetId: id } }
       : { type: ACTION_TYPES.PLAY_TACTIC, playerId: this.localPlayerId, payload: { cardInstanceId: pending.instanceId, targetId: id } };
     this._previewFor(action, el);
+  }
+
+  /** 选中有主动技能的己方单位时，在其上方显示“发动”按钮 */
+  _showSkillButton(unit, unitEl) {
+    const doc = globalThis.document;
+    this._hideSkillButton();
+    const spec = getActiveSkill(unit);
+    if (!spec || !doc || !this.gameState) return;
+    const reason = activeSkillBlockReason(this.gameState, unit);
+    const btn = doc.createElement('button');
+    btn.type = 'button';
+    btn.className = `skill-activate-btn${reason ? ' disabled' : ''}`;
+    btn.textContent = reason ? (reason.includes(spec.name) ? reason : `【${spec.name}】${reason}`) : `⚡ 发动【${spec.name}】`;
+    btn.title = spec.desc;
+    const r = unitEl.getBoundingClientRect();
+    doc.body.appendChild(btn);
+    const w = btn.offsetWidth;
+    Object.assign(btn.style, { left: `${Math.max(6, Math.min(r.left + r.width / 2 - w / 2, (globalThis.innerWidth || 800) - w - 6))}px`, top: `${Math.max(4, r.top - btn.offsetHeight - 6)}px` });
+    btn.addEventListener('pointerdown', ev => ev.stopPropagation());
+    btn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      if (reason) { this._showToast(reason); return; }
+      this._hideSkillButton();
+      this.cancelSelection();
+      this._beginSkillMode(unit, spec);
+    });
+    this.skillBtn = btn;
+  }
+
+  _hideSkillButton() {
+    this.skillBtn?.remove();
+    this.skillBtn = null;
+  }
+
+  _beginSkillMode(unit, spec) {
+    const doc = globalThis.document;
+    this.pendingSkill = { unitId: unit.instanceId, name: spec.name };
+    doc?.body?.classList.add('skill-hand-select');
+    this._showToast(`【${spec.name}】点一张手牌弃置，额外获得2粮草（点战场取消）`);
+  }
+
+  _endSkillMode() {
+    this.pendingSkill = null;
+    globalThis.document?.body?.classList.remove('skill-hand-select');
   }
 
   _unitBlockReason(unit, loc, player) {
@@ -1251,6 +1314,7 @@ export class InteractionController {
   // ==========================================
   cancelSelection() {
     globalThis.document?.body?.classList.remove('is-dragging');
+    this._hideSkillButton?.();
     this._hidePreview?.();
     this.selectedCard = null;
     this.selectedUnit = null;
