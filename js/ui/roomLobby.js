@@ -177,7 +177,7 @@ export class RoomLobby {
     let share = wait.querySelector('.net-invite');
     if (!share) { share = globalThis.document.createElement('div'); share.className = 'net-invite'; wait.insertBefore(share, this.$('net-cancel-room')); }
     if (!link) {
-      share.innerHTML = `<div class="net-invite-text"><p style="margin:0">你是在本机打开的游戏，朋友需要打开<b>公开的游戏网址</b>（如部署好的 GitHub Pages 地址），在「人人对战 → 公网联机」里输入房间号 <b>${esc(code)}</b>。从公开网址打开时，这里会直接显示邀请链接和二维码。</p></div>`;
+      share.innerHTML = `<div class="net-invite-text"><p style="margin:0">你是在本机打开的游戏，朋友需要打开<b>公开的游戏网址</b>（如部署好的 GitHub Pages 地址），在「群雄逐鹿 → 公网联机」里输入房间号 <b>${esc(code)}</b>。从公开网址打开时，这里会直接显示邀请链接和二维码。</p></div>`;
       return;
     }
     share.innerHTML = `<div class="net-invite-qr">${qrSvg(link, 132)}</div>
