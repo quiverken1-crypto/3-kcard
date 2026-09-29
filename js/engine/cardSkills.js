@@ -168,6 +168,19 @@ const CHOICE_SPECS = {
     auto: list => [...list].sort((a, b) => a.hp - b.hp)[0],
     apply(state, pid, t) { damageUnit(state, t, 1, '孙权·御将'); }
   },
+  chengYu: {
+    source: '程昱·捕粮', prompt: '选择弃置1张最低费手牌，额外获得2粮草', pool: 'hand',
+    auto: list => list[0],
+    apply(state, pid, card) {
+      const p = state.players[pid];
+      const i = p.hand.indexOf(card);
+      if (i === -1) return;
+      p.hand.splice(i, 1);
+      p.discard.push(card);
+      p.provisions += 2;
+      log(state, pid, `程昱·捕粮：弃置【${card.name}】，额外获得2粮草`);
+    }
+  },
   faZheng: {
     source: '法正·谋主', prompt: '选择1个友方单位，获得+1+1',
     auto: list => [...list].filter(isMilitary).sort((a, b) => b.atk - a.atk)[0] || list[0],
@@ -180,14 +193,21 @@ function queueChoice(state, pid, kind, sourceUnit, candidates) {
   const list = candidates.filter(Boolean);
   if (!list.length) return;
   const spec = CHOICE_SPECS[kind];
-  // 只有1个候选时无需询问
-  if (list.length === 1) { spec.apply(state, pid, list[0]); return; }
+  // 只有1个候选（或手牌候选全是同一张卡）时无需询问
+  const sameCard = spec.pool === 'hand' && list.every(c => baseId(c.cardId) === baseId(list[0].cardId));
+  if (list.length === 1 || sameCard) { spec.apply(state, pid, list[0]); return; }
   const p = state.players[pid];
   (p.pendingChoices ||= []).push({
     id: `ch_${state.turnNumber}_${++_choiceSeq}_${Math.floor(Math.random() * 1e6)}`,
-    kind, source: spec.source, prompt: spec.prompt, sourceId: sourceUnit?.instanceId,
+    kind, source: spec.source, prompt: spec.prompt, sourceId: sourceUnit?.instanceId, pool: spec.pool || 'board',
+    labels: Object.fromEntries(list.map(u => [u.instanceId, spec.pool === 'hand' ? `${u.name}（${u.cost ?? 0}费）` : u.name])),
     targetIds: list.map(u => u.instanceId)
   });
+}
+
+function liveChoiceTargets(state, pid, choice) {
+  if (choice.pool === 'hand') return choice.targetIds.map(id => state.players[pid].hand.find(c => c.instanceId === id)).filter(Boolean);
+  return choice.targetIds.map(id => findUnit(state, id)?.unit).filter(Boolean);
 }
 
 /** 结算队首的选择：targetId=玩家所选；mode='random' 随机（超时）；mode='auto' AI 挑选 */
@@ -197,7 +217,7 @@ export function resolveChoice(state, pid, { choiceId, targetId, mode } = {}) {
   if (!choice) throw new Error('当前没有待选择的目标');
   if (choiceId && choiceId !== choice.id) throw new Error('该选择已失效');
   const spec = CHOICE_SPECS[choice.kind];
-  const live = choice.targetIds.map(id => findUnit(state, id)?.unit).filter(Boolean);
+  const live = liveChoiceTargets(state, pid, choice);
   let t = null;
   if (targetId) {
     t = live.find(u => u.instanceId === targetId);
@@ -218,8 +238,7 @@ export function resolveChoice(state, pid, { choiceId, targetId, mode } = {}) {
 export function autoChoiceTarget(state, pid) {
   const choice = state.players[pid]?.pendingChoices?.[0];
   if (!choice) return null;
-  const live = choice.targetIds.map(id => findUnit(state, id)?.unit).filter(Boolean);
-  return CHOICE_SPECS[choice.kind].auto(live)?.instanceId || null;
+  return CHOICE_SPECS[choice.kind].auto(liveChoiceTargets(state, pid, choice))?.instanceId || null;
 }
 
 /** 选牌超时：随机挑选至多 max 张 */
@@ -595,7 +614,6 @@ const DEPLOY_SKILLS = {
     if (t) suppressUnit(state, t, '许褚·震慑');
   },
   wei_man_chong(state, unit) { scout(state, unit, 1); },
-  wei_cheng_yu(state, unit) { scout(state, unit, 1); },
   // 徐庶·举荐
   shu_xu_shu(state, unit) { drawCard(state, unit.faction); log(state, unit.faction, '徐庶·举荐：抽1张牌'); },
   // 连弩营·掩射
@@ -1340,11 +1358,9 @@ function afterRefill(state, pid) {
     if (isId(u, 'wei_jia_kui')) { healHq(state, pid, 1, true); log(state, pid, '贾逵·筑城：主城+1'); }
     // 程昱·捕粮：手牌充裕时弃1张最低费手牌，额外获得2粮草
     if (isId(u, 'wei_cheng_yu') && p.hand.length >= 6) {
-      const low = [...p.hand].sort((a, b) => (a.cost || 0) - (b.cost || 0))[0];
-      p.hand.splice(p.hand.indexOf(low), 1);
-      p.discard.push(low);
-      p.provisions += 2;
-      log(state, pid, `程昱·捕粮：弃置【${low.name}】，额外获得2粮草`);
+      const min = Math.min(...p.hand.map(c => c.cost || 0));
+      // 同为最低费的有多张时由玩家挑选弃哪张
+      queueChoice(state, pid, 'chengYu', u, p.hand.filter(c => (c.cost || 0) === min));
     }
   }
   refreshAuras(state);

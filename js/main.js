@@ -690,8 +690,10 @@ export class AppCoordinator {
     this._choiceSeenAt ||= {};
     this._choiceSeenAt[choice.id] ||= Date.now();
     if (mine) {
-      for (const id of mine.targetIds) doc.querySelectorAll(`.board-unit[data-instance-id="${id}"]`).forEach(el => el.classList.add('choice-target'));
+      const sel = mine.pool === 'hand' ? '.card-hand' : '.board-unit';
+      for (const id of mine.targetIds) doc.querySelectorAll(`${sel}[data-instance-id="${id}"]`).forEach(el => el.classList.add('choice-target'));
     }
+    doc.body.classList.toggle('choice-hand', Boolean(mine && mine.pool === 'hand'));
     if (bar.dataset.choiceId !== choice.id) {
       bar.dataset.choiceId = choice.id;
       const nameOf = id => {
@@ -702,7 +704,7 @@ export class AppCoordinator {
         }
         return null;
       };
-      const chips = mine ? mine.targetIds.map(id => ({ id, label: nameOf(id) })).filter(c => c.label)
+      const chips = mine ? mine.targetIds.map(id => ({ id, label: mine.labels?.[id] && mine.pool === 'hand' ? mine.labels[id] : nameOf(id) })).filter(c => c.label)
         .map(c => `<button type="button" class="choice-chip" data-id="${c.id}">${escapeHtml(c.label)}</button>`).join('') : '';
       bar.innerHTML = mine
         ? `<div class="choice-head"><b>【${escapeHtml(choice.source)}】</b>${escapeHtml(choice.prompt)}<span class="choice-timer">15</span></div>
@@ -726,6 +728,14 @@ export class AppCoordinator {
   }
 
   _bindChoiceInput(doc) {
+    doc.getElementById('hand-container')?.addEventListener('pointerdown', e => {
+      const c = this._activeChoice;
+      if (!c || c.pool !== 'hand') return;
+      e.stopPropagation();
+      e.preventDefault();
+      const id = e.target?.closest?.('.card-hand')?.dataset?.instanceId;
+      if (id && c.targetIds.includes(id)) this._submitChoice(id);
+    }, true);
     // 选择期间，点场上高亮单位 = 选它；其它战场操作暂停
     doc.getElementById('battlefield-main')?.addEventListener('pointerdown', e => {
       if (!this._activeChoice) return;

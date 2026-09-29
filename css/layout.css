@@ -790,3 +790,7 @@ body.tactic-targeting .board-unit:not(.legal-tactic-target) { opacity: .35 !impo
   padding: 0 6px; border-radius: 8px; background: #ffd76a; color: #3a2400; font-size: 10px; font-weight: 800; pointer-events: none;
 }
 /* 选目标时提示移到下方，不挡敌方阵线 */
+/* 程昱·捕粮：从手牌里选 */
+.card-hand.choice-target { outline: 3px solid #ffd76a !important; outline-offset: 2px; box-shadow: 0 0 18px rgba(255,200,80,.85) !important; z-index: 20; }
+body.choice-hand .card-hand:not(.choice-target) { opacity: .45; }
+body.choice-hand .choice-bar { bottom: auto !important; top: calc(46px + env(safe-area-inset-top, 0px)) !important; }
