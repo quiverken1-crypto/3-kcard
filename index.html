@@ -58,26 +58,31 @@
     </div>
 
     <!-- 主页 -->
-    <section id="home-screen" class="home-screen" aria-label="主页">
-      <div class="home-bg-art" aria-hidden="true"></div>
-      <div class="home-panel">
-        <div class="home-seal">三国</div>
-        <h1 class="home-title">三国 <span>KARDS</span></h1>
-        <p class="home-subtitle">魏 · 蜀 · 吴 · 吕　战线卡牌对决</p>
-        <div class="home-actions">
-          <button id="home-btn-pve" class="home-btn home-btn-mode home-btn-shu"><span class="hb-char">征</span><span class="hb-text">单骑出征<small>选势力与卡组，与 AI 对决</small></span></button>
-          <button id="home-btn-pvp" class="home-btn home-btn-mode home-btn-wei"><span class="hb-char">盟</span><span class="hb-text">群雄逐鹿<small>建房或输入房间号，与好友联机</small></span></button>
-          <button id="home-btn-eve" class="home-btn home-btn-mode home-btn-sand"><span class="hb-char">演</span><span class="hb-text">沙盘推演<small>观看两路 AI 交锋</small></span></button>
+    <section id="home-screen" class="home-screen hm" aria-label="主页">
+      <div class="hm-sun" aria-hidden="true"></div>
+      <div class="hm-grid-lines" aria-hidden="true"></div>
+      <div class="hm-stripes" aria-hidden="true"><i class="s-wei"></i><i class="s-shu"></i><i class="s-wu"></i><i class="s-lb"></i></div>
+      <header class="hm-brand">
+        <h1 class="hm-title" aria-label="三国 KARDS"><span>三</span><span>国</span></h1>
+        <div class="hm-side">
+          <span class="hm-seal" aria-hidden="true">战<br>线</span>
+          <p class="hm-en">THREE KINGDOMS<br><b>KARDS</b></p>
+          <p class="hm-tag">魏 · 蜀 · 吴 · 吕<br>战线卡牌对决</p>
         </div>
-        <div class="home-sub-actions">
-          <button id="home-btn-decks" class="home-link"><span class="hl-ico">阵</span>卡组</button>
-          <button id="home-btn-rules" class="home-link"><span class="hl-ico">典</span>规则</button>
-          <button id="home-btn-editor" class="home-link"><span class="hl-ico">匠</span>工坊</button>
-          <button id="home-btn-install" class="home-link home-touch-only"><span class="hl-ico">全</span>全屏</button>
-          <button id="home-btn-audio" class="home-link"><span class="hl-ico">乐</span><span class="hl-label">音乐</span></button>
+      </header>
+      <nav class="hm-menu" aria-label="模式">
+        <button id="home-btn-pve" class="hm-item hm-primary"><em>壹</em><span class="hm-it"><b>单骑出征</b><small>选势力与卡组，与 AI 对决</small></span><i class="hm-arrow" aria-hidden="true"></i></button>
+        <button id="home-btn-pvp" class="hm-item"><em>贰</em><span class="hm-it"><b>群雄逐鹿</b><small>建房或输入房间号，与好友联机</small></span><i class="hm-arrow" aria-hidden="true"></i></button>
+        <button id="home-btn-eve" class="hm-item"><em>叁</em><span class="hm-it"><b>沙盘推演</b><small>观看两路 AI 交锋</small></span><i class="hm-arrow" aria-hidden="true"></i></button>
+        <div class="hm-links">
+          <button id="home-btn-decks" class="hm-link">卡组</button>
+          <button id="home-btn-rules" class="hm-link">规则</button>
+          <button id="home-btn-editor" class="hm-link">工坊</button>
+          <button id="home-btn-install" class="hm-link hm-touch-only">全屏</button>
+          <button id="home-btn-audio" class="hm-link"><span class="hl-label">音乐</span></button>
         </div>
-      </div>
-      <div class="home-gallery" id="home-gallery" aria-hidden="true"></div>
+      </nav>
+      <p class="hm-foot">纯前端 · 可离线 · 局域网 / 公网联机</p>
     </section>
 
     <!-- ================================================================ -->
@@ -680,7 +685,7 @@
             <p><strong>水域</strong>（容量4）：只有水军可以同时移动和攻击——水军如鱼得水。</p>
             <p><strong>林地</strong>（容量2）：此处单位获得【先登】；此处单位受到的火攻伤害翻倍——埋伏一手，但是怕火。</p>
             <p><strong>山地</strong>（容量2）：此处所有单位视为步兵，并获得【矢石】——行路艰难，但是居高临下。</p>
-            <p><strong>险关</strong>（容量2）：此处单位每回合最多被攻击1次——易守难攻。</p>
+            <p><strong>险关</strong>（容量2）：此处单位获得坚阵+1，且每回合最多被攻击1次——易守难攻。</p>
             <p><strong>主城</strong>：魏·许昌（平原、平原）、魏·洛阳（平原、险关）；蜀·新野（平原、林地）、蜀·零陵（山地、林地）。主城生命20。</p>
           </section>
           <section class="rule-chapter">

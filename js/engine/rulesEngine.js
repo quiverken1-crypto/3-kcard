@@ -57,7 +57,7 @@ import {
 import { runAbilityTrigger } from './abilities.js';
 import {
   applyEnterKeywords, onUnitEnter, onUnitMoved, prepareTactic, resolveTactic, afterAttack, resolvePick, autoPickCards, randomPickCards, resolveChoice, autoChoiceTarget, activateSkill, canDeployToFrontline, isSiegeEngine,
-  processDeaths, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getTacticTargets, refreshAuras, baseId, targetSurcharge
+  processDeaths, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getTacticTargets, refreshAuras, baseId, targetSurcharge, qiMouDiscount, getCardPlayCost
 } from './cardSkills.js';
 
 /** 按指定位置插入（部署/移动时可放在区域内任意卡牌之间或两侧） */
@@ -344,15 +344,8 @@ function dispatchBase(state, action) {
       if (handIdx === -1) throw new Error('Tactic card not in hand');
       const card = player.hand[handIdx];
 
-      let cost = card.cost;
-      // 奇谋X aura discount from friendly units
-      const allUnits = getAllUnits(state, action.playerId);
-      for (const u of allUnits) {
-        const qm = u.keywords.find(k => k.startsWith(KEYWORDS.QI_MOU_PREFIX));
-        if (qm) {
-          cost = Math.max(0, cost - parseInt(qm.replace(KEYWORDS.QI_MOU_PREFIX, '') || '1', 10));
-        }
-      }
+      // 奇谋X：未被抑制的己方单位使战法费用降低
+      let cost = Math.max(0, card.cost - qiMouDiscount(state, action.playerId));
 
       if (player.provisions < cost) throw new Error(`Insufficient provisions for tactic (need ${cost})`);
       const prepared = prepareTactic(state, action.playerId, card, action.payload || {});
@@ -380,14 +373,7 @@ function dispatchBase(state, action) {
       if (handIdx === -1) throw new Error('Counter card not in hand');
       const card = player.hand[handIdx];
 
-      let cost = card.cost;
-      const allUnits = getAllUnits(state, action.playerId);
-      for (const u of allUnits) {
-        const qm = u.keywords.find(k => k.startsWith(KEYWORDS.QI_MOU_PREFIX));
-        if (qm) {
-          cost = Math.max(0, cost - parseInt(qm.replace(KEYWORDS.QI_MOU_PREFIX, '') || '1', 10));
-        }
-      }
+      let cost = Math.max(0, card.cost - qiMouDiscount(state, action.playerId));
 
       if (player.provisions < cost) throw new Error(`Insufficient provisions for counter (need ${cost})`);
       player.provisions -= cost;
@@ -610,10 +596,7 @@ export function getLegalActions(state, playerId) {
   }
 
   // 4. Tactics / Counters
-  const qiMou = units.reduce((sum, u) => {
-    const qm = !u.status?.[STATUS_TYPES.INHIBITED] && u.keywords.find(k => k.startsWith(KEYWORDS.QI_MOU_PREFIX));
-    return sum + (qm ? (parseInt(qm.replace(KEYWORDS.QI_MOU_PREFIX, '') || '1', 10) || 1) : 0);
-  }, 0);
+  const qiMou = qiMouDiscount(state, playerId);
   for (const card of player.hand) {
     if (card.type !== 'TACTIC' && card.type !== 'COUNTER') continue;
     if (player.provisions < Math.max(0, card.cost - qiMou)) continue;

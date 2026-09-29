@@ -19,7 +19,7 @@ export const KEYWORD_GLOSSARY = ({
   '斩将': '【斩将】攻击时，若自身战力大于敌军则将其移除；对伏击、潜袭单位无效。',
   '冲阵': '【冲阵】首次攻击敌军时不受反击，而后失去冲阵；对伏击无效。',
   '先登': '【先登】攻击时先造成伤害，若将其击败则自身不受反击；对伏击、潜袭单位无效。',
-  '矢石': '【矢石】攻击只会受到矢石单位的反击。',
+  '矢石': '【矢石】攻击只会受到矢石单位的反击（射程不变，仍只能攻击相邻一线）。',
   '攻心': '【攻心】攻击时，无视防御词条。',
   '掳掠': '【掳掠】攻击击败敌军并存活时，摸1张牌或补充等同于当前自身2倍行动花费的粮草。',
   '火攻': '【火攻】击败敌军后，对同一区域相邻目标传递等量伤害（无视坚阵），可连续传递。',
@@ -203,7 +203,8 @@ export function renderHandCard(card, options = {}) {
 
   // Calculate dynamic prestige discount if applicable
   const originalCost = card.cost ?? 0;
-  const discount = (card.type === 'UNIT' && options.prestigeDiscount) ? options.prestigeDiscount : 0;
+  const discount = (card.type === 'UNIT' && options.prestigeDiscount) ? options.prestigeDiscount
+    : ((card.type === 'TACTIC' || card.type === 'COUNTER') && options.tacticDiscount) ? options.tacticDiscount : 0;
   const effectiveCost = Math.max(0, originalCost - discount);
   const isDiscounted = discount > 0;
 

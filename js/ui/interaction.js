@@ -13,7 +13,7 @@
 import { ACTION_TYPES, KEYWORDS, STATUS_TYPES, hasKeyword } from '../engine/constants.js';
 import { getValidTargets, validateAttack } from '../engine/combat.js';
 import { findUnit, getAllUnits } from '../engine/state.js';
-import { getTacticTargets, getDeployTargets, tacticBlockReason, getActiveSkill, activeSkillBlockReason, canDeployToFrontline, getActionCost, actsLikeCavalry as skillActsLikeCavalry } from '../engine/cardSkills.js';
+import { getTacticTargets, getDeployTargets, tacticBlockReason, getActiveSkill, activeSkillBlockReason, canDeployToFrontline, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getCardPlayCost } from '../engine/cardSkills.js';
 import { CardInspector } from './cardRenderer.js';
 import { getUnitMoveZones, unitHasUsefulAction } from '../engine/unitOptions.js';
 import { previewAction, estimateAttack } from '../engine/preview.js';
@@ -247,10 +247,7 @@ export class InteractionController {
     if (this._isTouch(e)) this._showTouchInfo(card, cardEl);
 
     // Check provision affordability
-    let cost = card.cost ?? 0;
-    if (card.type === 'UNIT' && !player.prestigeDiscountUsed && player.prestige > 0) {
-      cost = Math.max(0, cost - player.prestige);
-    }
+    const cost = getCardPlayCost(this.gameState, this.localPlayerId, card);
     if (player.provisions < cost) {
       this._triggerShake(cardEl);
       this._showToast(`粮草不足 (需 ${cost} 粮草，当前仅存 ${player.provisions})`);

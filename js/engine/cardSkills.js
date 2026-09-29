@@ -259,12 +259,77 @@ const CHOICE_SPECS = {
       log(state, pid, `程昱·捕粮：弃置【${card.name}】，额外获得2粮草`);
     }
   },
+  shengDong: {
+    source: '声东击西', prompt: '选择手牌中1个单位上场换防', pool: 'hand',
+    auto: list => [...list].sort(byValueDesc)[0],
+    apply(state, pid, card, choice) {
+      const target = findUnit(state, choice?.boardTargetId)?.unit;
+      if (target) shengDongSwap(state, pid, target, card);
+    }
+  },
+  chongZheng: {
+    source: '重整旗鼓', prompt: '选择1张弃牌区的卡加入手牌', pool: 'option',
+    auto: (list, state, pid) => {
+      const d = state.players[pid].discard;
+      const best = [...d].filter(c => list.some(o => o.instanceId === c.instanceId)).sort(byValueDesc)[0];
+      return list.find(o => o.instanceId === best?.instanceId) || list[0];
+    },
+    apply(state, pid, opt) {
+      const d = state.players[pid].discard;
+      const card = d.find(c => c.instanceId === opt.instanceId);
+      if (!card) return;
+      d.splice(d.indexOf(card), 1);
+      resetCardState(card);
+      card.faction = pid;
+      putInHand(state, pid, card);
+      log(state, pid, `重整旗鼓：【${card.name}】重回手牌`);
+    }
+  },
   faZheng: {
     source: '法正·谋主', prompt: '选择1个友方单位，获得+1+1',
     auto: list => [...list].filter(isMilitary).sort((a, b) => b.atk - a.atk)[0] || list[0],
     apply(state, pid, t) { buff(t, 1, 1); log(state, pid, `法正·谋主：【${t.name}】获得+1+1`); }
   }
 };
+
+/** 声东击西：手牌单位 incoming 与场上友军 target 换防 */
+function shengDongSwap(state, owner, target, incoming) {
+  const player = state.players[owner];
+  const loc = findUnit(state, target.instanceId);
+  if (!loc || !player.hand.includes(incoming)) return;
+  const zoneArr = zoneUnitsOf(state, loc);
+  const idx = zoneArr.indexOf(target);
+  player.hand.splice(player.hand.indexOf(incoming), 1);
+  removeUnitFromBoard(state, target.instanceId, true, { silent: true });
+  resetCardState(target);
+  zoneArr.splice(Math.min(idx, zoneArr.length), 0, incoming);
+  if (loc.zoneType === 'FRONTLINE') state.battlefield.frontline[loc.zoneKey].occupant = owner;
+  incoming.faction = owner;
+  incoming.status[STATUS_TYPES.DEPLOYED_THIS_TURN] = true;
+  if (!hasKeyword(incoming, '突袭')) incoming.status[STATUS_TYPES.ACTIONS_USED] = 1;
+  putInHand(state, owner, target);
+  applyEnterKeywords(state, incoming, owner);
+  onUnitEnter(state, incoming);
+  log(state, owner, `声东击西：【${incoming.name}】与【${target.name}】换防`);
+}
+
+/** 奇谋X：己方未被抑制单位的奇谋合计（战法/反制费用减免） */
+export function qiMouDiscount(state, owner) {
+  return getAllUnits(state, owner).reduce((sum, u) => {
+    if (u.status?.[STATUS_TYPES.INHIBITED]) return sum;
+    const qm = (u.keywords || []).find(k => typeof k === 'string' && k.startsWith('奇谋'));
+    return sum + (qm ? (parseInt(qm.replace('奇谋', '') || '1', 10) || 1) : 0);
+  }, 0);
+}
+
+/** 打出这张手牌实际需要的粮草：单位按声望减免，战法/反制按奇谋减免 */
+export function getCardPlayCost(state, owner, card) {
+  const p = state.players[owner];
+  const base = card?.cost ?? 0;
+  if (card?.type === 'UNIT') return (!p.prestigeDiscountUsed && p.prestige > 0) ? Math.max(0, base - p.prestige) : base;
+  if (card?.type === 'TACTIC' || card?.type === 'COUNTER') return Math.max(0, base - qiMouDiscount(state, owner));
+  return base;
+}
 
 let _choiceSeq = 0;
 function queueChoice(state, pid, kind, sourceUnit, candidates, extra = {}) {
@@ -1063,15 +1128,12 @@ export const TACTICS = {
   // 重整旗鼓：将1张己方弃牌区单位加入手牌
   shu_chong_zheng_qi_gu: {
     precheck: (state, owner) => state.players[owner].discard.length > 0,
-    play(state, owner) {
-      const d = state.players[owner].discard;
-      const best = [...d].sort(byValueDesc)[0];
-      if (!best) return;
-      d.splice(d.indexOf(best), 1);
-      resetCardState(best);
-      best.faction = owner;
-      putInHand(state, owner, best);
-      log(state, owner, `重整旗鼓：【${best.name}】重回手牌`);
+    play(state, owner, card) {
+      // 由玩家从弃牌区挑选（同名卡只列一张）
+      const seen = new Set();
+      const opts = state.players[owner].discard.filter(c => c !== card && c.instanceId !== undefined && !seen.has(baseId(c.cardId)) && seen.add(baseId(c.cardId)))
+        .map(c => ({ instanceId: c.instanceId, name: `${c.name}（${c.cost ?? 0}费）` }));
+      queueChoice(state, owner, 'chongZheng', null, opts);
     }
   },
   // 喘息之机：所有友方单位完全恢复，每实际恢复1个单位，抽1张牌
@@ -1094,23 +1156,10 @@ export const TACTICS = {
     play(state, owner, card, target, payload = {}) {
       const player = state.players[owner];
       const handUnits = player.hand.filter(c => c.type === 'UNIT' && Math.abs((c.cost || 0) - (target.cost || 0)) <= 4);
-      const incoming = handUnits.find(c => c.instanceId === payload.handCardId) || [...handUnits].sort(byValueDesc)[0];
-      if (!incoming) return;
-      const loc = findUnit(state, target.instanceId);
-      const zoneArr = zoneUnitsOf(state, loc);
-      const idx = zoneArr.indexOf(target);
-      player.hand.splice(player.hand.indexOf(incoming), 1);
-      removeUnitFromBoard(state, target.instanceId, true, { silent: true });
-      resetCardState(target);
-      zoneArr.splice(Math.min(idx, zoneArr.length), 0, incoming);
-      if (loc.zoneType === 'FRONTLINE') state.battlefield.frontline[loc.zoneKey].occupant = owner;
-      incoming.faction = owner;
-      incoming.status[STATUS_TYPES.DEPLOYED_THIS_TURN] = true;
-      if (!hasKeyword(incoming, '突袭')) incoming.status[STATUS_TYPES.ACTIONS_USED] = 1;
-      putInHand(state, owner, target);
-      applyEnterKeywords(state, incoming, owner);
-      onUnitEnter(state, incoming);
-      log(state, owner, `声东击西：【${incoming.name}】与【${target.name}】换防`);
+      const chosen = handUnits.find(c => c.instanceId === payload.handCardId);
+      if (chosen) { shengDongSwap(state, owner, target, chosen); return; }
+      // 由玩家从手牌里选上场的单位（15 秒未选则随机）
+      queueChoice(state, owner, 'shengDong', null, handUnits, { boardTargetId: target.instanceId });
     }
   },
   // 连弩迭射：对所有敌军造成1点伤害，若有单位被消灭，重复此效果

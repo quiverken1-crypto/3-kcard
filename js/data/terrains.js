@@ -59,7 +59,7 @@ export const TERRAINS = Object.freeze({
     type: 'PASS',
     name: '险关',
     capacity: 2,
-    description: '险关：容纳2个单位。此处单位每回合最多被攻击1次（易守难攻）。',
+    description: '险关：容纳2个单位。此处单位获得坚阵+1，每回合最多被攻击1次（易守难攻）。',
     effects: Object.freeze({ waterBonus: false, mountainBonus: false, defenseBonus: 0 })
   })
 });
