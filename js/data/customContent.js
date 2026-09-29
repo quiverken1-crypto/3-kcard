@@ -56,7 +56,7 @@ function normalizeAbilities(list, where) {
       if (!EFFECT_TYPES.includes(type)) throw new Error(`${where}：不支持的效果 ${type}`);
       if (!EFFECT_TARGETS.includes(target)) throw new Error(`${where}：不支持的目标 ${target}`);
       if (!DECK_EFFECTS.has(type) && PLAYER_EFFECTS.has(type) !== PLAYER_TARGETS.includes(target)) throw new Error(`${where}：效果 ${type} 与目标 ${target} 不匹配`);
-      if (trigger === 'AURA' && (!AURA_EFFECTS.has(type) || !AURA_TARGETS.includes(target))) throw new Error(`${where}：光环只支持战力±、行动花费±，目标为自身/友军/敌军`);
+      if (trigger === 'AURA' && (!AURA_EFFECTS.has(type) || !AURA_TARGETS.includes(target))) throw new Error(`${where}：光环只支持战力±、行动花费±、获得词条，目标为自身/友军/敌军`);
       const out = { type, target: DECK_EFFECTS.has(type) ? 'OWNER' : target, amount: int(ef.amount, '效果数值', 0, 20, 1) };
       if (KEYWORD_EFFECTS.has(type)) out.keyword = text(ef.keyword, '词条', 24);
       const f = ef.filter || {};
@@ -135,6 +135,7 @@ function normalizeCard(raw, i, kingdomsOk) {
     customKeywords,
     skill: { name: text(raw.skill?.name || raw.skillName, '技能名', 12, { optional: true }), description: text(raw.skill?.description || raw.description, '技能描述', 300, { optional: true }) },
     abilities: normalizeAbilities(raw.abilities, `${name}`),
+    ...(typeof raw.art === 'string' && /^https:\/\/[^\s'\"()<>\\]{4,300}$/.test(raw.art.trim()) ? { art: raw.art.trim() } : {}),
     pending: Boolean(raw.pending),
     custom: true,
     updatedAt: Number(raw.updatedAt) || Date.now()

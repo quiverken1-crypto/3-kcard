@@ -95,6 +95,7 @@ export function createCard(def = {}, overrides = {}) {
     audioCue: def.audioCue || 'auto',
     abilities: Array.isArray(def.abilities) ? structuredClone(def.abilities) : [],
     ...(def.pending ? { pending: true } : {}),
+    ...(def.art ? { art: def.art } : {}),
     onDeploy: def.onDeploy || null,
     onKill: def.onKill || null,
     onDeath: def.onDeath || null,

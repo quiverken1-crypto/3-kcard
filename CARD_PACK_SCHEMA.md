@@ -24,6 +24,7 @@
       "customKeywords": [ { "name": "鹰视", "description": "进场时查看对方手牌" } ],
       "skill": { "name": "鹰视狼顾", "description": "卡面上显示的技能文字" },
       "pending": false,                  // true = 技能只有文字，等开发者实现
+      "art": "https://example.com/card.png",   // 可选：卡面图片链接（只存链接，不存图片）
       "abilities": [ /* 积木技能，见下 */ ]
     }
   ]
@@ -62,7 +63,7 @@
 **条件 conditions[i]**：`{ "field", "op": "GTE"|"LTE"|"EQ", "value" }`，field：`OWNER_PROVISIONS` `ENEMY_PROVISIONS` `OWNER_PRESTIGE` `ENEMY_PRESTIGE`
 `OWNER_HAND` `OWNER_UNITS` `ENEMY_UNITS` `OWNER_HQ_HP` `ENEMY_HQ_HP` `SOURCE_HP` `SOURCE_IN_FRONTLINE` `TARGET_HP` `TARGET_DIED` `SOURCE_SURVIVED` `TURN_NUMBER`。
 
-**光环 AURA**：只支持 `BUFF_ATTACK` `DEBUFF_ATTACK` `ACTION_COST_DOWN` `ACTION_COST_UP`，目标 `SELF` `ALL_FRIENDLIES` `OTHER_FRIENDLIES` `ALL_ENEMIES`，可加筛选。例：己方骑兵战力+1。
+**光环 AURA**：只支持 `BUFF_ATTACK` `DEBUFF_ATTACK` `ACTION_COST_DOWN` `ACTION_COST_UP` `GRANT_KEYWORD`（在场期间获得词条，离场收回），目标 `SELF` `ALL_FRIENDLIES` `OTHER_FRIENDLIES` `ALL_ENEMIES`，可加筛选。例：己方骑兵战力+1。
 
 **主动技 ACTIVE**：消耗 → 判定 → 获得。
 `"cost": { "type": "NONE"|"PROVISIONS"|"DISCARD"|"SELF_DAMAGE"|"HQ_HP"|"PRESTIGE"|"ACTION", "amount": 2 }`，

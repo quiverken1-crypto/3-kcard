@@ -68,6 +68,8 @@ export const TRAIT_GLOSSARY = Object.freeze({
 const COMMON_ART = new Set(['shipo', 'shanjia', 'cefan', 'shengdong', 'jueshui', 'chengsheng', 'youdi', 'tuchi', 'tuqi', 'andu']);
 const NO_ART = new Set(['shu_huang_quan', 'shu_yi_shou_wei_gong', 'shu_fu_tong', 'wu_pan_zhang', 'wu_sun_quan', 'wu_zhou_tai', 'wu_cheng_pu', 'lb_chen_gong', 'lb_lv_bu', 'wei_guo_jia_x']);
 export function getCardArtUrl(card) {
+  // 自定义卡：可填 https 图片链接作为卡面
+  if (card?.art && /^https:\/\/[^\s'\"()<>\\]{4,300}$/.test(card.art)) return card.art;
   const id = String(card?.cardId || '').replace(/_[0-9]+$/, '');
   const m = id.match(/^(wei|shu|wu|lb|gsz)_([a-z_]+)$/);
   if (!m || NO_ART.has(id)) return '';

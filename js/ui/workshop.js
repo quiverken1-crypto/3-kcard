@@ -202,6 +202,7 @@ export class Workshop {
           <div class="ws-grid">
             <label>技能名<input name="skillName" maxlength="12" value="${escapeHtml(c.skill?.name || '')}"></label>
           </div>
+          <label class="ws-wide">卡面图片链接（可选，https 开头的网络图片；不上传、不保存图片本身）<input name="art" maxlength="300" placeholder="https://…/xxx.png" value="${escapeHtml(c.art || '')}"></label>
           <label class="ws-wide">技能描述（卡面文字）<textarea name="skillDesc" rows="3" maxlength="300">${escapeHtml(c.skill?.description || '')}</textarea></label>
           <div class="ws-impl">
             <span>技能实现方式：</span>
@@ -313,6 +314,7 @@ export class Workshop {
         keywords: splitList(f.keywords.value), badges: splitList(f.badges.value),
         customKeywords: [...ckwBox.querySelectorAll('.ws-row')].map(r => ({ name: r.querySelector('.ckw-name').value.trim(), description: r.querySelector('.ckw-desc').value.trim() })).filter(k => k.name),
         skill: { name: f.skillName.value.trim(), description: f.skillDesc.value.trim() },
+        art: f.art.value.trim(),
         pending: f.impl.value === 'pending',
         abilities: f.impl.value === 'pending' ? [] : [...absBox.querySelectorAll('.ws-ab')].map(r => readAb(r))
       };

@@ -54,7 +54,7 @@ export const EFFECT_CATALOG = [
   { id: 'APPLY_INHIBITION', label: '抑制', group: '状态', kind: 'unit' },
   { id: 'REVEAL_UNIT', label: '翻开潜伏', group: '状态', kind: 'unit' },
   { id: 'RESTORE_ACTION', label: '恢复行动', group: '状态', kind: 'unit' },
-  { id: 'GRANT_KEYWORD', label: '获得词条（永久）', group: '词条', kind: 'unit', keyword: true },
+  { id: 'GRANT_KEYWORD', label: '获得词条（永久；光环里为在场期间）', group: '词条', kind: 'unit', keyword: true, aura: true },
   { id: 'TURN_KEYWORD', label: '获得词条（到回合结束）', group: '词条', kind: 'unit', keyword: true },
   { id: 'REMOVE_KEYWORD', label: '移除词条', group: '词条', kind: 'unit', keyword: true },
   { id: 'RETREAT', label: '撤退（前线→支援，支援→手牌）', group: '位置', kind: 'unit' },
@@ -447,4 +447,33 @@ export function runActiveAbility(state, unit, act, payload = {}) {
   if (success) for (const ef of act.effects) applyEffect(state, ef, unit.faction, unit, {});
   state.combatLog.push({ type: 'SKILL', playerId: unit.faction, message: `【${unit.name}】发动主动技${act.chance < 100 ? `（判定 ${roll}/${act.chance}）` : ''}：${success ? '成功' : '判定失败'}` });
   return success;
+}
+
+/** 光环词条：带 AURA+GRANT_KEYWORD 积木的单位在场时，符合筛选的单位获得词条；离场后收回（每次刷新重算） */
+export function refreshAuraKeywords(state) {
+  const all = [...getAllUnits(state, 'WEI'), ...getAllUnits(state, 'SHU')];
+  const want = new Map();
+  for (const src of all) {
+    if (src.status?.[STATUS_TYPES.INHIBITED]) continue;
+    for (const ab of src.abilities || []) {
+      if (ab.trigger !== 'AURA') continue;
+      for (const ef of ab.effects || []) {
+        if (ef.type !== 'GRANT_KEYWORD' || !ef.keyword) continue;
+        for (const u of all) {
+          const friendly = u.faction === src.faction;
+          const t = ef.target;
+          const hit = (t === 'SELF' && u === src) || (t === 'ALL_FRIENDLIES' && friendly) || (t === 'OTHER_FRIENDLIES' && friendly && u !== src) || (t === 'ALL_ENEMIES' && !friendly);
+          if (hit && matchesFilter(state, u, ef.filter)) { if (!want.has(u)) want.set(u, new Set()); want.get(u).add(ef.keyword); }
+        }
+      }
+    }
+  }
+  for (const u of all) {
+    const had = u._auraKws || [];
+    const now = [...(want.get(u) || [])];
+    for (const k of had) if (!now.includes(k)) u.keywords = u.keywords.filter(x => x !== k);
+    const added = [];
+    for (const k of now) { if (!u.keywords.includes(k)) { u.keywords.push(k); added.push(k); } else if (had.includes(k)) added.push(k); }
+    u._auraKws = added;
+  }
 }

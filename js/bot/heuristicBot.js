@@ -470,6 +470,13 @@ export class HeuristicBot {
         }
       }
     }
+    // 工坊积木主动技：能发动就发动（消耗不会致死，由 activeSkillBlockReason 保证）
+    for (const u of getAllUnits(state, botFaction)) {
+      const spec = getActiveSkill(u);
+      if (spec?.custom && !spec.needsHandCard && !activeSkillBlockReason(state, u)) {
+        return { type: ACTION_TYPES.ACTIVATE_SKILL, playerId: botFaction, payload: { unitId: u.instanceId } };
+      }
+    }
     // 1. Check immediate lethal strike
     const lethalAction = this.checkImmediateLethal(state, botFaction);
     if (lethalAction) return lethalAction;

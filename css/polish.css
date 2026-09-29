@@ -260,8 +260,8 @@ body.at-home .board-unit.status-can-act::before, body.page-hidden .board-unit.st
 @media (max-height: 520px) { .db-selbar.show + .db-statusbar { display: none; } .db-selbar { padding: 4px 8px; } .db-selbar .db-sb-step button { height: 32px; } }
 /* 横屏手机：倒计时 + 回合总时长并排显示，不再被右边裁掉 */
 body.m-land:not(.m-port) #player-dock #turn-timer.dock-timer { min-width: 0; overflow: hidden; }
-body.m-land:not(.m-port) #player-dock #turn-timer .turn-timer-chip { width: auto !important; flex: 1 1 auto; min-width: 0; flex-direction: row !important; white-space: nowrap; gap: 3px; line-height: 1; }
-body.m-land:not(.m-port) #player-dock #turn-timer .turn-timer-total { flex: none; }
+body.m-land:not(.m-port) #player-dock #turn-timer .turn-timer-chip { width: auto !important; flex: 0 0 auto; min-width: 0; flex-direction: row !important; white-space: nowrap; gap: 3px; line-height: 1; }
+body.m-land:not(.m-port) #player-dock #turn-timer .turn-timer-total { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: clip; white-space: nowrap; }
 body.m-land:not(.m-port) #player-dock #turn-timer.dock-timer { gap: 4px !important; }
 body.m-land:not(.m-port) #player-dock #turn-timer .turn-timer-chip { font-size: 11px !important; padding: 1px 6px !important; overflow: hidden; text-overflow: clip; }
 body.m-land:not(.m-port) #player-dock #turn-timer .turn-timer-total { font-size: 9.5px !important; letter-spacing: -.2px; }

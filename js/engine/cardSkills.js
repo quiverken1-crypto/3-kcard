@@ -12,7 +12,7 @@ import { FACTIONS, PHASES, STATUS_TYPES, TROOP_TYPES, GAME_CONFIG, hasKeyword } 
 import {
   drawCard, adjustPrestige, getAllUnits, findUnit, removeUnitFromBoard, registerTurnHooks
 } from './state.js';
-import { registerAbilityHooks, applyUnitEffect, auraModifiers, activeAbilityOf, activeCostBlock, runActiveAbility } from './abilities.js';
+import { registerAbilityHooks, applyUnitEffect, auraModifiers, activeAbilityOf, activeCostBlock, runActiveAbility, refreshAuraKeywords } from './abilities.js';
 
 // ==========================================
 // 0. 通用工具
@@ -701,6 +701,7 @@ export function findBodyguard(state, defender, attacker) {
 
 export function refreshAuras(state) {
   gszAuras(state);
+  refreshAuraKeywords(state);
   for (const pid of [FACTIONS.WEI, FACTIONS.SHU]) {
     const units = getAllUnits(state, pid);
     const frontHasFriend = ['LEFT', 'CENTER', 'RIGHT'].some(zk => state.battlefield.frontline[zk].occupant === pid && state.battlefield.frontline[zk].units.length);
