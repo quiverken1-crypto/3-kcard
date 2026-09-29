@@ -709,7 +709,8 @@ const DEPLOY_SKILLS = {
 };
 
 export function onUnitEnter(state, unit, opts = {}) {
-  if (!active(unit)) return;
+  // 死亡优先：进场时已被消灭（如被反制击杀）则不再结算进场技能
+  if (!active(unit) || !isOnBoard(state, unit)) return;
   if (opts.skillTargetId) unit._skillTargetId = opts.skillTargetId;
   // 徐盛·疑兵：己方下个进场单位获得潜袭
   const meta = ensurePlayerMeta(state.players[unit.faction]);
@@ -1264,7 +1265,7 @@ export function afterAttack(state, attacker, defender, result, targetIsHq) {
   const enemy = opp(attacker.faction);
 
   // 【掳掠】击败敌军后二选一：获得 2×本单位行动费 的粮草，或抽1张牌
-  if (!targetIsHq && result.defenderDied && active(attacker) && hasKeyword(attacker, '掳掠')) {
+  if (!targetIsHq && result.defenderDied && attackerAlive && active(attacker) && hasKeyword(attacker, '掳掠')) {
     const amount = 2 * (attacker.actionCost ?? 1);
     queueChoice(state, attacker.faction, 'luLue', attacker, [{ instanceId: 'grain', name: `获得${amount}粮草` }, { instanceId: 'draw', name: '抽1张牌' }], { amount });
   }
