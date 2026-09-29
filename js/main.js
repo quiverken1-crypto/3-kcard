@@ -32,6 +32,9 @@ import { HQ_CARDS } from './data/terrains.js';
 import { KINGDOMS } from './data/cardDB.js';
 import { setSeatKingdoms, seatArmy } from './ui/seats.js';
 import { preloadAssets } from './ui/preloader.js';
+import { DeckBuilder } from './ui/deckBuilder.js';
+import { listDecks, getDeck, validateDeck, deckCardDefs, lastDeckId, rememberDeck } from './data/deckStore.js';
+import { createCard, createKingdomDeck } from './engine/state.js';
 
 const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb'];
 const randomOther = k => { const o = KINGDOM_KEYS.filter(x => x !== k); return o[Math.floor(Math.random() * o.length)]; };
@@ -126,6 +129,7 @@ export class AppCoordinator {
     try { this.cardPack = loadSavedCardPack(); }
     catch (error) { console.warn('自定义卡包加载失败：', error); }
     this.cardEditor = new CardEditor(this.cardPack, pack => { this.cardPack = pack; });
+    this.deckBuilder = new DeckBuilder({ onChange: () => this._refreshDeckSelect?.() });
     this.audio = new AudioDirector();
     this.audio.setScene('lobby');
     this.audio.armUnlock(doc);
@@ -141,6 +145,17 @@ export class AppCoordinator {
     this._bindHomeScreen();
     this._setupBoardFit();
     this.showHome();
+
+    // 卡组分享链接：?deck=SGK1-… 直接打开导入
+    try {
+      const deckCode = new URLSearchParams(globalThis.location?.search || '').get('deck');
+      if (deckCode) {
+        this.deckBuilder.renderImport(deckCode);
+        const u = new URL(globalThis.location.href);
+        u.searchParams.delete('deck');
+        globalThis.history?.replaceState(null, '', u.toString());
+      }
+    } catch { /* ignore */ }
 
     // 邀请链接：?room=1234 直接进入联机并加入房间
     try {
@@ -257,10 +272,11 @@ export class AppCoordinator {
     const doc = typeof document !== 'undefined' ? document : globalThis.document;
     if (!doc) return;
     const on = (id, fn) => doc.getElementById(id)?.addEventListener('click', fn);
-    on('home-btn-pve', () => this._pickHq({ lan: false }, (k, hq, enemy) => this.startSoloMatch({ faction: 'WEI', kingdom: k, hq, enemyKingdom: enemy })));
+    on('home-btn-pve', () => this._pickHq({ lan: false }, (k, hq, enemy, deckId) => this.startSoloMatch({ faction: 'WEI', kingdom: k, hq, enemyKingdom: enemy, deckId })));
     on('home-btn-pvp', () => this.networkModal.show('tab-host'));
     on('home-btn-eve', () => this.startSandboxMatch({ stepSpeedMs: 750 }));
     on('home-btn-rules', () => doc.getElementById('modal-rulebook')?.classList.remove('hidden'));
+    on('home-btn-decks', () => this.deckBuilder.open());
     on('home-btn-editor', () => this.cardEditor?.show());
     on('btn-game-over-home', () => this.showHome());
     on('btn-go-home', () => this.showHome());
@@ -286,8 +302,28 @@ export class AppCoordinator {
     let enemy = 'RANDOM';
     if (!modal || !box) { onPick(kingdom, 'RANDOM', 'RANDOM'); return; }
     const T = { PLAIN: '平原', WATER: '水域', FOREST: '林地', MOUNTAIN: '山地', PASS: '险关' };
-    const close = () => modal.classList.add('hidden');
-    const done = (hq) => { close(); this._lastKingdom = kingdom; onPick(kingdom, hq, enemy); };
+    const close = () => { modal.classList.add('hidden'); this._refreshDeckSelect = null; };
+    const deckSel = doc.getElementById('hq-pick-deck');
+    const fillDecks = () => {
+      if (!deckSel) return;
+      const decks = listDecks({ mode: 'single', kingdom }).filter(d => validateDeck(d).ok);
+      const want = lastDeckId(kingdom);
+      deckSel.replaceChildren(...decks.map(d => {
+        const o = doc.createElement('option');
+        o.value = d.id;
+        o.textContent = d.official ? `${d.name}（官方）` : d.name;
+        o.selected = d.id === want;
+        return o;
+      }));
+    };
+    this._refreshDeckSelect = fillDecks;
+    const editBtn = doc.getElementById('hq-pick-deck-edit');
+    if (editBtn) editBtn.onclick = () => { this.deckBuilder.kingdomFilter = kingdom; this.deckBuilder.open(); };
+    const done = (hq) => {
+      const deckId = deckSel?.value || null;
+      if (deckId) rememberDeck(kingdom, deckId);
+      close(); this._lastKingdom = kingdom; onPick(kingdom, hq, enemy, deckId);
+    };
     const chips = (container, opts, current, onSel) => {
       if (!container) return;
       container.replaceChildren(...opts.map(([k, label]) => {
@@ -300,6 +336,7 @@ export class AppCoordinator {
     };
     const draw = () => {
       chips(doc.getElementById('hq-pick-self-options'), ALL.map(k => [k, KINGDOMS[k].name]), kingdom, k => { kingdom = k; if (enemy === k) enemy = 'RANDOM'; draw(); });
+      fillDecks();
       const enemyRow = doc.getElementById('hq-pick-enemy-row');
       if (enemyRow) enemyRow.style.display = lan ? 'none' : '';
       chips(doc.getElementById('hq-pick-enemy-options'), [['RANDOM', '随机'], ...ALL.filter(k => k !== kingdom).map(k => [k, KINGDOMS[k].name])], enemy, k => { enemy = k; draw(); });
@@ -887,15 +924,24 @@ export class AppCoordinator {
   // Mode Initializers
   // ==========================================
 
-  _newMatchOptions(hqs = {}, kingdoms = {}) {
+  _newMatchOptions(hqs = {}, kingdoms = {}, decks = {}) {
     const k = { WEI: kingdoms.WEI || 'wei', SHU: kingdoms.SHU || 'shu' };
     setSeatKingdoms(k);
-    return {
+    const opts = {
       autoInit: true, seed: createMatchSeed(), shuffleDecks: true, randomTerrains: true,
       weiHq: hqs.WEI || 'RANDOM', shuHq: hqs.SHU || 'RANDOM',
       weiKingdom: k.WEI, shuKingdom: k.SHU,
       ...buildDeckOptions(this.cardPack, k)
     };
+    // 选定的卡组（官方预设或自组）：覆盖该座位的默认卡组
+    for (const seat of ['WEI', 'SHU']) {
+      const deck = decks[seat];
+      if (!deck || deck.kingdom !== k[seat] || !validateDeck(deck).ok) continue;
+      const pre = seat === 'WEI' ? 'wei' : 'shu';
+      opts[`${pre}Deck`] = deckCardDefs(deck).map(def => createCard(def, { faction: seat, kingdom: k[seat] }));
+      opts[`${pre}Reserve`] = createKingdomDeck(k[seat], seat).reservePool;
+    }
+    return opts;
   }
 
   startSoloMatch(cfg = {}) {
@@ -912,7 +958,8 @@ export class AppCoordinator {
     this.lastMatch.cfg = { ...cfg, kingdom: myKingdom, enemyKingdom };
     this.rulesEngine = new RulesEngine(this._newMatchOptions(
       { [this.localPlayerId]: cfg.hq || 'RANDOM' },
-      { [this.localPlayerId]: myKingdom, [this.opponentPlayerId]: enemyKingdom }
+      { [this.localPlayerId]: myKingdom, [this.opponentPlayerId]: enemyKingdom },
+      { [this.localPlayerId]: cfg.deckId ? getDeck(cfg.deckId) : null }
     ));
     this.lastProcessedLogIndex = 0;
 
@@ -1036,13 +1083,16 @@ export class AppCoordinator {
       unlisten(onLobby);
       const ours = KINGDOM_KEYS.includes(myPick.kingdom) ? myPick.kingdom : 'wei';
       const theirs = KINGDOM_KEYS.includes(theirPick.kingdom) ? theirPick.kingdom : 'shu';
-      this._beginHostMatch(peerConnection, { WEI: myPick.hq || 'RANDOM', SHU: theirPick.hq || 'RANDOM' }, { WEI: ours, SHU: theirs });
+      const deckOf = (pick, k) => (pick.deck && pick.deck.kingdom === k && validateDeck(pick.deck).ok ? pick.deck : null);
+      this._beginHostMatch(peerConnection, { WEI: myPick.hq || 'RANDOM', SHU: theirPick.hq || 'RANDOM' }, { WEI: ours, SHU: theirs },
+        { WEI: deckOf(myPick, ours), SHU: deckOf(theirPick, theirs) });
     };
     listen(onLobby);
     if (!isHost) this._beginClientMatch(peerConnection);
 
-    this._pickHq({ lan: true, onCancel: leave }, (k, hq) => {
-      myPick = { type: 'LOBBY_PICK', kingdom: k, hq };
+    this._pickHq({ lan: true, onCancel: leave }, (k, hq, _enemy, deckId) => {
+      const d = deckId ? getDeck(deckId) : null;
+      myPick = { type: 'LOBBY_PICK', kingdom: k, hq, deck: d ? { kingdom: d.kingdom, name: d.name, cards: d.cards } : null };
       if (!theirPick) FX.showTriggerHint('已选定，等待对方选择…');
       send(myPick);
       if (isHost) { tryStart(); return; }
@@ -1054,9 +1104,9 @@ export class AppCoordinator {
     });
   }
 
-  _beginHostMatch(peerConnection, hqs, kingdoms) {
+  _beginHostMatch(peerConnection, hqs, kingdoms, decks = {}) {
     {
-      this.rulesEngine = new RulesEngine(this._newMatchOptions(hqs, kingdoms));
+      this.rulesEngine = new RulesEngine(this._newMatchOptions(hqs, kingdoms, decks));
       if (this.rulesEngine.state.phase === PHASES.MULLIGAN) startTurn(this.rulesEngine.state, this.rulesEngine.state.firstPlayer);
       this.hostSync = new HostSyncManager({
         rulesEngine: this.rulesEngine,

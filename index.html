@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="css/layout.css">
   <link rel="stylesheet" href="css/fx.css">
   <link rel="stylesheet" href="css/mobile.css">
+  <link rel="stylesheet" href="css/deck.css">
 </head>
 <body class="theme-martial">
 
@@ -68,6 +69,7 @@
           <button id="home-btn-eve" class="home-btn home-btn-mode"><span class="hb-char">机</span><span class="hb-text">机机对战<small>观摩 AI 随机对决</small></span></button>
         </div>
         <div class="home-sub-actions">
+          <button id="home-btn-decks" class="home-link">🗂 卡组</button>
           <button id="home-btn-rules" class="home-link">📜 规则与词条</button>
           <button id="home-btn-editor" class="home-link">✍️ 自定义卡牌</button>
           <button id="home-btn-install" class="home-link home-touch-only">📲 全屏玩</button>
@@ -713,6 +715,7 @@
         <p class="hq-pick-sub">双方主城各带2张地形，开局洗混后随机抽3张置于前线，余1张备用。</p>
         <div class="hq-pick-enemy">我方势力：<span id="hq-pick-self-options"></span></div>
         <div class="hq-pick-enemy" id="hq-pick-enemy-row">对手势力：<span id="hq-pick-enemy-options"></span></div>
+        <div class="hq-pick-enemy hq-pick-deck">我方卡组：<select id="hq-pick-deck"></select><button id="hq-pick-deck-edit" class="db-btn" type="button">管理卡组</button></div>
         <div id="hq-pick-options" class="hq-pick-options"></div>
         <div class="modal-actions">
           <button id="hq-pick-random" class="modal-btn btn-secondary">随机主城</button>

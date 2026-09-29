@@ -1,0 +1,125 @@
+/* ==========================================================================
+   卡组：列表 / 编辑器 / 分享导入
+   宽屏：筛选 | 卡池 | 当前卡组 三栏；窄屏 / 竖屏：卡池、卡组两个页签 + 底部状态条
+   ========================================================================== */
+.deck-builder { position: fixed; inset: 0; z-index: 1500; background: radial-gradient(ellipse at top, #2a1e13 0%, #120c07 70%); color: #f0e2bf; overflow: hidden;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); box-sizing: border-box; }
+.deck-builder.hidden { display: none; }
+body.deck-builder-open { overflow: hidden; }
+.db-shell { height: 100%; display: flex; flex-direction: column; box-sizing: border-box; padding: 10px 14px; gap: 8px; overflow-y: auto; }
+.db-narrow { max-width: 620px; margin: 0 auto; width: 100%; }
+
+.db-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.db-title { margin: 0; font-family: var(--font-serif-calligraphy); color: var(--gold-hi, #f3d892); font-size: 20px; letter-spacing: 2px; }
+.db-head-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.db-btn { padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(217,179,106,.5); background: #2a1f14; color: #f3e2b5; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.db-btn:hover { border-color: #f3d892; }
+.db-btn:disabled { opacity: .45; cursor: not-allowed; }
+.db-primary { background: linear-gradient(180deg, #9c6a1c, #6b440c); border-color: #f0cf6a; color: #fff6dc; font-weight: 700; }
+.db-danger { border-color: #b8543f; color: #ffb3a1; }
+.db-back { background: transparent; }
+.db-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+.db-hint { margin: 4px 0; color: #cbb98f; font-size: 13px; line-height: 1.6; }
+.db-label { font-size: 12px; color: #bfae86; }
+.db-empty { color: #9d8d6c; font-size: 13px; padding: 16px; text-align: center; }
+.db-error { color: #ff9a86; }
+.db-foot-note { color: #8f8063; font-size: 12px; margin-top: auto; }
+
+.db-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.db-chip { padding: 4px 10px; border-radius: 14px; border: 1px solid rgba(217,179,106,.35); background: #1d150d; color: #d9c89f; font-size: 12px; cursor: pointer; }
+.db-chip.active { background: #6b440c; border-color: #f0cf6a; color: #fff3cf; }
+.db-chip-big { font-size: 15px; padding: 8px 16px; }
+
+.db-mode-tabs, .db-mobile-tabs { display: flex; gap: 6px; }
+.db-tab { flex: 0 0 auto; padding: 6px 14px; border-radius: 8px 8px 0 0; border: 1px solid rgba(217,179,106,.35); border-bottom: none; background: #1b140c; color: #cbb98f; font-size: 13px; cursor: pointer; }
+.db-tab.active { background: #3a2a18; color: #fff3cf; border-color: #f0cf6a; }
+.db-tab:disabled { opacity: .5; cursor: not-allowed; }
+
+/* 势力印章色 */
+.db-seal { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; font-family: var(--font-serif-calligraphy); font-weight: 800; color: #fff; flex: none; }
+.seal-wei { background: #2f5d86; } .seal-shu { background: #8a2f22; } .seal-wu { background: #2e6b3d; } .seal-lb { background: #5a3a78; }
+
+/* 卡组列表 */
+.db-deck-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.db-deck-card { border: 1px solid rgba(217,179,106,.35); border-radius: 10px; padding: 10px; background: rgba(28,20,12,.9); display: flex; flex-direction: column; gap: 6px; }
+.db-deck-card.official { border-style: dashed; }
+.db-deck-top { display: flex; align-items: center; gap: 8px; }
+.db-deck-name { flex: 1; font-weight: 700; color: #fff0c8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-deck-mid { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: #cbb98f; }
+.db-deck-warn { font-size: 12px; color: #ffae8f; }
+.db-deck-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.db-deck-actions .db-btn { padding: 4px 10px; font-size: 12px; }
+.db-count { font: 700 13px var(--font-mono-numbers, monospace); padding: 1px 6px; border-radius: 6px; }
+.db-count.ok { color: #9fe0a4; } .db-count.bad { color: #ffb08f; }
+.db-count.big { font-size: 22px; }
+.db-curve rect { fill: #d9b36a; } .db-curve text { fill: #9d8d6c; font-size: 7px; text-anchor: middle; }
+
+/* 分享 / 导入 */
+.db-code { width: 100%; box-sizing: border-box; background: #0f0a06; color: #f3e2b5; border: 1px solid rgba(217,179,106,.4); border-radius: 8px; padding: 8px; font: 12px var(--font-mono-numbers, monospace); word-break: break-all; resize: vertical; }
+.db-qr { align-self: center; background: #fff; padding: 8px; border-radius: 8px; line-height: 0; }
+.db-toast { position: absolute; left: 50%; bottom: 70px; transform: translateX(-50%) translateY(10px); opacity: 0; transition: all .25s; background: rgba(20,14,8,.95); border: 1px solid #f0cf6a; color: #fff3cf; padding: 8px 16px; border-radius: 8px; font-size: 13px; z-index: 5; max-width: calc(100% - 24px); text-align: center; }
+.db-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* 编辑器 */
+.db-editor { overflow: hidden; }
+.db-name { flex: 1; min-width: 120px; max-width: 320px; background: #0f0a06; border: 1px solid rgba(217,179,106,.4); border-radius: 8px; color: #fff0c8; padding: 6px 10px; font-size: 15px; font-weight: 700; }
+.db-mobile-tabs { display: none; }
+.db-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 190px minmax(0, 1fr) 270px; gap: 10px; }
+.db-filters { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
+.db-fgroup { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.db-fgroup > span { width: 100%; font-size: 12px; color: #a8977a; }
+.db-search { background: #0f0a06; border: 1px solid rgba(217,179,106,.4); border-radius: 8px; color: #f3e2b5; padding: 6px 8px; font-size: 13px; }
+.db-pool { overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px 8px; align-content: start; padding: 4px; }
+.db-tile { position: relative; display: flex; justify-content: center; cursor: pointer; }
+.db-tile-card { zoom: .88; pointer-events: auto; }
+.db-tile-card .card-hand { position: relative !important; transform: none !important; margin: 0 !important; }
+.db-tile.maxed .db-tile-card { opacity: .72; filter: saturate(.6); }
+.db-tile-badge { position: absolute; right: 2px; bottom: -6px; z-index: 5; font: 700 11px var(--font-mono-numbers, monospace); padding: 1px 6px; border-radius: 8px; background: #1b140c; border: 1px solid #6b5a3c; color: #bfae86; }
+.db-tile-badge.some { background: #6b440c; border-color: #f0cf6a; color: #fff3cf; }
+.db-tile-src { position: absolute; left: 2px; bottom: -6px; z-index: 5; font-size: 10px; padding: 0 5px; border-radius: 8px; background: #3b2f4a; color: #e0d4ff; }
+.db-deck { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid rgba(217,179,106,.2); padding-left: 10px; }
+.db-summary { padding-bottom: 6px; border-bottom: 1px solid rgba(217,179,106,.2); }
+.db-sum-top { display: flex; align-items: center; gap: 10px; }
+.db-sum-types { font-size: 11px; color: #cbb98f; line-height: 1.35; }
+.db-rows { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; padding-top: 6px; }
+.db-row-card { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 6px; background: rgba(40,29,17,.9); border-left: 3px solid #8a6a3a; }
+.db-row-card.type-tactic { border-left-color: #6b8ac4; } .db-row-card.type-counter { border-left-color: #a15ec2; }
+.db-row-card.flash { animation: dbFlash .6s; }
+@keyframes dbFlash { from { background: #6b440c; } }
+.db-rc-cost { width: 20px; height: 20px; border-radius: 50%; background: #d9b36a; color: #2a1a05; font: 800 12px var(--font-mono-numbers, monospace); display: flex; align-items: center; justify-content: center; flex: none; }
+.db-rc-name { flex: 1; min-width: 0; text-align: left; background: none; border: none; color: #f3e2b5; font-size: 13px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0; }
+.db-rc-name small { margin-left: 5px; color: #9d8d6c; font-size: 10px; }
+.db-rc-n { font: 700 12px var(--font-mono-numbers, monospace); color: #fff0c8; }
+.db-rc-btn { width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(217,179,106,.4); background: #1d150d; color: #f3e2b5; font-size: 14px; line-height: 1; cursor: pointer; padding: 0; }
+.db-rc-btn:disabled { opacity: .35; }
+.db-statusbar { display: flex; align-items: center; gap: 10px; padding-top: 6px; border-top: 1px solid rgba(217,179,106,.2); }
+.db-status-msg { flex: 1; font-size: 12px; } .db-status-msg.ok { color: #9fe0a4; } .db-status-msg.warn { color: #f3d892; } .db-status-msg.bad { color: #ffb08f; }
+
+/* 中等宽度：筛选放到卡池上方 */
+@media (max-width: 1000px) {
+  .db-body { grid-template-columns: minmax(0, 1fr) 240px; grid-template-rows: auto minmax(0, 1fr); }
+  .db-filters { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; overflow: visible; gap: 6px 14px; }
+  .db-fgroup > span { width: auto; }
+  .db-pool { grid-row: 2; } .db-deck { grid-row: 2; }
+}
+/* 手机（窄屏/矮屏）：页签切换卡池与卡组 */
+@media (max-width: 760px), (max-height: 520px) {
+  .db-shell { padding: 6px 8px; gap: 6px; }
+  .db-mobile-tabs { display: flex; }
+  .db-body { display: flex; flex-direction: column; gap: 6px; }
+  .db-filters { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; gap: 10px; padding-bottom: 4px; flex: none; }
+  .db-fgroup { flex-wrap: nowrap; flex: none; } .db-fgroup > span { width: auto; }
+  .db-search { flex: none; width: 150px; }
+  .db-editor[data-tab="pool"] .db-deck { display: none; }
+  .db-editor[data-tab="deck"] .db-pool, .db-editor[data-tab="deck"] .db-filters { display: none; }
+  .db-pool, .db-deck { flex: 1; min-height: 0; }
+  .db-deck { border-left: none; padding-left: 0; }
+  .db-pool { grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); }
+  .db-tile-card { zoom: .74; }
+  .db-head .db-title { font-size: 16px; }
+  .db-name { font-size: 13px; padding: 4px 8px; }
+  .db-deck-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+}
+/* 选主城弹窗里的卡组下拉 */
+.hq-pick-deck select { max-width: 60vw; background: #0f0a06; color: #f3e2b5; border: 1px solid rgba(217,179,106,.5); border-radius: 6px; padding: 3px 6px; font-size: 13px; }
+.hq-pick-deck .db-btn { padding: 3px 8px; font-size: 12px; margin-left: 6px; }
