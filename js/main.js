@@ -34,7 +34,7 @@ import { DeckBuilder } from './ui/deckBuilder.js';
 import { Workshop } from './ui/workshop.js';
 import { loadCustom, setKeywordRegistrar, customFactions, onCustomChange, registerGuest } from './data/customContent.js';
 import { registerKeyword } from './ui/cardRenderer.js';
-import { listDecks, getDeck, validateDeck, deckCardDefs, lastDeckId, rememberDeckFor, dualPresets, generateDualDeck, DUAL, customPayloadFor } from './data/deckStore.js';
+import { listDecks, getDeck, validateDeck, deckStats, deckCardDefs, lastDeckId, rememberDeckFor, dualPresets, generateDualDeck, DUAL, customPayloadFor } from './data/deckStore.js';
 import { createCard, createKingdomDeck } from './engine/state.js';
 
 const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb'];
@@ -230,7 +230,15 @@ export class AppCoordinator {
       }
     } catch { /* ignore */ }
     // 选中/瞄准时显示“取消”按钮
+    // 切到后台：暂停动画、音乐，省电
+    const onVis = () => {
+      const hidden = doc.hidden;
+      doc.body.classList.toggle('page-hidden', hidden);
+      this.audio?.setBackground?.(hidden);
+    };
+    doc.addEventListener('visibilitychange', onVis);
     setInterval(() => {
+      if (doc.hidden) return;
       const busy = Boolean(this.interaction?._isBusySelecting?.()) && !doc.body.classList.contains('at-home');
       doc.body.classList.toggle('is-selecting', busy);
     }, 150);
@@ -318,30 +326,35 @@ export class AppCoordinator {
     if (!modal || !box) { onPick(kingdom, 'RANDOM', 'RANDOM', null, mode); return; }
     const T = { PLAIN: '平原', WATER: '水域', FOREST: '林地', MOUNTAIN: '山地', PASS: '险关' };
     const close = () => { modal.classList.add('hidden'); this._refreshDeckSelect = null; };
-    const deckSel = doc.getElementById('hq-pick-deck');
+    const deckBox = doc.getElementById('hq-pick-deck');
+    let deckId = null;
     const fillDecks = () => {
-      if (!deckSel) return;
+      if (!deckBox) return;
       const decks = listDecks({ mode, kingdom }).filter(d => validateDeck(d).ok);
       const want = lastDeckId(kingdom, mode);
-      if (!BUILTIN.includes(kingdom) && !decks.length) {
-        const o = doc.createElement('option');
-        o.value = ''; o.textContent = '（没有合法卡组，请先在“卡组”里组一套）';
-        deckSel.replaceChildren(o);
+      deckId = decks.some(d => d.id === deckId) ? deckId : (decks.find(d => d.id === want) || decks[0])?.id || null;
+      if (!decks.length) {
+        deckBox.innerHTML = `<span class="hqp-deck-empty">${BUILTIN.includes(kingdom) ? '将使用默认卡组' : '还没有合法卡组，点“管理”去组一套'}</span>`;
         return;
       }
-      deckSel.replaceChildren(...decks.map(d => {
-        const o = doc.createElement('option');
-        o.value = d.id;
-        o.textContent = d.official ? `${d.name}（官方）` : d.name;
-        o.selected = d.id === want;
-        return o;
+      deckBox.replaceChildren(...decks.map(d => {
+        const b = doc.createElement('button');
+        b.type = 'button';
+        b.className = `hqp-deck${d.id === deckId ? ' active' : ''}`;
+        b.setAttribute('role', 'option');
+        b.setAttribute('aria-selected', String(d.id === deckId));
+        const { byType } = deckStats(d);
+        b.innerHTML = `<span class="hqp-deck-name">${d.official ? '<i class="hqp-deck-tag">官方</i>' : ''}${escapeHtml(d.name.replace(/（推荐）$/, ''))}</span>
+          <span class="hqp-deck-meta">单位${byType.UNIT} · 战法${byType.TACTIC} · 反制${byType.COUNTER}</span>`;
+        b.onclick = () => { deckId = d.id; fillDecks(); };
+        return b;
       }));
+      deckBox.querySelector('.active')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     };
     this._refreshDeckSelect = fillDecks;
     const editBtn = doc.getElementById('hq-pick-deck-edit');
     if (editBtn) editBtn.onclick = () => { this.deckBuilder.kingdomFilter = kingdom; this.deckBuilder.mode = mode; this.deckBuilder.open(); };
     const done = (hq) => {
-      const deckId = deckSel?.value || null;
       if (!BUILTIN.includes(kingdom) && !deckId) { FX.showTriggerHint(`【${KINGDOMS[kingdom]?.name || '自定义'}】需要先组一套合法卡组`); return; }
       if (deckId) rememberDeckFor(kingdom, mode, deckId);
       close(); this._lastKingdom = kingdom; this._lastMode = mode; onPick(kingdom, hq, enemy, deckId, mode);
@@ -350,20 +363,20 @@ export class AppCoordinator {
       if (!container) return;
       container.replaceChildren(...opts.map(([k, label]) => {
         const b = doc.createElement('button');
-        b.className = `enemy-chip${k === current ? ' active' : ''}`;
+        b.type = 'button';
+        b.className = `enemy-chip k-${k}${k === current ? ' active' : ''}`;
         b.textContent = label;
         b.onclick = () => onSel(k);
         return b;
       }));
     };
     const draw = () => {
-      chips(doc.getElementById('hq-pick-mode-options'), [['single', '单阵营'], ['dual', '双阵营·测试（30血）']], mode, m => { mode = m; draw(); });
+      chips(doc.getElementById('hq-pick-mode-options'), [['single', '单阵营'], ['dual', '双阵营·测试']], mode, m => { mode = m; draw(); });
       const selfLabel = doc.getElementById('hq-pick-self-label');
-      if (selfLabel) selfLabel.textContent = mode === 'dual' ? '我方主阵营' : '我方势力';
+      if (selfLabel) selfLabel.textContent = mode === 'dual' ? '主阵营' : '我方';
       chips(doc.getElementById('hq-pick-self-options'), ALL.map(k => [k, KINGDOMS[k].name]), kingdom, k => { kingdom = k; if (enemy === k) enemy = 'RANDOM'; draw(); });
       fillDecks();
-      const enemyRow = doc.getElementById('hq-pick-enemy-row');
-      if (enemyRow) enemyRow.style.display = lan ? 'none' : '';
+      for (const id of ['hq-pick-enemy-label', 'hq-pick-enemy-options']) { const el = doc.getElementById(id); if (el) el.style.display = lan ? 'none' : ''; }
       chips(doc.getElementById('hq-pick-enemy-options'), [['RANDOM', '随机'], ...BUILTIN.filter(k => k !== kingdom).map(k => [k, KINGDOMS[k].name])], enemy, k => { enemy = k; draw(); });
       box.replaceChildren(...HQ_CARDS[kingdom].map(hq => {
         const card = doc.createElement('button');
@@ -377,7 +390,7 @@ export class AppCoordinator {
       }));
     };
     const title = modal.querySelector('.hq-pick-title');
-    if (title) title.textContent = lan ? '联机：选择势力与主城' : '人机：选择势力与主城';
+    if (title) title.textContent = lan ? '联机 · 整军备战' : '出征 · 整军备战';
     draw();
     doc.getElementById('hq-pick-random').onclick = () => done('RANDOM');
     const cancelBtn = doc.getElementById('hq-pick-cancel');
@@ -468,7 +481,9 @@ export class AppCoordinator {
       if (drawerButton) { drawerButton.textContent = muted ? '🔇' : '🔊'; drawerButton.setAttribute('aria-label', muted ? '开启音频' : '关闭音频'); }
       if (lobbyButton) lobbyButton.textContent = muted ? '🔇 音乐关闭' : '🔊 音乐开启';
       const homeButton = doc.getElementById('home-btn-audio');
-      if (homeButton) homeButton.textContent = muted ? '🔇 音乐关闭' : '🔊 音乐开启';
+      const homeLabel = homeButton?.querySelector('.hl-label');
+      if (homeLabel) homeLabel.textContent = muted ? '已静音' : '音乐';
+      homeButton?.classList.toggle('is-off', Boolean(muted));
     };
     for (const id of ['btn-audio-toggle', 'btn-audio-toggle-lobby', 'home-btn-audio']) {
       doc.getElementById(id)?.addEventListener('click', () => { this.audio.setMuted(!this.audio.muted); updateAudioControls(); });
@@ -1321,6 +1336,7 @@ export class AppCoordinator {
   }
 
   _tickTurnClock() {
+    if (globalThis.document?.hidden) return;
     this.turnClock.tick();
     this._renderTurnClock();
     try { this._tickChoiceTimer(); } catch { /* ignore */ }

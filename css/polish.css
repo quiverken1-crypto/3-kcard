@@ -1,0 +1,229 @@
+/* ==========================================================================
+   polish.css — 主页 / 出征准备 / 省资源（最后加载，覆盖前面的样式）
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. 省资源：一直在跑的动画只用 opacity / transform（交给合成器，不重绘）
+   -------------------------------------------------------------------------- */
+/* 瞄准线：只在真正拖出箭头时流动（原来空路径也一直 60 帧重算样式） */
+.targeting-curve { animation: none !important; }
+.targeting-curve.curve-attack, .targeting-curve.curve-move, .targeting-curve.curve-neutral { animation: dash-flow .8s linear infinite !important; }
+
+/* 结束回合按钮：呼吸光改为伪元素透明度 */
+.btn-end-turn.state-active { animation: none !important; position: relative; }
+.btn-end-turn.state-active::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: inset 0 0 0 2px rgba(255,226,150,.95), inset 0 0 18px rgba(255,210,120,.55);
+  animation: glowFade 2s ease-in-out infinite; will-change: opacity;
+}
+@keyframes glowFade { 0%, 100% { opacity: .15; } 50% { opacity: 1; } }
+
+/* 可行动单位：静态金边 + 伪元素透明度呼吸 */
+.board-unit.status-can-act { animation: none !important; }
+.board-unit.status-can-act::before {
+  content: ""; position: absolute; inset: -3px; border-radius: 10px; pointer-events: none; z-index: 0;
+  box-shadow: 0 0 14px 2px rgba(243,216,146,.6);
+  animation: glowFade 2.2s ease-in-out infinite; will-change: opacity;
+}
+body.tactic-targeting .board-unit.status-can-act::before,
+body.choice-active .board-unit.status-can-act::before { display: none; }
+
+/* 可攻击目标：静态红光 + 伪元素闪烁（不再逐帧改 box-shadow） */
+.legal-attack-target { animation: none !important; box-shadow: 0 0 12px rgba(229,62,62,.8) !important; }
+
+/* 水域波纹：平移图层代替改 background-position */
+.frontline-zone.terrain-water::after {
+  right: -60px !important; background-size: auto !important;
+  animation: waterShift 2.4s linear infinite !important; will-change: transform;
+}
+@keyframes waterShift { from { transform: translateX(0); } to { transform: translateX(-52.8px); } }
+
+/* 主页时对局界面虽然隐藏（visibility），动画仍会跑：暂停 */
+body.at-home .hud-top-bar *, body.at-home .battlefield-viewport *, body.at-home .dock-bottom-bar *,
+body.at-home .hud-top-bar *::before, body.at-home .battlefield-viewport *::before, body.at-home .battlefield-viewport *::after,
+body.at-home .dock-bottom-bar *::after { animation-play-state: paused !important; }
+/* 页面切到后台 */
+body.page-hidden *, body.page-hidden *::before, body.page-hidden *::after { animation-play-state: paused !important; }
+
+/* 手机：关掉毛玻璃（backdrop-filter 每帧重采样整屏，最耗 GPU）和持续动画 */
+@media (hover: none), (pointer: coarse) {
+  .modal-overlay, .tactical-drawer, .home-panel { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  .frontline-zone.terrain-water::after { animation: none !important; }
+  .board-unit.status-can-act::before { animation: none; opacity: .75; }
+  .home-gallery { filter: none !important; opacity: .16 !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* --------------------------------------------------------------------------
+   2. 主页
+   -------------------------------------------------------------------------- */
+.home-panel {
+  width: min(460px, calc(100vw - 32px)) !important;
+  padding: 30px 30px 20px !important;
+  border: 1px solid rgba(217,179,106,.75) !important;
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(180,130,60,.16), transparent 60%),
+    linear-gradient(180deg, rgba(36,27,18,.96), rgba(18,13,9,.96)) !important;
+  box-shadow: 0 30px 80px rgba(0,0,0,.8), inset 0 0 0 4px rgba(20,14,9,.9), inset 0 0 0 5px rgba(217,179,106,.25) !important;
+}
+.home-panel::before, .home-panel::after {
+  content: ""; position: absolute; width: 22px; height: 22px; border: 2px solid rgba(217,179,106,.7); pointer-events: none;
+}
+.home-panel::before { top: 10px; left: 10px; border-right: 0; border-bottom: 0; border-top-left-radius: 6px; }
+.home-panel::after { right: 10px; bottom: 10px; border-left: 0; border-top: 0; border-bottom-right-radius: 6px; }
+.home-seal { width: 52px !important; height: 52px !important; font-size: 18px !important; letter-spacing: 1px; box-shadow: 0 4px 14px rgba(179,55,42,.45), inset 0 0 0 2px rgba(255,220,200,.35) !important; }
+.home-title { font-size: 44px !important; line-height: 1.15; }
+.home-subtitle { margin: 6px 0 20px !important; font-size: 13px !important; letter-spacing: 3px !important; color: #b7a47d !important; }
+.home-subtitle::before, .home-subtitle::after { content: ""; display: inline-block; width: 28px; height: 1px; margin: 0 10px; vertical-align: middle; background: linear-gradient(90deg, transparent, rgba(217,179,106,.7)); }
+.home-subtitle::after { transform: scaleX(-1); }
+
+.home-actions { display: flex !important; flex-direction: column; gap: 10px !important; max-width: none !important; }
+.home-btn.home-btn-mode {
+  position: relative; width: 100%; padding: 12px 40px 12px 14px !important; min-height: 64px;
+  border-radius: 12px !important; gap: 12px !important;
+  box-shadow: 0 6px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.home-btn.home-btn-mode::after {
+  content: ""; position: absolute; right: 16px; top: 50%; width: 8px; height: 8px; margin-top: -4px;
+  border-top: 2px solid currentColor; border-right: 2px solid currentColor; transform: rotate(45deg); opacity: .6;
+}
+.home-btn .hb-char { flex: 0 0 42px !important; width: 42px; height: 42px !important; font-size: 21px !important; border-radius: 10px !important; transform: rotate(-3deg); }
+.home-btn .hb-text { display: flex; flex-direction: column; gap: 2px; font-size: 18px !important; letter-spacing: 3px !important; }
+.home-btn .hb-text small { font-family: var(--font-body, system-ui, sans-serif); font-size: 12px; letter-spacing: .5px; color: rgba(243,226,181,.72); }
+#home-btn-eve.home-btn-sand { background: linear-gradient(180deg, #4a3a22, #2a2014) !important; border-color: #b8955a !important; }
+#home-btn-eve.home-btn-sand .hb-char { background: #6b5330 !important; color: #fff3d6 !important; border-color: #d9b36a !important; }
+
+.home-sub-actions { display: flex !important; flex-wrap: nowrap !important; gap: 6px !important; margin-top: 16px !important; }
+.home-sub-actions .home-link { flex: 1 1 0; min-width: 0; }
+.home-link.home-touch-only { display: none !important; }
+@media (pointer: coarse) { .home-link.home-touch-only { display: flex !important; } body.is-standalone .home-link.home-touch-only { display: none !important; } }
+.home-link {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 2px !important;
+  border: 1px solid rgba(217,179,106,.22) !important; border-radius: 10px; background: rgba(0,0,0,.18);
+  color: #d9c69c !important; font-size: 12px !important; letter-spacing: 1px;
+}
+.home-link:hover { background: rgba(217,179,106,.12); border-color: rgba(217,179,106,.55) !important; }
+.home-link .hl-ico { font-family: var(--font-serif-calligraphy); font-size: 17px; line-height: 1; color: var(--gold-hi, #f3d892); }
+@media (max-width: 420px) { .home-subtitle::before, .home-subtitle::after { display: none; } }
+.home-foot { margin: 12px 0 0; font-size: 11px; color: #7f7056; letter-spacing: 1px; }
+@media (max-height: 560px) and (orientation: landscape) {
+  .home-panel { padding: 14px 20px 12px !important; width: min(620px, calc(100vw - 24px)) !important; }
+  .home-seal, .home-subtitle::before, .home-subtitle::after, @media (max-width: 420px) { .home-subtitle::before, .home-subtitle::after { display: none; } }
+.home-foot { display: none !important; }
+  .home-title { font-size: 30px !important; }
+  .home-subtitle { margin: 2px 0 10px !important; }
+  .home-actions { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; }
+  .home-btn.home-btn-mode { flex-direction: column; text-align: center; padding: 10px 8px !important; min-height: 0; }
+  .home-btn.home-btn-mode::after { display: none; }
+  .home-btn .hb-text { align-items: center; font-size: 16px !important; }
+  .home-sub-actions { margin-top: 10px !important; }
+  .home-link { padding: 5px 2px !important; }
+}
+
+/* --------------------------------------------------------------------------
+   3. 出征准备（选势力 / 卡组 / 主城）
+   -------------------------------------------------------------------------- */
+.hq-pick-box { width: min(600px, calc(100vw - 20px)) !important; text-align: left !important; }
+.hq-pick-title { text-align: center; }
+.hqp-grid { display: grid; grid-template-columns: auto 1fr; gap: 10px 12px; align-items: center; margin: 14px 0 6px; }
+.hqp-label { font-size: 12px; color: #bfae86; letter-spacing: 2px; white-space: nowrap; text-align: right; }
+.hqp-field { min-width: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.hqp-field .enemy-chip { min-width: 40px; padding: 5px 12px; font-size: 15px; transition: background .15s, border-color .15s; }
+.hqp-seg { display: inline-flex; border: 1px solid rgba(217,179,106,.45); border-radius: 18px; overflow: hidden; }
+.hqp-seg .enemy-chip { border: 0; border-radius: 0; background: transparent; font-size: 13px; padding: 5px 14px; }
+.hqp-seg .enemy-chip.active { background: #8e2a20; }
+.hqp-field .enemy-chip.k-wei.active { background: #2f5d86; border-color: #8fc0ec; }
+.hqp-field .enemy-chip.k-shu.active { background: #8a2f22; border-color: #f0a58f; }
+.hqp-field .enemy-chip.k-wu.active { background: #2e6b3d; border-color: #9fd6a8; }
+.hqp-field .enemy-chip.k-lb.active { background: #5a3a78; border-color: #c7a6e6; }
+.hqp-decks { flex: 1; min-width: 0; display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+.hqp-deck {
+  flex: 0 0 auto; width: 150px; scroll-snap-align: start; text-align: left;
+  display: flex; flex-direction: column; gap: 3px; padding: 7px 9px; border-radius: 10px;
+  border: 1px solid rgba(217,179,106,.3); background: #1d150d; color: #efe0bb; cursor: pointer;
+}
+.hqp-deck.active { border-color: #f0cf6a; background: linear-gradient(180deg, #4a3418, #2a1d0f); box-shadow: 0 0 0 1px #f0cf6a inset; }
+.hqp-deck-name { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hqp-deck-meta { font-size: 11px; color: #bfae86; white-space: nowrap; }
+.hqp-deck-tag { display: inline-block; margin-right: 4px; padding: 0 5px; border-radius: 5px; font-size: 10px; background: rgba(217,179,106,.2); color: #f3d892; vertical-align: 1px; }
+.hqp-deck-empty { font-size: 12px; color: #ffae8f; padding: 6px 0; }
+.hqp-manage { flex: none; align-self: stretch; padding: 4px 10px !important; font-size: 12px !important; }
+.hq-pick-sub { text-align: center; margin: 10px 0 8px !important; }
+@media (max-width: 520px) {
+  .hqp-grid { grid-template-columns: 1fr; gap: 4px; }
+  .hqp-label { text-align: left; margin-top: 6px; }
+  .hqp-deck { width: 136px; }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .hq-pick-box { width: min(760px, calc(100vw - 16px)) !important; }
+  .hqp-grid { margin: 6px 0 2px; gap: 5px 10px; }
+  .hqp-field .enemy-chip { padding: 3px 10px; font-size: 13px; }
+  .hqp-deck { width: 132px; padding: 4px 8px; }
+  .hqp-deck-meta { display: none; }
+  .hq-pick-sub { display: none; }
+}
+
+/* --------------------------------------------------------------------------
+   4. 卡组编辑器：手机筛选改为下拉，卡池“选中 → 下方加减”
+   -------------------------------------------------------------------------- */
+.db-fselects { display: none; }
+.db-fselects select, .db-fselects input {
+  min-width: 0; background: #1d150d; color: #f0e2bf; border: 1px solid rgba(217,179,106,.4); border-radius: 16px;
+  padding: 5px 8px; font-size: 13px; -webkit-appearance: none; appearance: none;
+}
+.db-fselects select { padding-right: 18px; background-image: linear-gradient(45deg, transparent 50%, #d9b36a 50%), linear-gradient(135deg, #d9b36a 50%, transparent 50%); background-position: calc(100% - 11px) 55%, calc(100% - 7px) 55%; background-size: 4px 4px; background-repeat: no-repeat; }
+.db-fselects select.set { border-color: #f0cf6a; color: #fff3cf; background-color: #3a2a18; }
+.db-tile.selected { outline: 3px solid #f0cf6a; outline-offset: 2px; border-radius: 8px; }
+.db-tile.has .db-tile-badge { background: #6b440c; color: #fff3cf; }
+.db-selbar {
+  display: none; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px;
+  border: 1px solid #f0cf6a; background: linear-gradient(180deg, #3a2a18, #22180e); box-shadow: 0 -6px 18px rgba(0,0,0,.45);
+}
+.db-selbar.show { display: flex; }
+.db-selbar .db-sb-name { flex: 1; min-width: 0; display: flex; flex-direction: column; font-weight: 700; color: #fff0c8; }
+.db-selbar .db-sb-name small { font-weight: 400; font-size: 11px; color: #bfae86; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.db-selbar .db-sb-step { display: flex; align-items: center; gap: 0; border: 1px solid rgba(217,179,106,.5); border-radius: 20px; overflow: hidden; }
+.db-selbar .db-sb-step button { width: 44px; height: 38px; font-size: 22px; line-height: 1; background: #2a1f14; color: #f3e2b5; border: 0; cursor: pointer; touch-action: manipulation; }
+.db-selbar .db-sb-step button:disabled { opacity: .35; }
+.db-selbar .db-sb-n { min-width: 52px; text-align: center; font: 700 16px var(--font-mono-numbers, monospace); color: #fff3cf; }
+.db-selbar .db-sb-n small { font-size: 11px; color: #bfae86; }
+.db-selbar .db-sb-x { width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(217,179,106,.4); background: transparent; color: #d9c89f; font-size: 16px; }
+.db-selbar .db-sb-info { padding: 6px 10px; font-size: 12px; }
+@media (max-width: 1000px), (max-height: 520px) {
+  .db-editor .db-filters .db-fgroup, .db-editor .db-filters .db-search { display: none !important; }
+  .db-editor .db-fselects { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.4fr); gap: 6px; width: 100%; }
+  .db-editor .db-filters { padding: 0 !important; overflow: visible !important; }
+}
+@media (max-width: 460px) {
+  .db-editor .db-fselects { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .db-editor .db-fselects .db-search2 { grid-column: 1 / -1; }
+}
+/* 卡组列表页：模式页签 + 势力筛选合成一行，手机上横向滑动而不是换行占高 */
+.db-list-view .db-listbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.db-list-view .db-listbar .db-mode-tabs { flex: none; }
+.db-list-view .db-listbar .db-kfilter { flex: 1; min-width: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.db-list-view .db-listbar .db-kfilter::-webkit-scrollbar { display: none; }
+.db-list-view .db-seg { display: inline-flex; border: 1px solid rgba(217,179,106,.45); border-radius: 18px; overflow: hidden; }
+.db-list-view .db-seg .db-tab { border: 0; border-radius: 0; padding: 6px 14px; background: transparent; }
+.db-list-view .db-seg .db-tab.active { background: #6b440c; }
+.db-list-view .db-kfilter .db-chip { flex: none; }
+@media (max-width: 520px) {
+  .db-list-view .db-listbar { flex-direction: column; align-items: stretch; gap: 6px; }
+  .db-list-view .db-seg { display: grid; grid-template-columns: 1fr 1fr; }
+  .db-list-view .db-seg .db-tab { text-align: center; padding: 6px 4px; }
+  .db-list-view .db-head-actions .db-btn { padding: 6px 9px; }
+  .db-deck-grid { gap: 8px !important; }
+  .db-deck-card { padding: 8px 10px !important; gap: 4px !important; }
+  .db-deck-mid .db-curve { width: 84px; height: 26px; }
+}
+/* 矮屏：选中卡牌时，选中条代替底部状态条（顶部仍有“保存”） */
+@media (max-height: 520px) { .db-selbar.show + .db-statusbar { display: none; } .db-selbar { padding: 4px 8px; } .db-selbar .db-sb-step button { height: 32px; } }
+/* 横屏手机：倒计时 + 回合总时长并排显示，不再被右边裁掉 */
+body.m-land:not(.m-port) #player-dock #turn-timer.dock-timer { min-width: 0; overflow: hidden; }
+body.m-land:not(.m-port) #player-dock #turn-timer .turn-timer-chip { width: auto !important; flex: 1 1 auto; min-width: 0; flex-direction: row !important; white-space: nowrap; gap: 3px; line-height: 1; }
+body.m-land:not(.m-port) #player-dock #turn-timer .turn-timer-total { flex: none; }
+body.m-land:not(.m-port) #player-dock #turn-timer.dock-timer { gap: 4px !important; }
+body.m-land:not(.m-port) #player-dock #turn-timer .turn-timer-chip { font-size: 11px !important; padding: 1px 6px !important; overflow: hidden; text-overflow: clip; }
+body.m-land:not(.m-port) #player-dock #turn-timer .turn-timer-total { font-size: 9.5px !important; letter-spacing: -.2px; }
