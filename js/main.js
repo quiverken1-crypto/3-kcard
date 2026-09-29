@@ -353,7 +353,7 @@ export class AppCoordinator {
     };
     this._refreshDeckSelect = fillDecks;
     const editBtn = doc.getElementById('hq-pick-deck-edit');
-    if (editBtn) editBtn.onclick = () => { this.deckBuilder.kingdomFilter = kingdom; this.deckBuilder.mode = mode; this.deckBuilder.open(); };
+    if (editBtn) editBtn.onclick = () => { this.deckBuilder.codexKingdom = kingdom; this.deckBuilder.mode = mode; this.deckBuilder.open('mine'); };
     const done = (hq) => {
       if (!BUILTIN.includes(kingdom) && !deckId) { FX.showTriggerHint(`【${KINGDOMS[kingdom]?.name || '自定义'}】需要先组一套合法卡组`); return; }
       if (deckId) rememberDeckFor(kingdom, mode, deckId);

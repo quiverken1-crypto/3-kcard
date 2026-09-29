@@ -684,9 +684,11 @@ export class InteractionController {
 
   _beginSkillMode(unit, spec) {
     const doc = globalThis.document;
+    // 不需要选手牌的主动技：直接发动
+    if (!spec.needsHandCard) { this.onAction({ type: ACTION_TYPES.ACTIVATE_SKILL, playerId: this.localPlayerId, payload: { unitId: unit.instanceId } }); return; }
     this.pendingSkill = { unitId: unit.instanceId, name: spec.name };
     doc?.body?.classList.add('skill-hand-select');
-    this._showToast(`【${spec.name}】点一张手牌弃置，额外获得2粮草（点战场取消）`);
+    this._showToast(`【${spec.name}】${spec.handPrompt || '点一张手牌弃置，额外获得2粮草'}（点战场取消）`);
   }
 
   _endSkillMode() {

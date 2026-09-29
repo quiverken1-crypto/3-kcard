@@ -21,8 +21,15 @@ export const TRIGGER_CATALOG = [
   { id: 'ON_ALLY_DEATH', label: '其他友军阵亡时', group: '联动' },
   { id: 'ON_ENEMY_DEPLOY', label: '敌军进场时', group: '联动' },
   { id: 'ON_ENEMY_ACTION', label: '敌方行动时（反制）', group: '反制' },
-  { id: 'AURA', label: '在场时持续（光环）', group: '持续' }
+  { id: 'AURA', label: '在场时持续（光环）', group: '持续' },
+  { id: 'ACTIVE', label: '主动技（点单位发动）', group: '主动' }
 ];
+/** 主动技：消耗 → 判定 → 获得 */
+export const ACTIVE_COST_CATALOG = [
+  ['NONE', '无消耗'], ['PROVISIONS', '消耗粮草'], ['DISCARD', '弃1张手牌（自选）'], ['SELF_DAMAGE', '自身受伤'],
+  ['HQ_HP', '己方主城失血'], ['PRESTIGE', '消耗声望'], ['ACTION', '消耗本单位行动']
+];
+export const ACTIVE_LIMIT_CATALOG = [['TURN', '每回合1次'], ['GAME', '每局1次']];
 export const EFFECT_CATALOG = [
   { id: 'DRAW', label: '抽牌', group: '资源', kind: 'player' },
   { id: 'GAIN_PROVISIONS', label: '获得粮草', group: '资源', kind: 'player' },
@@ -385,4 +392,59 @@ export function auraModifiers(state, unit) {
     }
   }
   return { atk, cost };
+}
+
+/** 主动技：同一张卡的多条“主动技”积木合并为一个技能，消耗/判定/次数以第一条为准 */
+export function activeAbilityOf(unit) {
+  const list = (unit?.abilities || []).filter(a => a.trigger === 'ACTIVE');
+  if (!list.length) return null;
+  const head = list[0];
+  return {
+    cost: head.cost || { type: 'NONE', amount: 0 },
+    chance: Math.max(0, Math.min(100, head.chance ?? 100)),
+    limit: head.limit === 'GAME' ? 'GAME' : 'TURN',
+    conditions: head.conditions || [],
+    effects: list.flatMap(a => a.effects || [])
+  };
+}
+
+/** 主动技当前能否支付消耗；可以返回空串 */
+export function activeCostBlock(state, unit, act) {
+  const p = state.players[unit.faction];
+  const n = act.cost.amount ?? 1;
+  switch (act.cost.type) {
+    case 'PROVISIONS': return p.provisions < n ? `粮草不足（需${n}）` : '';
+    case 'DISCARD': return p.hand.length ? '' : '没有手牌可弃置';
+    case 'PRESTIGE': return p.prestige < n ? `声望不足（需${n}）` : '';
+    case 'SELF_DAMAGE': return (unit.hp ?? 0) <= n ? '生命不足以支付' : '';
+    case 'HQ_HP': return p.hp <= n ? '主城生命不足以支付' : '';
+    case 'ACTION': return (unit.status?.[STATUS_TYPES.ACTIONS_USED] || 0) >= 1 ? '本单位本回合已行动' : '';
+    default: return '';
+  }
+}
+
+/** 发动主动技：先付消耗，再判定（条件 + 概率），成功则结算效果；返回是否判定成功 */
+export function runActiveAbility(state, unit, act, payload = {}) {
+  const p = state.players[unit.faction];
+  const n = act.cost.amount ?? 1;
+  switch (act.cost.type) {
+    case 'PROVISIONS': p.provisions -= n; break;
+    case 'DISCARD': {
+      const idx = p.hand.findIndex(c => c.instanceId === payload?.cardId);
+      if (idx === -1) throw new Error('请选择要弃置的手牌');
+      p.discard.push(p.hand.splice(idx, 1)[0]);
+      break;
+    }
+    case 'PRESTIGE': p.prestige -= n; break;
+    case 'SELF_DAMAGE': unit.hp -= n; unit.status[STATUS_TYPES.DAMAGED] = true; break;
+    case 'HQ_HP': changeHq(state, unit.faction, -n, unit.faction); break;
+    case 'ACTION': unit.status[STATUS_TYPES.ACTIONS_USED] = (unit.status[STATUS_TYPES.ACTIONS_USED] || 0) + 1; break;
+    default: break;
+  }
+  const condOk = checkConditions(state, act.conditions, unit.faction, unit, {});
+  const roll = act.chance >= 100 ? 100 : state.prng.randomInt(1, 100);
+  const success = condOk && roll <= act.chance;
+  if (success) for (const ef of act.effects) applyEffect(state, ef, unit.faction, unit, {});
+  state.combatLog.push({ type: 'SKILL', playerId: unit.faction, message: `【${unit.name}】发动主动技${act.chance < 100 ? `（判定 ${roll}/${act.chance}）` : ''}：${success ? '成功' : '判定失败'}` });
+  return success;
 }

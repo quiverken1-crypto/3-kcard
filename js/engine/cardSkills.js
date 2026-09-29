@@ -12,7 +12,7 @@ import { FACTIONS, PHASES, STATUS_TYPES, TROOP_TYPES, GAME_CONFIG, hasKeyword } 
 import {
   drawCard, adjustPrestige, getAllUnits, findUnit, removeUnitFromBoard, registerTurnHooks
 } from './state.js';
-import { registerAbilityHooks, applyUnitEffect, auraModifiers } from './abilities.js';
+import { registerAbilityHooks, applyUnitEffect, auraModifiers, activeAbilityOf, activeCostBlock, runActiveAbility } from './abilities.js';
 
 // ==========================================
 // 0. 通用工具
@@ -204,7 +204,20 @@ export const ACTIVE_SKILLS = {
 };
 
 export function getActiveSkill(unit) {
-  return active(unit) ? ACTIVE_SKILLS[baseId(unit?.cardId)] || null : null;
+  if (!active(unit)) return null;
+  const builtin = ACTIVE_SKILLS[baseId(unit?.cardId)];
+  if (builtin) return builtin;
+  // 工坊积木主动技：消耗 → 判定 → 获得
+  const act = activeAbilityOf(unit);
+  if (!act) return null;
+  const costLabel = { NONE: '', PROVISIONS: `消耗${act.cost.amount}粮草`, DISCARD: '弃1张手牌', SELF_DAMAGE: `自身受${act.cost.amount}伤`, HQ_HP: `主城失${act.cost.amount}血`, PRESTIGE: `消耗${act.cost.amount}声望`, ACTION: '消耗行动' }[act.cost.type] || '';
+  return {
+    name: unit.skill?.name || '主动技', custom: act,
+    desc: [costLabel, act.chance < 100 ? `${act.chance}%判定` : '', act.limit === 'GAME' ? '每局1次' : '每回合1次'].filter(Boolean).join('，'),
+    needsHandCard: act.cost.type === 'DISCARD',
+    handPrompt: '点一张手牌弃置',
+    apply(state, u, payload) { runActiveAbility(state, u, act, payload); }
+  };
 }
 
 /** 主动技能当前不能发动的原因；可发动返回空串 */
@@ -216,6 +229,11 @@ export function activeSkillBlockReason(state, unit) {
   if (unit.status?.[STATUS_TYPES.IS_FACE_DOWN]) return '潜伏中无法发动';
   if (unit._skillUsedTurn === state.turnNumber) return `【${spec.name}】本回合已发动过`;
   if (spec.needsHandCard && !state.players[unit.faction].hand.length) return '没有手牌可弃置';
+  if (spec.custom) {
+    if (spec.custom.limit === 'GAME' && unit._skillUsedGame) return `【${spec.name}】每局只能发动1次`;
+    const c = activeCostBlock(state, unit, spec.custom);
+    if (c) return c;
+  }
   return '';
 }
 
@@ -226,6 +244,8 @@ export function activateSkill(state, pid, payload = {}) {
   if (reason) throw new Error(reason);
   getActiveSkill(unit).apply(state, unit, payload);
   unit._skillUsedTurn = state.turnNumber;
+  unit._skillUsedGame = true;
+  processDeaths(state);
   refreshAuras(state);
   return { success: true };
 }

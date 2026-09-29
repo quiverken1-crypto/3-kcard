@@ -464,7 +464,7 @@ export class HeuristicBot {
     const hand = state.players?.[botFaction]?.hand || [];
     if (hand.length >= 5) {
       for (const u of getAllUnits(state, botFaction)) {
-        if (getActiveSkill(u) && !activeSkillBlockReason(state, u)) {
+        if (getActiveSkill(u)?.needsHandCard && !activeSkillBlockReason(state, u)) {
           const cheap = [...hand].sort((a, b) => (a.cost || 0) - (b.cost || 0))[0];
           return { type: ACTION_TYPES.ACTIVATE_SKILL, playerId: botFaction, payload: { unitId: u.instanceId, cardId: cheap.instanceId } };
         }

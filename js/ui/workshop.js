@@ -10,7 +10,7 @@ import {
   customPack, upsertCard, deleteCard, upsertFaction, deleteFaction, pickSubset, mergePack, encodePack, decodePack,
   downloadPack, newCustomId, normalizePack, TROOP_OPTIONS, TERRAIN_OPTIONS
 } from '../data/customContent.js';
-import { TRIGGER_CATALOG, EFFECT_CATALOG, TARGET_CATALOG, FILTER_CATALOG, CONDITION_CATALOG, PLAYER_EFFECTS, DECK_EFFECTS, KEYWORD_EFFECTS, AURA_EFFECTS } from '../engine/abilities.js';
+import { TRIGGER_CATALOG, EFFECT_CATALOG, TARGET_CATALOG, FILTER_CATALOG, CONDITION_CATALOG, PLAYER_EFFECTS, DECK_EFFECTS, KEYWORD_EFFECTS, AURA_EFFECTS, ACTIVE_COST_CATALOG, ACTIVE_LIMIT_CATALOG } from '../engine/abilities.js';
 import { renderHandCard, escapeHtml, builtinKeywords } from './cardRenderer.js';
 import { createCard } from '../engine/state.js';
 
@@ -65,6 +65,12 @@ export function describeAbility(ab) {
       default: return `${whoF}${name}${amt}`;
     }
   });
+  if (ab.trigger === 'ACTIVE') {
+    const c = ab.cost || {};
+    const pay = { NONE: '', PROVISIONS: `消耗${c.amount}粮草`, DISCARD: '弃置1张手牌', SELF_DAMAGE: `自身受到${c.amount}点伤害`, HQ_HP: `己方主城失去${c.amount}点生命`, PRESTIGE: `消耗${c.amount}点声望`, ACTION: '消耗本单位行动' }[c.type] || '';
+    const judge = (ab.chance ?? 100) < 100 ? `进行判定（${ab.chance}%成功），成功则` : '';
+    return `主动（${ab.limit === 'GAME' ? '每局1次' : '每回合1次'}）：${pay ? `${pay}，` : ''}${cond}${judge}${parts.join('，')}。`;
+  }
   return `${ab.trigger === 'AURA' ? '在场时：' : `${t}，`}${cond}${parts.join('，')}。`;
 }
 const COMMON_BADGES = ['鲁莽', '狂傲', '名士', '二心', '皇亲', '暴虐'];
@@ -203,7 +209,7 @@ export class Workshop {
             <label><input type="radio" name="impl" value="pending"${c.pending ? ' checked' : ''}> 文字描述，交给开发者实现（标“待实现”，对局中暂无效果）</label>
           </div>
           <div class="ws-blocks">
-            <div class="ws-sub"><span>积木效果（时机 → 效果 → 目标 → 数值；可加筛选与条件）</span><span><button type="button" class="db-btn" data-act="fill-desc">用积木生成描述</button> <button type="button" class="db-btn" data-act="add-ab">＋ 添加效果</button></span></div>
+            <div class="ws-sub"><span>积木效果（时机 → 效果 → 目标 → 数值；可加筛选与条件）<br><small class="db-hint">主动技 = 消耗 → 判定 → 获得；同一张卡的多条主动技会合并成一个技能，消耗和判定以第一条为准。</small></span><span><button type="button" class="db-btn" data-act="fill-desc">用积木生成描述</button> <button type="button" class="db-btn" data-act="add-ab">＋ 添加效果</button></span></div>
             <div class="ws-abs"></div>
           </div>
           <div class="ws-err"></div>
@@ -247,6 +253,14 @@ export class Workshop {
           <select class="ab-c-op">${pairOpts([['GTE', '≥'], ['LTE', '≤'], ['EQ', '=']], cd.op || 'GTE')}</select>
           <input class="ab-c-val" type="number" min="0" max="100" value="${cd.value ?? 1}">
         </div>
+        <div class="ws-row ws-ab-more ws-ab-active">
+          <span class="ws-ab-lbl">消耗</span>
+          <select class="ab-cost">${pairOpts(ACTIVE_COST_CATALOG, ab.cost?.type || 'NONE')}</select>
+          <input class="ab-cost-n" type="number" min="0" max="20" value="${ab.cost?.amount ?? 1}" title="消耗数值">
+          <span class="ws-ab-lbl">判定成功率%</span>
+          <input class="ab-chance" type="number" min="1" max="100" value="${ab.chance ?? 100}">
+          <select class="ab-limit">${pairOpts(ACTIVE_LIMIT_CATALOG, ab.limit || 'TURN')}</select>
+        </div>
         <div class="ws-ab-desc"></div>
       </div>`);
       const fix = () => {
@@ -271,6 +285,9 @@ export class Workshop {
         row.querySelector('.ab-f-type').style.display = deck ? '' : 'none';
         row.querySelector('.ab-f-badge').style.display = unitish ? '' : 'none';
         row.querySelector('.ab-f-kw').style.display = unitish ? '' : 'none';
+        const isActive = trig === 'ACTIVE';
+        row.querySelector('.ws-ab-active').style.display = isActive ? '' : 'none';
+        row.querySelector('.ab-cost-n').style.display = ['NONE', 'DISCARD', 'ACTION'].includes(row.querySelector('.ab-cost').value) ? 'none' : '';
         const noCond = !row.querySelector('.ab-c-field').value;
         row.querySelector('.ab-c-op').style.display = noCond ? 'none' : '';
         row.querySelector('.ab-c-val').style.display = noCond ? 'none' : '';
@@ -281,7 +298,7 @@ export class Workshop {
       absBox.appendChild(row);
     };
     for (const k of c.customKeywords || []) addCkw(k);
-    for (const ab of c.abilities || []) for (const ef of ab.effects) addAb({ trigger: ab.trigger, conditions: ab.conditions, effects: [ef] });
+    for (const ab of c.abilities || []) for (const ef of ab.effects) addAb({ ...ab, effects: [ef] });
     const splitList = v => String(v || '').split(/[,，、\s]+/).map(x => x.trim()).filter(Boolean);
     const read = () => {
       const f = form.elements;
@@ -314,7 +331,9 @@ export class Workshop {
       if (Object.keys(filter).length) effect.filter = filter;
       const field = q('.ab-c-field').value;
       const conditions = field ? [{ field, op: q('.ab-c-op').value, value: Number(q('.ab-c-val').value || 0) }] : [];
-      return { trigger: q('.ab-trigger').value, conditions, effects: [effect] };
+      const trigger = q('.ab-trigger').value;
+      if (trigger === 'ACTIVE') return { trigger, conditions, effects: [effect], cost: { type: q('.ab-cost').value, amount: Number(q('.ab-cost-n').value || 0) }, chance: Number(q('.ab-chance').value || 100), limit: q('.ab-limit').value };
+      return { trigger, conditions, effects: [effect] };
     };
     const errBox = pane.querySelector('.ws-err');
     const sync = () => {

@@ -18,7 +18,7 @@
  */
 import { KINGDOMS, BUILTIN_KINGDOMS, DB_CARD_MAP, registerKingdom, unregisterKingdom } from './cardDB.js';
 import { registerHqs, unregisterHqs } from './terrains.js';
-import { ABILITY_TRIGGERS, EFFECT_TYPES, EFFECT_TARGETS, CONDITION_FIELDS, PLAYER_EFFECTS, DECK_EFFECTS, KEYWORD_EFFECTS, AURA_EFFECTS, FILTER_CATALOG } from '../engine/abilities.js';
+import { ABILITY_TRIGGERS, EFFECT_TYPES, EFFECT_TARGETS, CONDITION_FIELDS, PLAYER_EFFECTS, DECK_EFFECTS, KEYWORD_EFFECTS, AURA_EFFECTS, FILTER_CATALOG, ACTIVE_COST_CATALOG } from '../engine/abilities.js';
 import { CUSTOM_CARDS_KEY } from './customCards.js';
 
 export const CUSTOM_V2_KEY = 'sgk_custom_v2';
@@ -76,6 +76,16 @@ function normalizeAbilities(list, where) {
       if (!CONDITION_FIELDS.includes(field) || !['EQ', 'GTE', 'LTE'].includes(op)) throw new Error(`${where}：不支持的条件`);
       return { field, op, value: int(c.value, '条件值', 0, 100) };
     });
+    if (trigger === 'ACTIVE') {
+      const ct = String(ab.cost?.type || 'NONE').toUpperCase();
+      if (!ACTIVE_COST_CATALOG.some(([v]) => v === ct)) throw new Error(`${where}：主动技消耗类型无效`);
+      return {
+        trigger, conditions, effects,
+        cost: { type: ct, amount: int(ab.cost?.amount, '消耗数值', 0, 20, 1) },
+        chance: int(ab.chance, '判定概率', 1, 100, 100),
+        limit: ab.limit === 'GAME' ? 'GAME' : 'TURN'
+      };
+    }
     return { trigger, conditions, effects };
   });
 }

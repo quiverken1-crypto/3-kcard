@@ -303,3 +303,37 @@ body.m-land #player-dock .hand-card-fan.hand-scroll .card-hand.selected { transf
 .seal-gsz { background: #7a7362; }
 .hm-stripes .s-gsz { background: #9a927c; }
 .hqp-field .enemy-chip.k-gsz.active { background: #7a7362; border-color: #e6e0cd; }
+
+/* 卡组主页：图鉴 / 系统预设 / 我的卡组 */
+.db-hub { overflow: hidden; }
+.db-hub-tabs { display: flex; gap: 0; border-bottom: 1px solid rgba(217,179,106,.3); flex: none; }
+.db-hub-tab { flex: 0 0 auto; padding: 9px 18px; background: transparent; border: 0; border-bottom: 2px solid transparent; color: #bfae86; font-size: 15px; letter-spacing: 3px; cursor: pointer; font-family: var(--font-serif-calligraphy); }
+.db-hub-tab.active { color: #fff3cf; border-bottom-color: #f0cf6a; }
+.db-hub-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-top: 6px; -webkit-overflow-scrolling: touch; }
+.db-codex-bar { display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; z-index: 3; background: linear-gradient(#1c140c 85%, transparent); padding-bottom: 6px; }
+.db-codex-bar .db-kfilter { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.db-codex-bar .db-kfilter::-webkit-scrollbar { display: none; }
+.db-kchip { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 3px 12px 3px 3px; font-size: 13px; }
+.db-kchip .db-seal { width: 22px; height: 22px; font-size: 12px; }
+.db-codex-filters { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.6fr); gap: 6px; }
+.db-codex-count { margin: 0; font-size: 12px; color: #9d8d6c; }
+.db-codex-grid { overflow: visible !important; flex: none !important; min-height: auto !important; }
+.db-codex-tile { cursor: zoom-in; }
+.db-tile-src.fill { background: rgba(80,110,160,.8) !important; }
+.db-groups { display: flex; flex-direction: column; gap: 14px; }
+.db-group-title { display: flex; align-items: center; gap: 8px; margin: 4px 0 6px; font-family: var(--font-serif-calligraphy); font-size: 17px; color: #f3d892; letter-spacing: 2px; }
+.db-group-title small { font-family: inherit; font-size: 12px; color: #9d8d6c; letter-spacing: 0; }
+.db-deck-note { font-size: 12px; color: #bfae86; line-height: 1.5; }
+.db-hub .db-listbar .db-kfilter .db-chip { flex: none; }
+@media (max-width: 520px) {
+  .db-hub-tab { flex: 1 1 0; padding: 8px 4px; font-size: 14px; letter-spacing: 1px; }
+  .db-codex-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .db-codex-filters .db-search2 { grid-column: 1 / -1; }
+  .db-head-actions .db-btn { padding: 6px 9px; }
+}
+.db-hub .db-listbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.db-hub .db-seg { display: inline-flex; border: 1px solid rgba(217,179,106,.45); border-radius: 18px; overflow: hidden; }
+.db-hub .db-seg .db-tab { border: 0; border-radius: 0; padding: 6px 14px; background: transparent; }
+.db-hub .db-seg .db-tab.active { background: #6b440c; }
+.db-hub .db-listbar .db-kfilter { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+@media (max-width: 520px) { .db-hub .db-seg { display: grid; grid-template-columns: 1fr 1fr; width: 100%; } .db-hub .db-seg .db-tab { text-align: center; } }
