@@ -6,6 +6,7 @@
  * 分享码：SGK1-<base64url(deflate(JSON))>，不支持压缩的浏览器用 SGK0-<base64url(JSON)>。
  */
 import { CARDS_BY_KINGDOM, DB_DECKS, DB_CARD_MAP, KINGDOMS } from './cardDB.js';
+import { EXTRA_PRESETS } from './presetDecks.js';
 
 export const DECK_SIZE = 40;
 export const MIN_UNITS_HINT = 15;
@@ -28,12 +29,14 @@ const countsFromList = ids => ids.reduce((m, id) => { m[id] = (m[id] || 0) + 1; 
 
 /** 官方预设（单阵营） */
 export function officialPresets() {
-  return KINGDOM_KEYS.map(k => ({
+  const standard = KINGDOM_KEYS.map(k => ({
     id: `preset_${k}_standard`,
     name: `${KINGDOMS[k].army}·标准`,
     mode: 'single', kingdom: k, official: true,
     cards: countsFromList(DB_DECKS[k].main)
   }));
+  const extra = EXTRA_PRESETS.map(d => ({ ...d, official: true, cards: { ...d.cards } }));
+  return [...standard, ...extra];
 }
 
 export function loadUserDecks() {
