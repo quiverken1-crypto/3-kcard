@@ -282,3 +282,12 @@ body.m-land #player-dock .hand-card-fan.hand-scroll .card-hand.selected { transf
 /* 卡组编辑器 / 工坊里的卡牌只是展示：允许在卡牌上直接上下滑动（对局手牌的 touch-action:none 不影响这里） */
 .deck-builder .card-hand, .deck-builder .db-tile, .deck-builder .db-tile-card, .deck-builder .db-tile * { touch-action: pan-y !important; }
 .deck-builder .db-pool { touch-action: pan-y; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+/* 工坊积木：两行 + 自动说明 */
+.ws-ab { display: flex; flex-direction: column; gap: 4px; padding: 6px !important; border: 1px solid rgba(217,179,106,.18); }
+.ws-ab-more { font-size: 12px; }
+.ws-ab-more select, .ws-ab-more input { font-size: 12px !important; padding: 3px 5px !important; flex: 0 1 auto !important; min-width: 0; }
+.ws-ab-more .ab-f-badge, .ws-ab-more .ab-f-kw { width: 64px; }
+.ws-ab-more .ab-c-val { width: 52px; }
+.ws-ab-lbl { color: #9d8d6c; font-size: 11px; }
+.ws-ab-desc { font-size: 12px; color: #f3d892; padding-left: 2px; }
+.ws-form optgroup { color: #d9b36a; font-style: normal; }

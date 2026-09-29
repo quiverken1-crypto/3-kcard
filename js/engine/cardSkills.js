@@ -12,6 +12,7 @@ import { FACTIONS, PHASES, STATUS_TYPES, TROOP_TYPES, GAME_CONFIG, hasKeyword } 
 import {
   drawCard, adjustPrestige, getAllUnits, findUnit, removeUnitFromBoard, registerTurnHooks
 } from './state.js';
+import { registerAbilityHooks, applyUnitEffect, auraModifiers } from './abilities.js';
 
 // ==========================================
 // 0. 通用工具
@@ -285,6 +286,14 @@ const CHOICE_SPECS = {
       log(state, pid, `重整旗鼓：【${card.name}】重回手牌`);
     }
   },
+  block: {
+    source: '技能', prompt: '选择目标',
+    auto: (list, state, pid) => {
+      const enemy = list[0] && list[0].faction !== pid;
+      return enemy ? [...list].sort((a, b) => a.hp - b.hp)[0] : [...list].sort((a, b) => b.atk - a.atk)[0];
+    },
+    apply(state, pid, t, choice) { if (choice?.effect) applyUnitEffect(state, choice.effect, pid, t); }
+  },
   faZheng: {
     source: '法正·谋主', prompt: '选择1个友方单位，获得+1+1',
     auto: list => [...list].filter(isMilitary).sort((a, b) => b.atk - a.atk)[0] || list[0],
@@ -542,8 +551,10 @@ export function getAttackValue(state, unit, loc = null, foe = null) {
   if (fx.tuChi && loc.zoneType === 'FRONTLINE' && unit.troopType === TROOP_TYPES.CAVALRY) atk += 3;
   // 以守为攻：本回合步兵按防御力（生命）造成伤害
   if (fx.defAsAtk && effectiveTroop(state, unit, loc) === TROOP_TYPES.INFANTRY && unit.faction === state.activePlayer) atk = Math.max(atk, unit.hp);
-  // 侯成·献酒（回合内临时加成）
+  // 侯成·献酒 / 积木“到回合结束”（回合内临时加成）
   atk += unit._tempAtk || 0;
+  // 积木光环
+  atk += auraModifiers(state, unit).atk;
   // 王平·镇守：己方坚阵单位在敌方回合战力+2
   if (unit.faction !== state.activePlayer && hasKeyword(unit, '坚阵') && getAllUnits(state, unit.faction).some(u => isId(u, 'shu_wang_ping'))) atk += 2;
   // 程普·石阵：己方水军战力+2
@@ -583,6 +594,7 @@ export function getActionCost(state, unit, loc = null) {
   const fx = ensureTurnFx(state)[unit.faction] || {};
   if (fx.wangMei && loc.zoneType === 'FRONTLINE') cost -= 1;
   if (fx.tuChi && loc.zoneType === 'FRONTLINE' && unit.troopType === TROOP_TYPES.CAVALRY) cost -= 1;
+  cost += auraModifiers(state, unit).cost;
   return Math.max(0, cost);
 }
 
@@ -1541,7 +1553,11 @@ function onTurnEnd(state, pid) {
     if (u) { u.atk = rec.atk; u.actionCost = rec.act; }
   }
   // 侯成·献酒：临时战力清零
-  for (const u of [...getAllUnits(state, FACTIONS.WEI), ...getAllUnits(state, FACTIONS.SHU)]) u._tempAtk = 0;
+  for (const u of [...getAllUnits(state, FACTIONS.WEI), ...getAllUnits(state, FACTIONS.SHU)]) {
+    u._tempAtk = 0;
+    // 积木“到回合结束”获得的词条
+    if (u._tempKw?.length) { u.keywords = u.keywords.filter(k => !u._tempKw.includes(k)); u._tempKw = []; }
+  }
   // 辕门射戟：本方“不能部署”在自己回合结束时解除
   if (p.noDeployNextTurn && p._noDeployActive) { p.noDeployNextTurn = false; p._noDeployActive = false; }
   state.turnEffects[pid] = {};
@@ -1561,3 +1577,23 @@ export default {
   TACTICS, getTacticTargets, prepareTactic, resolveTactic, afterAttack, processDeaths,
   onUnitEnter, onUnitMoved, applyEnterKeywords, getAttackValue, getActionCost, damageHq, refreshAuras
 };
+
+// 积木技能：撤退 / 返回手牌 / 玩家选择目标（15 秒，超时随机）
+registerAbilityHooks({
+  retreat: (state, unit) => retreatUnit(state, unit, '技能'),
+  returnToHand: (state, unit) => {
+    if (!findUnit(state, unit.instanceId)) return false;
+    removeUnitFromBoard(state, unit.instanceId, true, { silent: true });
+    resetCardState(unit);
+    const owner = unit.originalFaction || unit.faction;
+    unit.faction = owner;
+    putInHand(state, owner, unit);
+    log(state, owner, `【${unit.name}】返回手牌`);
+    return true;
+  },
+  chooseUnit: (state, owner, source, list, effect) => {
+    const name = EFFECT_NAMES[effect.type] || '效果';
+    queueChoice(state, owner, 'block', source, list, { effect, source: source?.name || '技能', prompt: `选择${list[0]?.faction === owner ? '友军' : '敌军'}：${name}${effect.amount ? ` ${effect.amount}` : ''}${effect.keyword ? `【${effect.keyword}】` : ''}` });
+  }
+});
+const EFFECT_NAMES = { DAMAGE_UNIT: '造成伤害', HEAL_UNIT: '恢复', BUFF_ATTACK: '战力+', DEBUFF_ATTACK: '战力−', TURN_ATTACK: '本回合战力+', BUFF_HEALTH: '生命+', ACTION_COST_DOWN: '行动花费−', ACTION_COST_UP: '行动花费+', APPLY_SUPPRESSION: '压制', APPLY_INHIBITION: '抑制', REVEAL_UNIT: '翻开', RESTORE_ACTION: '恢复行动', GRANT_KEYWORD: '获得', TURN_KEYWORD: '本回合获得', REMOVE_KEYWORD: '移除', RETREAT: '撤退', RETURN_HAND: '返回手牌', DESTROY: '消灭' };

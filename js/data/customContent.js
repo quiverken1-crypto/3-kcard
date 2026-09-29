@@ -18,15 +18,15 @@
  */
 import { KINGDOMS, BUILTIN_KINGDOMS, DB_CARD_MAP, registerKingdom, unregisterKingdom } from './cardDB.js';
 import { registerHqs, unregisterHqs } from './terrains.js';
-import { ABILITY_TRIGGERS, EFFECT_TYPES, EFFECT_TARGETS } from '../engine/abilities.js';
+import { ABILITY_TRIGGERS, EFFECT_TYPES, EFFECT_TARGETS, CONDITION_FIELDS, PLAYER_EFFECTS, DECK_EFFECTS, KEYWORD_EFFECTS, AURA_EFFECTS, FILTER_CATALOG } from '../engine/abilities.js';
 import { CUSTOM_CARDS_KEY } from './customCards.js';
 
 export const CUSTOM_V2_KEY = 'sgk_custom_v2';
 export const TROOP_OPTIONS = ['INFANTRY', 'CAVALRY', 'NAVY', 'STRATEGIST', 'ARCHER'];
 export const TERRAIN_OPTIONS = ['PLAIN', 'WATER', 'FOREST', 'MOUNTAIN', 'PASS'];
 const TYPES = ['UNIT', 'TACTIC', 'COUNTER'];
-const PLAYER_EFFECTS = new Set(['DRAW', 'STEAL_CARD', 'DISCARD_RANDOM', 'GAIN_PRESTIGE', 'REMOVE_PRESTIGE', 'GAIN_PROVISIONS', 'STEAL_PROVISIONS', 'GAIN_CAPACITY', 'DAMAGE_HQ', 'HEAL_HQ']);
-const CONDITION_FIELDS = ['OWNER_PROVISIONS', 'OWNER_PRESTIGE', 'ENEMY_PROVISIONS', 'SOURCE_HP', 'TARGET_HP', 'TURN_NUMBER', 'TARGET_DIED', 'SOURCE_SURVIVED'];
+const AURA_TARGETS = ['SELF', 'ALL_FRIENDLIES', 'OTHER_FRIENDLIES', 'ALL_ENEMIES'];
+const PLAYER_TARGETS = ['OWNER', 'OPPONENT'];
 
 const storage = () => { try { return globalThis.localStorage || null; } catch { return null; } };
 const text = (v, label, max, { optional = false } = {}) => {
@@ -55,9 +55,18 @@ function normalizeAbilities(list, where) {
       const target = String(ef?.target || 'OWNER').toUpperCase();
       if (!EFFECT_TYPES.includes(type)) throw new Error(`${where}：不支持的效果 ${type}`);
       if (!EFFECT_TARGETS.includes(target)) throw new Error(`${where}：不支持的目标 ${target}`);
-      if (PLAYER_EFFECTS.has(type) !== ['OWNER', 'OPPONENT'].includes(target)) throw new Error(`${where}：效果 ${type} 与目标 ${target} 不匹配`);
-      const out = { type, target, amount: int(ef.amount, '效果数值', 0, 20, 1) };
-      if (['GRANT_KEYWORD', 'REMOVE_KEYWORD'].includes(type)) out.keyword = text(ef.keyword, '词条', 24);
+      if (!DECK_EFFECTS.has(type) && PLAYER_EFFECTS.has(type) !== PLAYER_TARGETS.includes(target)) throw new Error(`${where}：效果 ${type} 与目标 ${target} 不匹配`);
+      if (trigger === 'AURA' && (!AURA_EFFECTS.has(type) || !AURA_TARGETS.includes(target))) throw new Error(`${where}：光环只支持战力±、行动花费±，目标为自身/友军/敌军`);
+      const out = { type, target: DECK_EFFECTS.has(type) ? 'OWNER' : target, amount: int(ef.amount, '效果数值', 0, 20, 1) };
+      if (KEYWORD_EFFECTS.has(type)) out.keyword = text(ef.keyword, '词条', 24);
+      const f = ef.filter || {};
+      const filter = {};
+      if (f.troop && FILTER_CATALOG.troop.some(([v]) => v === f.troop)) filter.troop = f.troop;
+      if (f.line && FILTER_CATALOG.line.some(([v]) => v === f.line)) filter.line = f.line;
+      if (f.cardType && FILTER_CATALOG.cardType.some(([v]) => v === f.cardType)) filter.cardType = f.cardType;
+      if (f.badge) filter.badge = text(String(f.badge), '性格筛选', 6);
+      if (f.keyword) filter.keyword = text(String(f.keyword), '词条筛选', 8);
+      if (Object.keys(filter).length) out.filter = filter;
       return out;
     });
     if (!effects.length || effects.length > 8) throw new Error(`${where} 第${i + 1}条技能需要1至8个效果`);

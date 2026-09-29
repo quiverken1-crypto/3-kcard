@@ -183,6 +183,23 @@ export class InteractionController {
 
   _isTouch(e) { return Boolean(e?.pointerType) && e.pointerType !== 'mouse'; }
 
+  /** 非己方回合：不能操作，但仍可点按查看卡牌/单位说明 */
+  _peekInfo(e, fromHand) {
+    if (!this._isTouch(e) || !this.gameState) return;
+    if (fromHand) {
+      const el = e.target?.closest?.('.card-hand');
+      const card = el && this.gameState.players?.[this.localPlayerId]?.hand?.find(c => c.instanceId === el.dataset?.instanceId);
+      if (card) this._showTouchInfo(card, el);
+      return;
+    }
+    const unitEl = e.target?.closest?.('.board-unit');
+    if (!unitEl || unitEl.dataset?.isFaceDown === 'true') return;
+    const loc = findUnit(this.gameState, unitEl.dataset.instanceId);
+    if (!loc?.unit) return;
+    const u = loc.unit.faction === this.localPlayerId && loc.unit.status?.isFaceDown ? { ...loc.unit, status: { ...loc.unit.status, isFaceDown: false } } : loc.unit;
+    this._showTouchInfo(u, unitEl);
+  }
+
   _showTouchInfo(card, el) {
     try { CardInspector.show(card, el.getBoundingClientRect()); } catch { /* ignore */ }
     clearTimeout(this._infoTimer);
@@ -221,7 +238,7 @@ export class InteractionController {
     if (this._isNonPrimary(e)) return;
     if (this.pendingTactic) this._endTacticTargeting();
     this._hideSkillButton();
-    if (this.state === INTERACTION_STATE.DISABLED) return;
+    if (this.state === INTERACTION_STATE.DISABLED) { this._peekInfo(e, true); return; }
     if (this.state === INTERACTION_STATE.TARGETING) {
       this.cancelSelection();
     }
@@ -325,7 +342,7 @@ export class InteractionController {
     if (this._isNonPrimary(e)) return;
     this._hideSkillButton();
     this._lastPointer = { x: e.clientX ?? 0, y: e.clientY ?? 0 };
-    if (this.state === INTERACTION_STATE.DISABLED) return;
+    if (this.state === INTERACTION_STATE.DISABLED) { this._peekInfo(e, false); return; }
 
     if (this.pendingSkill) {
       this._endSkillMode();

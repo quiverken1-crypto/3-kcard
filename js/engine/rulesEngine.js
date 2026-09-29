@@ -54,7 +54,7 @@ import {
   actsLikeCavalryOnTerrain,
   getEffectiveActionCost
 } from '../data/terrains.js';
-import { runAbilityTrigger } from './abilities.js';
+import { runAbilityTrigger, runLinkedTriggers } from './abilities.js';
 import {
   applyEnterKeywords, onUnitEnter, onUnitMoved, prepareTactic, resolveTactic, afterAttack, resolvePick, autoPickCards, randomPickCards, resolveChoice, autoChoiceTarget, activateSkill, canDeployToFrontline, isSiegeEngine,
   processDeaths, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getTacticTargets, refreshAuras, baseId, targetSurcharge, qiMouDiscount, getCardPlayCost
@@ -486,7 +486,7 @@ export function dispatch(state, action) {
     afterAttack(state, source, result.defenderRef || defender, result, Boolean(result.targetIsHq));
     delete result.defenderRef;
   }
-  if (action.type === ACTION_TYPES.DEPLOY) runAbilityTrigger(state, 'ON_DEPLOY', source, context);
+  if (action.type === ACTION_TYPES.DEPLOY) { runAbilityTrigger(state, 'ON_DEPLOY', source, context); runLinkedTriggers(state, 'DEPLOY', source); }
   else if (action.type === ACTION_TYPES.PLAY_TACTIC) runAbilityTrigger(state, 'ON_PLAY', source, context);
   else if (action.type === ACTION_TYPES.MOVE) runAbilityTrigger(state, 'ON_MOVE', source, context);
   else if (action.type === ACTION_TYPES.ATTACK) {
@@ -497,10 +497,12 @@ export function dispatch(state, action) {
     if (result.defenderDied) {
       runAbilityTrigger(state, 'ON_KILL', source, context);
       runAbilityTrigger(state, 'ON_DEATH', defender, context);
+      runLinkedTriggers(state, 'DEATH', defender);
     }
     if (result.attackerDied) {
       runAbilityTrigger(state, 'ON_KILL', defender, context);
       runAbilityTrigger(state, 'ON_DEATH', source, context);
+      runLinkedTriggers(state, 'DEATH', source);
     }
   }
 
