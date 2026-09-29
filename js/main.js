@@ -24,16 +24,30 @@ import { CardInspector, renderHandCard, escapeHtml, getCardDescription } from '.
 import { CombatLogController } from './ui/combatLog.js';
 import FX from './ui/fx.js';
 import { BattleFx } from './ui/battleFx.js';
-import { CardEditor } from './ui/cardEditor.js';
-import { buildDeckOptions, loadSavedCardPack } from './data/customCards.js';
 import { AudioDirector } from './ui/audioDirector.js';
 import { TurnClock } from './ui/turnClock.js';
 import { HQ_CARDS } from './data/terrains.js';
 import { KINGDOMS } from './data/cardDB.js';
 import { setSeatKingdoms, seatArmy } from './ui/seats.js';
 import { preloadAssets } from './ui/preloader.js';
+import { DeckBuilder } from './ui/deckBuilder.js';
+import { Workshop } from './ui/workshop.js';
+import { loadCustom, setKeywordRegistrar, customFactions, onCustomChange, registerGuest } from './data/customContent.js';
+import { registerKeyword } from './ui/cardRenderer.js';
+import { listDecks, getDeck, validateDeck, deckStats, deckCardDefs, lastDeckId, rememberDeckFor, dualPresets, generateDualDeck, DUAL, customPayloadFor } from './data/deckStore.js';
+import { createCard, createKingdomDeck } from './engine/state.js';
 
 const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb'];
+
+/** 自定义势力的印章/主城配色 */
+function injectFactionStyles() {
+  const doc = globalThis.document;
+  if (!doc) return;
+  let el = doc.getElementById('custom-faction-styles');
+  if (!el) { el = doc.createElement('style'); el.id = 'custom-faction-styles'; doc.head.appendChild(el); }
+  const safe = c => (/^#[0-9a-f]{3,8}$/i.test(c) ? c : '#6b7280');
+  el.textContent = customFactions().map(f => `.seal-${f.key},.db-seal-${f.key}{background:${safe(f.color)};color:#fff}.hq-card-${f.key}{border-color:${safe(f.color)}}`).join('\n');
+}
 const randomOther = k => { const o = KINGDOM_KEYS.filter(x => x !== k); return o[Math.floor(Math.random() * o.length)]; };
 
 export const APP_MODE = Object.freeze({
@@ -70,8 +84,6 @@ export class AppCoordinator {
     this.interaction = null;
     this.networkModal = null;
     this.combatLog = null;
-    this.cardEditor = null;
-    this.cardPack = { schemaVersion: 1, cards: [] };
     this.audio = null;
     this.turnClock = new TurnClock({ onExpire: () => this._handleTurnTimeout() });
     this.clockTurnKey = null;
@@ -123,9 +135,13 @@ export class AppCoordinator {
       onP2PConnected: (cfg) => this.startP2PMatch(cfg)
     });
 
-    try { this.cardPack = loadSavedCardPack(); }
-    catch (error) { console.warn('自定义卡包加载失败：', error); }
-    this.cardEditor = new CardEditor(this.cardPack, pack => { this.cardPack = pack; });
+    // 自定义内容（工坊）：先注册自定义势力/主城/词条，再建卡组编辑器
+    try { setKeywordRegistrar(registerKeyword); loadCustom(); }
+    catch (error) { console.warn('自定义内容加载失败：', error); }
+    injectFactionStyles();
+    onCustomChange(() => injectFactionStyles());
+    this.deckBuilder = new DeckBuilder({ onChange: () => this._refreshDeckSelect?.() });
+    this.workshop = new Workshop({ onChange: () => this._refreshDeckSelect?.() });
     this.audio = new AudioDirector();
     this.audio.setScene('lobby');
     this.audio.armUnlock(doc);
@@ -141,6 +157,17 @@ export class AppCoordinator {
     this._bindHomeScreen();
     this._setupBoardFit();
     this.showHome();
+
+    // 卡组分享链接：?deck=SGK1-… 直接打开导入
+    try {
+      const deckCode = new URLSearchParams(globalThis.location?.search || '').get('deck');
+      if (deckCode) {
+        this.deckBuilder.renderImport(deckCode);
+        const u = new URL(globalThis.location.href);
+        u.searchParams.delete('deck');
+        globalThis.history?.replaceState(null, '', u.toString());
+      }
+    } catch { /* ignore */ }
 
     // 邀请链接：?room=1234 直接进入联机并加入房间
     try {
@@ -203,7 +230,15 @@ export class AppCoordinator {
       }
     } catch { /* ignore */ }
     // 选中/瞄准时显示“取消”按钮
+    // 切到后台：暂停动画、音乐，省电
+    const onVis = () => {
+      const hidden = doc.hidden;
+      doc.body.classList.toggle('page-hidden', hidden);
+      this.audio?.setBackground?.(hidden);
+    };
+    doc.addEventListener('visibilitychange', onVis);
     setInterval(() => {
+      if (doc.hidden) return;
       const busy = Boolean(this.interaction?._isBusySelecting?.()) && !doc.body.classList.contains('at-home');
       doc.body.classList.toggle('is-selecting', busy);
     }, 150);
@@ -257,11 +292,12 @@ export class AppCoordinator {
     const doc = typeof document !== 'undefined' ? document : globalThis.document;
     if (!doc) return;
     const on = (id, fn) => doc.getElementById(id)?.addEventListener('click', fn);
-    on('home-btn-pve', () => this._pickHq({ lan: false }, (k, hq, enemy) => this.startSoloMatch({ faction: 'WEI', kingdom: k, hq, enemyKingdom: enemy })));
+    on('home-btn-pve', () => this._pickHq({ lan: false }, (k, hq, enemy, deckId, mode) => this.startSoloMatch({ faction: 'WEI', kingdom: k, hq, enemyKingdom: enemy, deckId, mode })));
     on('home-btn-pvp', () => this.networkModal.show('tab-host'));
     on('home-btn-eve', () => this.startSandboxMatch({ stepSpeedMs: 750 }));
     on('home-btn-rules', () => doc.getElementById('modal-rulebook')?.classList.remove('hidden'));
-    on('home-btn-editor', () => this.cardEditor?.show());
+    on('home-btn-decks', () => this.deckBuilder.open());
+    on('home-btn-editor', () => this.workshop.open());
     on('btn-game-over-home', () => this.showHome());
     on('btn-go-home', () => this.showHome());
     const gallery = doc.getElementById('home-gallery');
@@ -281,41 +317,80 @@ export class AppCoordinator {
     const doc = globalThis.document;
     const modal = doc?.getElementById('modal-hq-pick');
     const box = doc?.getElementById('hq-pick-options');
-    const ALL = ['wei', 'shu', 'wu', 'lb'];
-    let kingdom = this._lastKingdom || 'wei';
+    const BUILTIN = ['wei', 'shu', 'wu', 'lb'];
+    // 自定义势力：有主城即可选择，但需要一套合法卡组才能开局（人机对手只用内置势力）
+    const ALL = [...BUILTIN, ...customFactions().map(f => f.key).filter(key => KINGDOMS[key] && HQ_CARDS[key]?.length)];
+    let kingdom = ALL.includes(this._lastKingdom) ? this._lastKingdom : 'wei';
     let enemy = 'RANDOM';
-    if (!modal || !box) { onPick(kingdom, 'RANDOM', 'RANDOM'); return; }
+    let mode = this._lastMode || 'single';
+    if (!modal || !box) { onPick(kingdom, 'RANDOM', 'RANDOM', null, mode); return; }
     const T = { PLAIN: '平原', WATER: '水域', FOREST: '林地', MOUNTAIN: '山地', PASS: '险关' };
-    const close = () => modal.classList.add('hidden');
-    const done = (hq) => { close(); this._lastKingdom = kingdom; onPick(kingdom, hq, enemy); };
+    const close = () => { modal.classList.add('hidden'); this._refreshDeckSelect = null; };
+    const deckBox = doc.getElementById('hq-pick-deck');
+    let deckId = null;
+    const fillDecks = () => {
+      if (!deckBox) return;
+      const decks = listDecks({ mode, kingdom }).filter(d => validateDeck(d).ok);
+      const want = lastDeckId(kingdom, mode);
+      deckId = decks.some(d => d.id === deckId) ? deckId : (decks.find(d => d.id === want) || decks[0])?.id || null;
+      if (!decks.length) {
+        deckBox.innerHTML = `<span class="hqp-deck-empty">${BUILTIN.includes(kingdom) ? '将使用默认卡组' : '还没有合法卡组，点“管理”去组一套'}</span>`;
+        return;
+      }
+      deckBox.replaceChildren(...decks.map(d => {
+        const b = doc.createElement('button');
+        b.type = 'button';
+        b.className = `hqp-deck${d.id === deckId ? ' active' : ''}`;
+        b.setAttribute('role', 'option');
+        b.setAttribute('aria-selected', String(d.id === deckId));
+        const { byType } = deckStats(d);
+        b.innerHTML = `<span class="hqp-deck-name">${d.official ? '<i class="hqp-deck-tag">官方</i>' : ''}${escapeHtml(d.name.replace(/（推荐）$/, ''))}</span>
+          <span class="hqp-deck-meta">单位${byType.UNIT} · 战法${byType.TACTIC} · 反制${byType.COUNTER}</span>`;
+        b.onclick = () => { deckId = d.id; fillDecks(); };
+        return b;
+      }));
+      deckBox.querySelector('.active')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    };
+    this._refreshDeckSelect = fillDecks;
+    const editBtn = doc.getElementById('hq-pick-deck-edit');
+    if (editBtn) editBtn.onclick = () => { this.deckBuilder.kingdomFilter = kingdom; this.deckBuilder.mode = mode; this.deckBuilder.open(); };
+    const done = (hq) => {
+      if (!BUILTIN.includes(kingdom) && !deckId) { FX.showTriggerHint(`【${KINGDOMS[kingdom]?.name || '自定义'}】需要先组一套合法卡组`); return; }
+      if (deckId) rememberDeckFor(kingdom, mode, deckId);
+      close(); this._lastKingdom = kingdom; this._lastMode = mode; onPick(kingdom, hq, enemy, deckId, mode);
+    };
     const chips = (container, opts, current, onSel) => {
       if (!container) return;
       container.replaceChildren(...opts.map(([k, label]) => {
         const b = doc.createElement('button');
-        b.className = `enemy-chip${k === current ? ' active' : ''}`;
+        b.type = 'button';
+        b.className = `enemy-chip k-${k}${k === current ? ' active' : ''}`;
         b.textContent = label;
         b.onclick = () => onSel(k);
         return b;
       }));
     };
     const draw = () => {
+      chips(doc.getElementById('hq-pick-mode-options'), [['single', '单阵营'], ['dual', '双阵营·测试']], mode, m => { mode = m; draw(); });
+      const selfLabel = doc.getElementById('hq-pick-self-label');
+      if (selfLabel) selfLabel.textContent = mode === 'dual' ? '主阵营' : '我方';
       chips(doc.getElementById('hq-pick-self-options'), ALL.map(k => [k, KINGDOMS[k].name]), kingdom, k => { kingdom = k; if (enemy === k) enemy = 'RANDOM'; draw(); });
-      const enemyRow = doc.getElementById('hq-pick-enemy-row');
-      if (enemyRow) enemyRow.style.display = lan ? 'none' : '';
-      chips(doc.getElementById('hq-pick-enemy-options'), [['RANDOM', '随机'], ...ALL.filter(k => k !== kingdom).map(k => [k, KINGDOMS[k].name])], enemy, k => { enemy = k; draw(); });
+      fillDecks();
+      for (const id of ['hq-pick-enemy-label', 'hq-pick-enemy-options']) { const el = doc.getElementById(id); if (el) el.style.display = lan ? 'none' : ''; }
+      chips(doc.getElementById('hq-pick-enemy-options'), [['RANDOM', '随机'], ...BUILTIN.filter(k => k !== kingdom).map(k => [k, KINGDOMS[k].name])], enemy, k => { enemy = k; draw(); });
       box.replaceChildren(...HQ_CARDS[kingdom].map(hq => {
         const card = doc.createElement('button');
         card.className = `hq-card hq-card-${kingdom}`;
         card.innerHTML = `<span class="hq-card-name">${hq.name}</span>
           <span class="hq-card-terrains">${hq.terrains.map(t => `<i class="terrain-chip chip-${t.toLowerCase()}">${T[t]}</i>`).join('')}</span>
-          <span class="hq-card-shield">${hq.hp}</span>
+          <span class="hq-card-shield">${mode === 'dual' ? DUAL.HQ_HP : hq.hp}</span>
           <span class="hq-card-grain">粮草 1–10</span>`;
         card.onclick = () => done(hq.id);
         return card;
       }));
     };
     const title = modal.querySelector('.hq-pick-title');
-    if (title) title.textContent = lan ? '联机：选择势力与主城' : '人机：选择势力与主城';
+    if (title) title.textContent = lan ? '联机 · 整军备战' : '出征 · 整军备战';
     draw();
     doc.getElementById('hq-pick-random').onclick = () => done('RANDOM');
     const cancelBtn = doc.getElementById('hq-pick-cancel');
@@ -397,7 +472,7 @@ export class AppCoordinator {
     if (!doc) return;
 
     for (const id of ['btn-open-card-editor', 'btn-open-card-editor-start']) {
-      doc.getElementById(id)?.addEventListener('click', () => this.cardEditor?.show());
+      doc.getElementById(id)?.addEventListener('click', () => this.workshop.open());
     }
     const updateAudioControls = () => {
       const muted = this.audio?.muted;
@@ -406,7 +481,9 @@ export class AppCoordinator {
       if (drawerButton) { drawerButton.textContent = muted ? '🔇' : '🔊'; drawerButton.setAttribute('aria-label', muted ? '开启音频' : '关闭音频'); }
       if (lobbyButton) lobbyButton.textContent = muted ? '🔇 音乐关闭' : '🔊 音乐开启';
       const homeButton = doc.getElementById('home-btn-audio');
-      if (homeButton) homeButton.textContent = muted ? '🔇 音乐关闭' : '🔊 音乐开启';
+      const homeLabel = homeButton?.querySelector('.hl-label');
+      if (homeLabel) homeLabel.textContent = muted ? '已静音' : '音乐';
+      homeButton?.classList.toggle('is-off', Boolean(muted));
     };
     for (const id of ['btn-audio-toggle', 'btn-audio-toggle-lobby', 'home-btn-audio']) {
       doc.getElementById(id)?.addEventListener('click', () => { this.audio.setMuted(!this.audio.muted); updateAudioControls(); });
@@ -887,15 +964,32 @@ export class AppCoordinator {
   // Mode Initializers
   // ==========================================
 
-  _newMatchOptions(hqs = {}, kingdoms = {}) {
+  _newMatchOptions(hqs = {}, kingdoms = {}, decks = {}, mode = 'single') {
     const k = { WEI: kingdoms.WEI || 'wei', SHU: kingdoms.SHU || 'shu' };
     setSeatKingdoms(k);
-    return {
+    const opts = {
       autoInit: true, seed: createMatchSeed(), shuffleDecks: true, randomTerrains: true,
       weiHq: hqs.WEI || 'RANDOM', shuHq: hqs.SHU || 'RANDOM',
-      weiKingdom: k.WEI, shuKingdom: k.SHU,
-      ...buildDeckOptions(this.cardPack, k)
+      weiKingdom: k.WEI, shuKingdom: k.SHU
     };
+    // 选定的卡组（官方预设或自组）：覆盖该座位的默认卡组
+    const dual = mode === 'dual';
+    if (dual) opts.initialHp = DUAL.HQ_HP;
+    for (const seat of ['WEI', 'SHU']) {
+      let deck = decks[seat];
+      const ok = deck && deck.kingdom === k[seat] && (deck.mode || 'single') === mode && validateDeck(deck).ok;
+      if (!ok) deck = dual ? this._defaultDualDeck(k[seat]) : null;
+      if (!deck) continue;
+      const pre = seat === 'WEI' ? 'wei' : 'shu';
+      opts[`${pre}Deck`] = deckCardDefs(deck).map(def => createCard(def, { faction: seat, kingdom: def.kingdom || k[seat] }));
+      opts[`${pre}Reserve`] = [deck.kingdom, deck.subKingdom].filter(Boolean).flatMap(x => createKingdomDeck(x, seat).reservePool);
+    }
+    return opts;
+  }
+
+  /** 双阵营默认卡组：该势力做主阵营的推荐预设 */
+  _defaultDualDeck(kingdom) {
+    return dualPresets().find(d => d.kingdom === kingdom) || generateDualDeck(kingdom, KINGDOM_KEYS.find(x => x !== kingdom));
   }
 
   startSoloMatch(cfg = {}) {
@@ -912,7 +1006,9 @@ export class AppCoordinator {
     this.lastMatch.cfg = { ...cfg, kingdom: myKingdom, enemyKingdom };
     this.rulesEngine = new RulesEngine(this._newMatchOptions(
       { [this.localPlayerId]: cfg.hq || 'RANDOM' },
-      { [this.localPlayerId]: myKingdom, [this.opponentPlayerId]: enemyKingdom }
+      { [this.localPlayerId]: myKingdom, [this.opponentPlayerId]: enemyKingdom },
+      { [this.localPlayerId]: cfg.deckId ? getDeck(cfg.deckId) : null },
+      cfg.mode || 'single'
     ));
     this.lastProcessedLogIndex = 0;
 
@@ -1026,6 +1122,11 @@ export class AppCoordinator {
     const onLobby = (ev) => {
       const msg = parse(ev);
       if (!msg || msg.type !== 'LOBBY_PICK') return;
+      // 对方卡组里的自定义卡/势力：只登记到本局内存
+      if (msg.deck?.x && !theirPick) {
+        const { remap } = registerGuest(msg.deck.x);
+        if (Object.keys(remap).length) msg.deck.cards = Object.fromEntries(Object.entries(msg.deck.cards || {}).map(([id, n]) => [remap[id] || id, n]));
+      } else if (theirPick?.deck && msg.deck) msg.deck.cards = theirPick.deck.cards;
       if (!theirPick) FX.showTriggerHint(`对方已选定【${kName(msg.kingdom)}】${myPick ? '' : '，等你选择…'}`);
       theirPick = msg;
       if (isHost) tryStart();
@@ -1034,15 +1135,22 @@ export class AppCoordinator {
       if (started || !myPick || !theirPick) return;
       started = true;
       unlisten(onLobby);
-      const ours = KINGDOM_KEYS.includes(myPick.kingdom) ? myPick.kingdom : 'wei';
-      const theirs = KINGDOM_KEYS.includes(theirPick.kingdom) ? theirPick.kingdom : 'shu';
-      this._beginHostMatch(peerConnection, { WEI: myPick.hq || 'RANDOM', SHU: theirPick.hq || 'RANDOM' }, { WEI: ours, SHU: theirs });
+      const known = k => KINGDOM_KEYS.includes(k) || (KINGDOMS[k] && HQ_CARDS[k]?.length);
+      const ours = known(myPick.kingdom) ? myPick.kingdom : 'wei';
+      const theirs = known(theirPick.kingdom) ? theirPick.kingdom : 'shu';
+      // 模式以房主为准；对方卡组模式不符或不合法时，用该势力的默认卡组
+      const mode = myPick.mode === 'dual' ? 'dual' : 'single';
+      const deckOf = (pick, k) => (pick.deck && pick.deck.kingdom === k && (pick.deck.mode || 'single') === mode && validateDeck(pick.deck).ok ? pick.deck : null);
+      if ((theirPick.mode || 'single') !== mode) FX.showTriggerHint(`对方选择的模式与房主不同，按房主的${mode === 'dual' ? '双阵营' : '单阵营'}模式开局`);
+      this._beginHostMatch(peerConnection, { WEI: myPick.hq || 'RANDOM', SHU: theirPick.hq || 'RANDOM' }, { WEI: ours, SHU: theirs },
+        { WEI: deckOf(myPick, ours), SHU: deckOf(theirPick, theirs) }, mode);
     };
     listen(onLobby);
     if (!isHost) this._beginClientMatch(peerConnection);
 
-    this._pickHq({ lan: true, onCancel: leave }, (k, hq) => {
-      myPick = { type: 'LOBBY_PICK', kingdom: k, hq };
+    this._pickHq({ lan: true, onCancel: leave }, (k, hq, _enemy, deckId, mode) => {
+      const d = deckId ? getDeck(deckId) : null;
+      myPick = { type: 'LOBBY_PICK', kingdom: k, hq, mode, deck: d ? { kingdom: d.kingdom, subKingdom: d.subKingdom, mode: d.mode, name: d.name, cards: d.cards, x: customPayloadFor(d) } : null };
       if (!theirPick) FX.showTriggerHint('已选定，等待对方选择…');
       send(myPick);
       if (isHost) { tryStart(); return; }
@@ -1054,9 +1162,9 @@ export class AppCoordinator {
     });
   }
 
-  _beginHostMatch(peerConnection, hqs, kingdoms) {
+  _beginHostMatch(peerConnection, hqs, kingdoms, decks = {}, mode = 'single') {
     {
-      this.rulesEngine = new RulesEngine(this._newMatchOptions(hqs, kingdoms));
+      this.rulesEngine = new RulesEngine(this._newMatchOptions(hqs, kingdoms, decks, mode));
       if (this.rulesEngine.state.phase === PHASES.MULLIGAN) startTurn(this.rulesEngine.state, this.rulesEngine.state.firstPlayer);
       this.hostSync = new HostSyncManager({
         rulesEngine: this.rulesEngine,
@@ -1228,6 +1336,7 @@ export class AppCoordinator {
   }
 
   _tickTurnClock() {
+    if (globalThis.document?.hidden) return;
     this.turnClock.tick();
     this._renderTurnClock();
     try { this._tickChoiceTimer(); } catch { /* ignore */ }

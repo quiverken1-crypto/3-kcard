@@ -18,14 +18,14 @@ import {
   escapeHtml
 } from './cardRenderer.js';
 import { KEYWORDS, hasKeyword } from '../engine/constants.js';
-import { getAttackValue, getActionCost } from '../engine/cardSkills.js';
+import { getAttackValue, getActionCost, qiMouDiscount } from '../engine/cardSkills.js';
 import { kingdomOf, seatChar } from './seats.js';
 
 export const TERRAIN_EFFECTS = Object.freeze({
   PLAIN: { short: '容纳3 · 无特殊效果', detail: '平原：容纳3个单位，无特殊效果。' },
   WATER: { short: '容纳4 · 水军如鱼得水', detail: '水域：容纳4个单位。只有水军（及可视为水军的关羽）能在此同时移动和攻击。' },
   FOREST: { short: '容纳2 · 先登 · 惧火', detail: '林地：容纳2个单位。此处单位获得【先登】；此处单位受到的火攻伤害翻倍（埋伏一手，但是怕火）。' },
-  PASS: { short: '容纳2 · 每回合限受击1次', detail: '险关：容纳2个单位。此处单位每回合最多被攻击1次（易守难攻）。' },
+  PASS: { short: '容纳2 · 坚阵+1 · 限击1次', detail: '险关：容纳2个单位。此处单位获得坚阵+1，每回合最多被攻击1次（易守难攻）。' },
   MOUNTAIN: { short: '容纳2 · 皆为步兵 · 矢石', detail: '山地：容纳2个单位。此处所有单位视为步兵，并获得【矢石】（行路艰难，但是居高临下）。另：无当飞军行动-1，黄忠战力+2并获先登。' }
 });
 
@@ -166,7 +166,7 @@ export function renderBoard(container, state, viewerFaction = 'WEI', options = {
   // 4. Render Player Hand Cards
   const handContainer = document.getElementById('hand-container');
   if (handContainer && state.players?.[viewerFaction]?.hand) {
-    renderHandFan(handContainer, state.players[viewerFaction], options);
+    renderHandFan(handContainer, state.players[viewerFaction], { ...options, tacticDiscount: qiMouDiscount(state, viewerFaction) });
   }
 }
 
@@ -307,12 +307,14 @@ export function renderHandFan(container, playerData, options = {}) {
   const prestigeDiscount = (!playerData.prestigeDiscountUsed && playerData.prestige > 0)
     ? playerData.prestige
     : 0;
+  const tacticDiscount = options.tacticDiscount || 0;
 
   const cardEls = [];
   hand.forEach((card) => {
     const cardEl = renderHandCard(card, {
       ...options,
-      prestigeDiscount
+      prestigeDiscount,
+      tacticDiscount
     });
     container.appendChild(cardEl);
     cardEls.push(cardEl);
@@ -328,27 +330,29 @@ export function renderHandFan(container, playerData, options = {}) {
 export function fitHandStrip(container = document.getElementById('hand-container')) {
   if (!container) return;
   const cards = [...container.querySelectorAll('.card-hand')];
-  cards.forEach(c => { c.style.marginLeft = ''; });
+  cards.forEach(c => { c.style.marginLeft = ''; c.style.zoom = ''; });
+  container.classList.remove('hand-dense', 'hand-scroll');
+  container.parentElement?.classList.remove('hand-tray-scroll');
   if (!document.body.classList.contains('m-land') || cards.length < 2) return;
+  // 手牌不再互相叠压：放不下时按比例缩小每张牌（选中的牌会放大显示）
   const tray = container.parentElement || container;
   const avail = tray.clientWidth - 12;
   const first = cards[0].getBoundingClientRect();
-  const second = cards[1].getBoundingClientRect();
-  const step = second.left - first.left;          // 当前相邻两张牌的间距（屏幕像素）
-  const total = step * (cards.length - 1) + first.width;
-  if (!(total > avail) || step <= 0) return;
-  const wantStep = Math.max(first.width * 0.28, (avail - first.width) / (cards.length - 1));
-  const reduce = step - wantStep;                  // 每张需要多叠的屏幕像素
-  const zf = first.width / (cards[0].offsetWidth || first.width) || 1; // zoom 系数
-  const apply = (px) => cards.slice(1).forEach(c => { c.style.marginLeft = `${px}px`; });
-  let m = -reduce / zf;
-  apply(m);
-  // 校验一次：不同浏览器对 zoom 下 margin 的换算不同
-  const realStep = cards[1].getBoundingClientRect().left - cards[0].getBoundingClientRect().left;
-  if (Math.abs(realStep - wantStep) > 1) {
-    const perUnit = (step - realStep) / -m;       // 每 1px margin 实际移动多少屏幕像素
-    if (perUnit > 0) { m = -reduce / perUnit; apply(m); }
-  }
+  const last = cards[cards.length - 1].getBoundingClientRect();
+  const total = last.right - first.left;
+  if (!(total > avail)) return;
+  const z0 = parseFloat(getComputedStyle(cards[0]).zoom) || 1;
+  const gap = cards.length > 1 ? (cards[1].getBoundingClientRect().left - first.right) : 0;
+  const widths = total - gap * (cards.length - 1);
+  const fit = (avail - gap * (cards.length - 1)) / widths;
+  // 缩到 80% 仍放不下：保持 80%，改为左右滑动查看（仍然不叠压）
+  const f = Math.max(0.8, fit);
+  const z = +(z0 * f).toFixed(3);
+  cards.forEach(c => { c.style.zoom = String(z); });
+  container.classList.toggle('hand-scroll', fit < 0.8);
+  tray.classList.toggle('hand-tray-scroll', fit < 0.8);
+  if (fit < 0.8 && !tray._handScrolled) tray.scrollLeft = 0;
+  if (!tray._handScrollBound) { tray._handScrollBound = true; tray.addEventListener('scroll', () => { tray._handScrolled = tray.scrollLeft > 0; }, { passive: true }); }
 }
 
 /**

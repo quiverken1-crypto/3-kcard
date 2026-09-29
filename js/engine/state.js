@@ -94,6 +94,7 @@ export function createCard(def = {}, overrides = {}) {
     skill: def.skill ? { ...def.skill } : null,
     audioCue: def.audioCue || 'auto',
     abilities: Array.isArray(def.abilities) ? structuredClone(def.abilities) : [],
+    ...(def.pending ? { pending: true } : {}),
     onDeploy: def.onDeploy || null,
     onKill: def.onKill || null,
     onDeath: def.onDeath || null,
@@ -105,6 +106,8 @@ export const createCardInstance = createCard;
 
 /** 按势力（wei/shu/wu/lb）生成卡组；seat 为对局座位（WEI/SHU），卡牌归属于座位 */
 export function createKingdomDeck(kingdom, seat) {
+  // 自定义势力没有标准卡组：返回空（卡牌由玩家卡组提供）
+  if (kingdom && !DB_DECKS[kingdom] && !['WEI', 'SHU'].includes(String(kingdom).toUpperCase())) return { mainDeck: [], reservePool: [] };
   const deck = DB_DECKS[kingdom] || DB_DECKS.wei;
   const inst = instantiateDeck({ main: deck.main, reserve: deck.reserve }, CARD_MAP, def => createCard(def, { faction: seat, kingdom: def.kingdom || kingdom }));
   return inst;

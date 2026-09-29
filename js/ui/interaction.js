@@ -13,7 +13,7 @@
 import { ACTION_TYPES, KEYWORDS, STATUS_TYPES, hasKeyword } from '../engine/constants.js';
 import { getValidTargets, validateAttack } from '../engine/combat.js';
 import { findUnit, getAllUnits } from '../engine/state.js';
-import { getTacticTargets, getDeployTargets, tacticBlockReason, getActiveSkill, activeSkillBlockReason, getActionCost, actsLikeCavalry as skillActsLikeCavalry } from '../engine/cardSkills.js';
+import { getTacticTargets, getDeployTargets, tacticBlockReason, getActiveSkill, activeSkillBlockReason, canDeployToFrontline, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getCardPlayCost } from '../engine/cardSkills.js';
 import { CardInspector } from './cardRenderer.js';
 import { getUnitMoveZones, unitHasUsefulAction } from '../engine/unitOptions.js';
 import { previewAction, estimateAttack } from '../engine/preview.js';
@@ -183,6 +183,23 @@ export class InteractionController {
 
   _isTouch(e) { return Boolean(e?.pointerType) && e.pointerType !== 'mouse'; }
 
+  /** 非己方回合：不能操作，但仍可点按查看卡牌/单位说明 */
+  _peekInfo(e, fromHand) {
+    if (!this._isTouch(e) || !this.gameState) return;
+    if (fromHand) {
+      const el = e.target?.closest?.('.card-hand');
+      const card = el && this.gameState.players?.[this.localPlayerId]?.hand?.find(c => c.instanceId === el.dataset?.instanceId);
+      if (card) this._showTouchInfo(card, el);
+      return;
+    }
+    const unitEl = e.target?.closest?.('.board-unit');
+    if (!unitEl || unitEl.dataset?.isFaceDown === 'true') return;
+    const loc = findUnit(this.gameState, unitEl.dataset.instanceId);
+    if (!loc?.unit) return;
+    const u = loc.unit.faction === this.localPlayerId && loc.unit.status?.isFaceDown ? { ...loc.unit, status: { ...loc.unit.status, isFaceDown: false } } : loc.unit;
+    this._showTouchInfo(u, unitEl);
+  }
+
   _showTouchInfo(card, el) {
     try { CardInspector.show(card, el.getBoundingClientRect()); } catch { /* ignore */ }
     clearTimeout(this._infoTimer);
@@ -221,7 +238,7 @@ export class InteractionController {
     if (this._isNonPrimary(e)) return;
     if (this.pendingTactic) this._endTacticTargeting();
     this._hideSkillButton();
-    if (this.state === INTERACTION_STATE.DISABLED) return;
+    if (this.state === INTERACTION_STATE.DISABLED) { this._peekInfo(e, true); return; }
     if (this.state === INTERACTION_STATE.TARGETING) {
       this.cancelSelection();
     }
@@ -247,10 +264,7 @@ export class InteractionController {
     if (this._isTouch(e)) this._showTouchInfo(card, cardEl);
 
     // Check provision affordability
-    let cost = card.cost ?? 0;
-    if (card.type === 'UNIT' && !player.prestigeDiscountUsed && player.prestige > 0) {
-      cost = Math.max(0, cost - player.prestige);
-    }
+    const cost = getCardPlayCost(this.gameState, this.localPlayerId, card);
     if (player.provisions < cost) {
       this._triggerShake(cardEl);
       this._showToast(`粮草不足 (需 ${cost} 粮草，当前仅存 ${player.provisions})`);
@@ -287,13 +301,8 @@ export class InteractionController {
       }
 
       // Frontline deployment (requires 奇袭)
-      if (hasKeyword(card, KEYWORDS.QI_XI)) {
-        for (const zk of ['LEFT', 'CENTER', 'RIGHT']) {
-          const zone = bf.frontline?.[zk];
-          if (zone && (zone.occupant === null || zone.occupant === this.localPlayerId) && zone.units.length < zone.capacity) {
-            this.legalDropZones.add(zk);
-          }
-        }
+      for (const zk of ['LEFT', 'CENTER', 'RIGHT']) {
+        if (canDeployToFrontline(this.gameState, card, this.localPlayerId, zk)) this.legalDropZones.add(zk);
       }
     } else if (card.type === 'TACTIC' || card.type === 'COUNTER') {
       this.legalDropZones.add('BATTLEFIELD');
@@ -333,7 +342,7 @@ export class InteractionController {
     if (this._isNonPrimary(e)) return;
     this._hideSkillButton();
     this._lastPointer = { x: e.clientX ?? 0, y: e.clientY ?? 0 };
-    if (this.state === INTERACTION_STATE.DISABLED) return;
+    if (this.state === INTERACTION_STATE.DISABLED) { this._peekInfo(e, false); return; }
 
     if (this.pendingSkill) {
       this._endSkillMode();

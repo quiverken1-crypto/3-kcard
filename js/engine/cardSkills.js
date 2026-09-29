@@ -12,6 +12,7 @@ import { FACTIONS, PHASES, STATUS_TYPES, TROOP_TYPES, GAME_CONFIG, hasKeyword } 
 import {
   drawCard, adjustPrestige, getAllUnits, findUnit, removeUnitFromBoard, registerTurnHooks
 } from './state.js';
+import { registerAbilityHooks, applyUnitEffect, auraModifiers } from './abilities.js';
 
 // ==========================================
 // 0. 通用工具
@@ -67,18 +68,42 @@ export function isGuardedHq(state, faction) {
   return Boolean(first && active(first) && hasKeyword(first, '守护'));
 }
 
-function terrainOf(state, loc) {
+/** 器械（霹雳车、发石车等）：完全不受地形影响 */
+export const isSiegeEngine = unit => unit?.troopType === TROOP_TYPES.ARCHER;
+export const ignoresTerrain = unit => Boolean(unit) && isSiegeEngine(unit);
+/** 张郃·巧变：自己无视地形负面效果（山地视为步兵、林地火攻翻倍），地形增益照常 */
+const ignoresTerrainPenalty = unit => ignoresTerrain(unit) || isId(unit, 'wei_zhang_he');
+
+/** 地形；忽略地形的单位视为没有地形 */
+function terrainOf(state, loc, unit = null) {
+  if (unit && ignoresTerrain(unit)) return null;
   return loc?.zoneType === 'FRONTLINE' ? state.battlefield.frontline[loc.zoneKey]?.terrain : null;
 }
+export function unitTerrain(state, unit, loc = null) {
+  loc ||= findUnit(state, unit?.instanceId);
+  return terrainOf(state, loc, unit);
+}
 
-const onMountain = (state, loc) => terrainOf(state, loc)?.type === 'MOUNTAIN';
-const inForest = (state, loc) => terrainOf(state, loc)?.type === 'FOREST';
+const onMountain = (state, loc, unit = null) => terrainOf(state, loc, unit)?.type === 'MOUNTAIN';
+const inForest = (state, loc, unit = null) => terrainOf(state, loc, unit)?.type === 'FOREST';
+
+/**
+ * 能否从手牌直接部署到某条前线：
+ * 【奇袭】可部署到空置或己方占领的区域；器械可直接部署到己方已占领的区域。
+ */
+export function canDeployToFrontline(state, card, owner, zoneKey) {
+  const z = state.battlefield.frontline?.[zoneKey];
+  if (!z || z.units.length >= z.capacity) return false;
+  if (hasKeyword(card, '奇袭') && (z.occupant === null || z.occupant === owner)) return true;
+  if (isSiegeEngine(card) && z.occupant === owner) return true;
+  return false;
+}
 
 /** 山地：此处所有单位视为步兵 */
 export function effectiveTroop(state, unit, loc = null) {
   if (!unit) return null;
   loc ||= findUnit(state, unit.instanceId);
-  return onMountain(state, loc) ? TROOP_TYPES.INFANTRY : unit.troopType;
+  return onMountain(state, loc, unit) && !ignoresTerrainPenalty(unit) ? TROOP_TYPES.INFANTRY : unit.troopType;
 }
 
 /** 矢石：自身词条，或位于山地（居高临下） */
@@ -86,13 +111,13 @@ export function hasShiShi(state, unit, loc = null) {
   if (!unit) return false;
   if (Array.isArray(unit.keywords) && unit.keywords.includes('矢石')) return true;
   loc ||= findUnit(state, unit.instanceId);
-  return onMountain(state, loc);
+  return onMountain(state, loc, unit);
 }
 
 /** 林地：火攻伤害翻倍 */
 export function fireMultiplier(state, unit, loc = null) {
   loc ||= findUnit(state, unit.instanceId);
-  return inForest(state, loc) ? 2 : 1;
+  return inForest(state, loc, unit) && !ignoresTerrainPenalty(unit) ? 2 : 1;
 }
 
 function ensureTurnFx(state) {
@@ -235,12 +260,85 @@ const CHOICE_SPECS = {
       log(state, pid, `程昱·捕粮：弃置【${card.name}】，额外获得2粮草`);
     }
   },
+  shengDong: {
+    source: '声东击西', prompt: '选择手牌中1个单位上场换防', pool: 'hand',
+    auto: list => [...list].sort(byValueDesc)[0],
+    apply(state, pid, card, choice) {
+      const target = findUnit(state, choice?.boardTargetId)?.unit;
+      if (target) shengDongSwap(state, pid, target, card);
+    }
+  },
+  chongZheng: {
+    source: '重整旗鼓', prompt: '选择1张弃牌区的卡加入手牌', pool: 'option',
+    auto: (list, state, pid) => {
+      const d = state.players[pid].discard;
+      const best = [...d].filter(c => list.some(o => o.instanceId === c.instanceId)).sort(byValueDesc)[0];
+      return list.find(o => o.instanceId === best?.instanceId) || list[0];
+    },
+    apply(state, pid, opt) {
+      const d = state.players[pid].discard;
+      const card = d.find(c => c.instanceId === opt.instanceId);
+      if (!card) return;
+      d.splice(d.indexOf(card), 1);
+      resetCardState(card);
+      card.faction = pid;
+      putInHand(state, pid, card);
+      log(state, pid, `重整旗鼓：【${card.name}】重回手牌`);
+    }
+  },
+  block: {
+    source: '技能', prompt: '选择目标',
+    auto: (list, state, pid) => {
+      const enemy = list[0] && list[0].faction !== pid;
+      return enemy ? [...list].sort((a, b) => a.hp - b.hp)[0] : [...list].sort((a, b) => b.atk - a.atk)[0];
+    },
+    apply(state, pid, t, choice) { if (choice?.effect) applyUnitEffect(state, choice.effect, pid, t); }
+  },
   faZheng: {
     source: '法正·谋主', prompt: '选择1个友方单位，获得+1+1',
     auto: list => [...list].filter(isMilitary).sort((a, b) => b.atk - a.atk)[0] || list[0],
     apply(state, pid, t) { buff(t, 1, 1); log(state, pid, `法正·谋主：【${t.name}】获得+1+1`); }
   }
 };
+
+/** 声东击西：手牌单位 incoming 与场上友军 target 换防 */
+function shengDongSwap(state, owner, target, incoming) {
+  const player = state.players[owner];
+  const loc = findUnit(state, target.instanceId);
+  if (!loc || !player.hand.includes(incoming)) return;
+  const zoneArr = zoneUnitsOf(state, loc);
+  const idx = zoneArr.indexOf(target);
+  player.hand.splice(player.hand.indexOf(incoming), 1);
+  removeUnitFromBoard(state, target.instanceId, true, { silent: true });
+  resetCardState(target);
+  zoneArr.splice(Math.min(idx, zoneArr.length), 0, incoming);
+  if (loc.zoneType === 'FRONTLINE') state.battlefield.frontline[loc.zoneKey].occupant = owner;
+  incoming.faction = owner;
+  incoming.status[STATUS_TYPES.DEPLOYED_THIS_TURN] = true;
+  if (!hasKeyword(incoming, '突袭')) incoming.status[STATUS_TYPES.ACTIONS_USED] = 1;
+  putInHand(state, owner, target);
+  applyEnterKeywords(state, incoming, owner);
+  onUnitEnter(state, incoming);
+  log(state, owner, `声东击西：【${incoming.name}】与【${target.name}】换防`);
+}
+
+/** 奇谋X：己方未被抑制单位的奇谋合计（战法/反制费用减免） */
+export function qiMouDiscount(state, owner) {
+  return getAllUnits(state, owner).reduce((sum, u) => {
+    if (u.status?.[STATUS_TYPES.INHIBITED]) return sum;
+    const qm = (u.keywords || []).find(k => typeof k === 'string' && k.startsWith('奇谋'));
+    return sum + (qm ? (parseInt(qm.replace('奇谋', '') || '1', 10) || 1) : 0);
+  }, 0);
+}
+
+/** 打出这张手牌实际需要的粮草：单位按声望减免，战法/反制按奇谋减免 */
+export function getCardPlayCost(state, owner, card) {
+  const p = state.players[owner];
+  const base = card?.cost ?? 0;
+  if (card?.type === 'UNIT') return (!p.prestigeDiscountUsed && p.prestige > 0) ? Math.max(0, base - p.prestige) : base;
+  if (card?.type === 'TACTIC' || card?.type === 'COUNTER') return Math.max(0, base - qiMouDiscount(state, owner));
+  return base;
+}
 
 let _choiceSeq = 0;
 function queueChoice(state, pid, kind, sourceUnit, candidates, extra = {}) {
@@ -453,15 +551,17 @@ export function getAttackValue(state, unit, loc = null, foe = null) {
   if (fx.tuChi && loc.zoneType === 'FRONTLINE' && unit.troopType === TROOP_TYPES.CAVALRY) atk += 3;
   // 以守为攻：本回合步兵按防御力（生命）造成伤害
   if (fx.defAsAtk && effectiveTroop(state, unit, loc) === TROOP_TYPES.INFANTRY && unit.faction === state.activePlayer) atk = Math.max(atk, unit.hp);
-  // 侯成·献酒（回合内临时加成）
+  // 侯成·献酒 / 积木“到回合结束”（回合内临时加成）
   atk += unit._tempAtk || 0;
+  // 积木光环
+  atk += auraModifiers(state, unit).atk;
   // 王平·镇守：己方坚阵单位在敌方回合战力+2
   if (unit.faction !== state.activePlayer && hasKeyword(unit, '坚阵') && getAllUnits(state, unit.faction).some(u => isId(u, 'shu_wang_ping'))) atk += 2;
   // 程普·石阵：己方水军战力+2
   if (unit.troopType === TROOP_TYPES.NAVY && getAllUnits(state, unit.faction).some(u => isId(u, 'wu_cheng_pu'))) atk += 2;
 
   // 黄忠·烈弓：山地战力+2（张郃·巧变无视敌方地形增益）
-  if (isId(unit, 'shu_huang_zhong') && onMountain(state, loc) && !(foe && isId(foe, 'wei_zhang_he'))) atk += 2;
+  if (isId(unit, 'shu_huang_zhong') && onMountain(state, loc, unit) && !(foe && isId(foe, 'wei_zhang_he'))) atk += 2;
 
   if (foe) {
     if (isId(unit, 'wei_zang_ba') && foe.troopType === unit.troopType) atk *= 2;
@@ -477,15 +577,15 @@ export function getAttackValue(state, unit, loc = null, foe = null) {
 export function hasVanguard(state, unit, loc = null) {
   if (unit.keywords.includes('先登')) return true;
   loc ||= findUnit(state, unit.instanceId);
-  if (inForest(state, loc)) return true; // 林地：获得先登
-  return isId(unit, 'shu_huang_zhong') && onMountain(state, loc);
+  if (inForest(state, loc, unit)) return true; // 林地：获得先登
+  return isId(unit, 'shu_huang_zhong') && onMountain(state, loc, unit);
 }
 
 export function getActionCost(state, unit, loc = null) {
   let cost = unit.actionCost ?? 1;
   loc ||= findUnit(state, unit.instanceId);
   if (!loc) return cost;
-  if (isId(unit, 'shu_wu_dang_fei_jun') && onMountain(state, loc)) cost = 0;
+  if (isId(unit, 'shu_wu_dang_fei_jun') && onMountain(state, loc, unit)) cost = 0;
   // 并州铁骑：场上有己方步兵时行动花费-1
   if (isId(unit, 'lb_bing_zhou') && getAllUnits(state, unit.faction).some(u => u !== unit && effectiveTroop(state, u) === TROOP_TYPES.INFANTRY)) cost -= 1;
   // 治军：相同兵种的其他友军行动花费-1
@@ -494,16 +594,17 @@ export function getActionCost(state, unit, loc = null) {
   const fx = ensureTurnFx(state)[unit.faction] || {};
   if (fx.wangMei && loc.zoneType === 'FRONTLINE') cost -= 1;
   if (fx.tuChi && loc.zoneType === 'FRONTLINE' && unit.troopType === TROOP_TYPES.CAVALRY) cost -= 1;
+  cost += auraModifiers(state, unit).cost;
   return Math.max(0, cost);
 }
 
 /** 关羽可同时视为水军 */
 export function actsLikeCavalry(state, unit, loc = null) {
   loc ||= findUnit(state, unit.instanceId);
-  if (onMountain(state, loc)) return false; // 山地：视为步兵
+  if (onMountain(state, loc, unit) && !ignoresTerrainPenalty(unit)) return false; // 山地：视为步兵
   if (unit.troopType === TROOP_TYPES.CAVALRY) return true;
   if (isId(unit, 'wu_gan_ning')) return true; // 锦帆：可同时视为骑兵
-  const water = terrainOf(state, loc)?.type === 'WATER';
+  const water = terrainOf(state, loc, unit)?.type === 'WATER';
   const navy = unit.troopType === TROOP_TYPES.NAVY || isId(unit, 'shu_guan_yu');
   return navy && water;
 }
@@ -1039,15 +1140,12 @@ export const TACTICS = {
   // 重整旗鼓：将1张己方弃牌区单位加入手牌
   shu_chong_zheng_qi_gu: {
     precheck: (state, owner) => state.players[owner].discard.length > 0,
-    play(state, owner) {
-      const d = state.players[owner].discard;
-      const best = [...d].sort(byValueDesc)[0];
-      if (!best) return;
-      d.splice(d.indexOf(best), 1);
-      resetCardState(best);
-      best.faction = owner;
-      putInHand(state, owner, best);
-      log(state, owner, `重整旗鼓：【${best.name}】重回手牌`);
+    play(state, owner, card) {
+      // 由玩家从弃牌区挑选（同名卡只列一张）
+      const seen = new Set();
+      const opts = state.players[owner].discard.filter(c => c !== card && c.instanceId !== undefined && !seen.has(baseId(c.cardId)) && seen.add(baseId(c.cardId)))
+        .map(c => ({ instanceId: c.instanceId, name: `${c.name}（${c.cost ?? 0}费）` }));
+      queueChoice(state, owner, 'chongZheng', null, opts);
     }
   },
   // 喘息之机：所有友方单位完全恢复，每实际恢复1个单位，抽1张牌
@@ -1070,23 +1168,10 @@ export const TACTICS = {
     play(state, owner, card, target, payload = {}) {
       const player = state.players[owner];
       const handUnits = player.hand.filter(c => c.type === 'UNIT' && Math.abs((c.cost || 0) - (target.cost || 0)) <= 4);
-      const incoming = handUnits.find(c => c.instanceId === payload.handCardId) || [...handUnits].sort(byValueDesc)[0];
-      if (!incoming) return;
-      const loc = findUnit(state, target.instanceId);
-      const zoneArr = zoneUnitsOf(state, loc);
-      const idx = zoneArr.indexOf(target);
-      player.hand.splice(player.hand.indexOf(incoming), 1);
-      removeUnitFromBoard(state, target.instanceId, true, { silent: true });
-      resetCardState(target);
-      zoneArr.splice(Math.min(idx, zoneArr.length), 0, incoming);
-      if (loc.zoneType === 'FRONTLINE') state.battlefield.frontline[loc.zoneKey].occupant = owner;
-      incoming.faction = owner;
-      incoming.status[STATUS_TYPES.DEPLOYED_THIS_TURN] = true;
-      if (!hasKeyword(incoming, '突袭')) incoming.status[STATUS_TYPES.ACTIONS_USED] = 1;
-      putInHand(state, owner, target);
-      applyEnterKeywords(state, incoming, owner);
-      onUnitEnter(state, incoming);
-      log(state, owner, `声东击西：【${incoming.name}】与【${target.name}】换防`);
+      const chosen = handUnits.find(c => c.instanceId === payload.handCardId);
+      if (chosen) { shengDongSwap(state, owner, target, chosen); return; }
+      // 由玩家从手牌里选上场的单位（15 秒未选则随机）
+      queueChoice(state, owner, 'shengDong', null, handUnits, { boardTargetId: target.instanceId });
     }
   },
   // 连弩迭射：对所有敌军造成1点伤害，若有单位被消灭，重复此效果
@@ -1468,7 +1553,11 @@ function onTurnEnd(state, pid) {
     if (u) { u.atk = rec.atk; u.actionCost = rec.act; }
   }
   // 侯成·献酒：临时战力清零
-  for (const u of [...getAllUnits(state, FACTIONS.WEI), ...getAllUnits(state, FACTIONS.SHU)]) u._tempAtk = 0;
+  for (const u of [...getAllUnits(state, FACTIONS.WEI), ...getAllUnits(state, FACTIONS.SHU)]) {
+    u._tempAtk = 0;
+    // 积木“到回合结束”获得的词条
+    if (u._tempKw?.length) { u.keywords = u.keywords.filter(k => !u._tempKw.includes(k)); u._tempKw = []; }
+  }
   // 辕门射戟：本方“不能部署”在自己回合结束时解除
   if (p.noDeployNextTurn && p._noDeployActive) { p.noDeployNextTurn = false; p._noDeployActive = false; }
   state.turnEffects[pid] = {};
@@ -1488,3 +1577,23 @@ export default {
   TACTICS, getTacticTargets, prepareTactic, resolveTactic, afterAttack, processDeaths,
   onUnitEnter, onUnitMoved, applyEnterKeywords, getAttackValue, getActionCost, damageHq, refreshAuras
 };
+
+// 积木技能：撤退 / 返回手牌 / 玩家选择目标（15 秒，超时随机）
+registerAbilityHooks({
+  retreat: (state, unit) => retreatUnit(state, unit, '技能'),
+  returnToHand: (state, unit) => {
+    if (!findUnit(state, unit.instanceId)) return false;
+    removeUnitFromBoard(state, unit.instanceId, true, { silent: true });
+    resetCardState(unit);
+    const owner = unit.originalFaction || unit.faction;
+    unit.faction = owner;
+    putInHand(state, owner, unit);
+    log(state, owner, `【${unit.name}】返回手牌`);
+    return true;
+  },
+  chooseUnit: (state, owner, source, list, effect) => {
+    const name = EFFECT_NAMES[effect.type] || '效果';
+    queueChoice(state, owner, 'block', source, list, { effect, source: source?.name || '技能', prompt: `选择${list[0]?.faction === owner ? '友军' : '敌军'}：${name}${effect.amount ? ` ${effect.amount}` : ''}${effect.keyword ? `【${effect.keyword}】` : ''}` });
+  }
+});
+const EFFECT_NAMES = { DAMAGE_UNIT: '造成伤害', HEAL_UNIT: '恢复', BUFF_ATTACK: '战力+', DEBUFF_ATTACK: '战力−', TURN_ATTACK: '本回合战力+', BUFF_HEALTH: '生命+', ACTION_COST_DOWN: '行动花费−', ACTION_COST_UP: '行动花费+', APPLY_SUPPRESSION: '压制', APPLY_INHIBITION: '抑制', REVEAL_UNIT: '翻开', RESTORE_ACTION: '恢复行动', GRANT_KEYWORD: '获得', TURN_KEYWORD: '本回合获得', REMOVE_KEYWORD: '移除', RETREAT: '撤退', RETURN_HAND: '返回手牌', DESTROY: '消灭' };

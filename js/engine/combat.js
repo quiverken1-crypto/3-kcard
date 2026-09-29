@@ -17,7 +17,7 @@ import {
 import { findUnit, getAllUnits, removeUnitFromBoard, drawCard } from './state.js';
 import {
   getAttackValue, getActionCost, actsLikeCavalry as skillActsLikeCavalry, ignoresGuardian,
-  isArtillery, isSiege, isIronWall, findBodyguard, effectiveTroop, hasShiShi, fireMultiplier, isGuardedUnit, isGuardedHq, ignoresJianZhen, immuneToShiShi, allianceBlocks, targetSurcharge, triggerCounters, hasVanguard as hasVanguardSkill, damageHq
+  isArtillery, isSiege, isIronWall, findBodyguard, effectiveTroop, hasShiShi, fireMultiplier, isGuardedUnit, isGuardedHq, unitTerrain, baseId, ignoresJianZhen, immuneToShiShi, allianceBlocks, targetSurcharge, triggerCounters, hasVanguard as hasVanguardSkill, damageHq
 } from './cardSkills.js';
 
 const getAttackStyle = unit => unit.keywords.includes(KEYWORDS.HUO_GONG) || unit.keywords.includes(KEYWORDS.SHI_SHI) || ['ARCHER', 'STRATEGIST'].includes(unit.troopType)
@@ -192,14 +192,15 @@ export function validateAttack(state, attackerId, targetId, actingPlayerId = nul
 
   // Range / Adjacency Rule:
   // Non-strategist military units in Support line cannot attack opposing Support line directly without advancing to Frontline unless Ranged/矢石
-  if (effectiveTroop(state, attacker) !== TROOP_TYPES.STRATEGIST && !hasShiShi(state, attacker) && !isArtillery(attacker) && !options.skipSupportRangeCheck) {
+  // 矢石只免反击，射程与普通单位一样（只能打相邻一线）；谋士与抛射器械除外
+  if (effectiveTroop(state, attacker) !== TROOP_TYPES.STRATEGIST && !isArtillery(attacker) && !options.skipSupportRangeCheck) {
     if (loc.zoneType === 'SUPPORT' && targetLoc.zoneType === 'SUPPORT') {
       throw new Error('Military unit in support line cannot attack opposing support line directly without advancing to Frontline unless Ranged/矢石');
     }
   }
 
   // 险关：此处单位每回合最多被攻击1次
-  if (targetLoc.zoneType === 'FRONTLINE' && state.battlefield.frontline[targetLoc.zoneKey]?.terrain?.type === 'PASS' &&
+  if (targetLoc.zoneType === 'FRONTLINE' && unitTerrain(state, defender, targetLoc)?.type === 'PASS' && baseId(attacker.cardId) !== 'wei_zhang_he' &&
       defender._attackedOnTurn === state.turnNumber) {
     throw new Error('险关：该单位本回合已被攻击过');
   }
@@ -365,10 +366,13 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
   const attackerEffectiveAtk = getEffectiveAttack(state, attacker, loc, defender);
   const defenderEffectiveAtk = getEffectiveAttack(state, defender, targetLoc, attacker);
 
+  // 坚阵值：词条坚阵X + 险关地形坚阵+1（器械不受地形影响，不享受）
   function getJianZhenValue(unit) {
     const kw = unit.keywords.find(k => k.startsWith(KEYWORDS.JIAN_ZHEN_PREFIX));
-    if (!kw) return 0;
-    return parseInt(kw.replace(KEYWORDS.JIAN_ZHEN_PREFIX, '') || '1', 10);
+    let v = kw ? parseInt(kw.replace(KEYWORDS.JIAN_ZHEN_PREFIX, '') || '1', 10) : 0;
+    const uLoc = unit === attacker ? loc : targetLoc;
+    if (uLoc?.zoneType === 'FRONTLINE' && unitTerrain(state, unit, uLoc)?.type === 'PASS') v += 1;
+    return v;
   }
 
   // Consume 冲阵 (Charge) if present: consumed/removed upon making attack
@@ -386,7 +390,7 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
     ambushTriggered = true;
     defender.status[STATUS_TYPES.AMBUSH_USED_THIS_TURN] = true;
     let rawAmbushCounter = defenderEffectiveAtk;
-    if (attacker.keywords.some(k => k.startsWith(KEYWORDS.JIAN_ZHEN_PREFIX)) && !defender.keywords.includes(KEYWORDS.GONG_XIN)) {
+    if (getJianZhenValue(attacker) > 0 && !defender.keywords.includes(KEYWORDS.GONG_XIN)) {
       rawAmbushCounter = Math.max(0, rawAmbushCounter - getJianZhenValue(attacker));
     }
     counterDealt = rawAmbushCounter;
@@ -454,7 +458,7 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
 
   // Step 4: Attacker Outgoing Damage Calculation
   let rawAttackerDmg = attackerEffectiveAtk;
-  if (defender.keywords.some(k => k.startsWith(KEYWORDS.JIAN_ZHEN_PREFIX)) && !attacker.keywords.includes(KEYWORDS.GONG_XIN) && !ignoresJianZhen(attacker)) {
+  if (getJianZhenValue(defender) > 0 && !attacker.keywords.includes(KEYWORDS.GONG_XIN) && !ignoresJianZhen(attacker)) {
     rawAttackerDmg = Math.max(0, rawAttackerDmg - getJianZhenValue(defender));
   }
   if (attacker.keywords.includes(KEYWORDS.HUO_GONG)) rawAttackerDmg *= fireMultiplier(state, defender, targetLoc);
@@ -476,7 +480,7 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
 
   if (canCounter) {
     let rawCounterDmg = defenderEffectiveAtk;
-    if (attacker.keywords.some(k => k.startsWith(KEYWORDS.JIAN_ZHEN_PREFIX)) && !defender.keywords.includes(KEYWORDS.GONG_XIN)) {
+    if (getJianZhenValue(attacker) > 0 && !defender.keywords.includes(KEYWORDS.GONG_XIN)) {
       rawCounterDmg = Math.max(0, rawCounterDmg - getJianZhenValue(attacker));
     }
     counterDealt = rawCounterDmg;

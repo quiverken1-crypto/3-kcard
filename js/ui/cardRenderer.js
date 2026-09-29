@@ -13,13 +13,13 @@
 import { KINGDOMS } from '../data/cardDB.js';
 import { cardKingdom, kingdomOf } from './seats.js';
 
-export const KEYWORD_GLOSSARY = Object.freeze({
+/** 词条释义：内置词条 + 自定义词条（registerKeyword 加入，不覆盖内置） */
+export const KEYWORD_GLOSSARY = ({
   '奋战': '【奋战】每回合可以攻击2次。',
-  '掳掠': '【掳掠】击败敌军后二选一：获得“2×本单位行动费”的粮草，或抽1张牌。',
   '斩将': '【斩将】攻击时，若自身战力大于敌军则将其移除；对伏击、潜袭单位无效。',
   '冲阵': '【冲阵】首次攻击敌军时不受反击，而后失去冲阵；对伏击无效。',
   '先登': '【先登】攻击时先造成伤害，若将其击败则自身不受反击；对伏击、潜袭单位无效。',
-  '矢石': '【矢石】攻击只会受到矢石单位的反击。',
+  '矢石': '【矢石】攻击只会受到矢石单位的反击（射程不变，仍只能攻击相邻一线）。',
   '攻心': '【攻心】攻击时，无视防御词条。',
   '掳掠': '【掳掠】攻击击败敌军并存活时，摸1张牌或补充等同于当前自身2倍行动花费的粮草。',
   '火攻': '【火攻】击败敌军后，对同一区域相邻目标传递等量伤害（无视坚阵），可连续传递。',
@@ -45,6 +45,12 @@ export const KEYWORD_GLOSSARY = Object.freeze({
   '使节': '【使节】在场时己方主城免受伤害。',
   '溢出转移': '【溢出转移】击杀敌军后溢出伤害转移到敌方主城。'
 });
+const BUILTIN_KEYWORDS = Object.freeze(Object.keys(KEYWORD_GLOSSARY));
+export const builtinKeywords = () => [...BUILTIN_KEYWORDS];
+export function registerKeyword(name, description) {
+  if (!name || BUILTIN_KEYWORDS.includes(name)) return;
+  KEYWORD_GLOSSARY[name] = `【${name}】${description || '自定义词条'}`;
+}
 
 export const TRAIT_GLOSSARY = Object.freeze({
   '名士': '性格·名士',
@@ -125,7 +131,8 @@ export function escapeHtml(str) {
 
 export function getCardDescription(card) {
   const description = card?.skill?.description?.trim();
-  if (description) return description;
+  // 工坊里标“待实现”的文字技能：对局中暂不生效，卡面注明
+  if (description) return card.pending ? `${description}（技能待实现）` : description;
   if (LEGACY_CARD_DESCRIPTIONS[card?.cardId]) return LEGACY_CARD_DESCRIPTIONS[card.cardId];
   const keywords = Array.isArray(card?.keywords) ? card.keywords : [];
   return keywords.length ? keywords.map(kw => KEYWORD_GLOSSARY[kw.replace(/[0-9]/g, '')] || `【${kw}】当前对局尚未实现此词条效果。`).join(' ') : '无特殊能力';
@@ -196,7 +203,8 @@ export function renderHandCard(card, options = {}) {
 
   // Calculate dynamic prestige discount if applicable
   const originalCost = card.cost ?? 0;
-  const discount = (card.type === 'UNIT' && options.prestigeDiscount) ? options.prestigeDiscount : 0;
+  const discount = (card.type === 'UNIT' && options.prestigeDiscount) ? options.prestigeDiscount
+    : ((card.type === 'TACTIC' || card.type === 'COUNTER') && options.tacticDiscount) ? options.tacticDiscount : 0;
   const effectiveCost = Math.max(0, originalCost - discount);
   const isDiscounted = discount > 0;
 

@@ -22,6 +22,8 @@
   <link rel="stylesheet" href="css/layout.css">
   <link rel="stylesheet" href="css/fx.css">
   <link rel="stylesheet" href="css/mobile.css">
+  <link rel="stylesheet" href="css/deck.css">
+  <link rel="stylesheet" href="css/polish.css">
 </head>
 <body class="theme-martial">
 
@@ -56,25 +58,31 @@
     </div>
 
     <!-- 主页 -->
-    <section id="home-screen" class="home-screen" aria-label="主页">
-      <div class="home-bg-art" aria-hidden="true"></div>
-      <div class="home-panel">
-        <div class="home-seal">三国</div>
-        <h1 class="home-title">三国 <span>KARDS</span></h1>
-        <p class="home-subtitle">魏 · 蜀 · 吴 · 吕　战线卡牌对决</p>
-        <div class="home-actions">
-          <button id="home-btn-pve" class="home-btn home-btn-mode home-btn-shu"><span class="hb-char">人</span><span class="hb-text">人机对战<small>选势力与主城，挑战 AI</small></span></button>
-          <button id="home-btn-pvp" class="home-btn home-btn-mode home-btn-wei"><span class="hb-char">联</span><span class="hb-text">人人对战<small>先建/加入房间，再各选势力</small></span></button>
-          <button id="home-btn-eve" class="home-btn home-btn-mode"><span class="hb-char">机</span><span class="hb-text">机机对战<small>观摩 AI 随机对决</small></span></button>
+    <section id="home-screen" class="home-screen hm" aria-label="主页">
+      <div class="hm-sun" aria-hidden="true"></div>
+      <div class="hm-grid-lines" aria-hidden="true"></div>
+      <div class="hm-stripes" aria-hidden="true"><i class="s-wei"></i><i class="s-shu"></i><i class="s-wu"></i><i class="s-lb"></i></div>
+      <header class="hm-brand">
+        <h1 class="hm-title" aria-label="三国 KARDS"><span>三</span><span>国</span></h1>
+        <div class="hm-side">
+          <span class="hm-seal" aria-hidden="true">战<br>线</span>
+          <p class="hm-en">THREE KINGDOMS<br><b>KARDS</b></p>
+          <p class="hm-tag">魏 · 蜀 · 吴 · 吕<br>战线卡牌对决</p>
         </div>
-        <div class="home-sub-actions">
-          <button id="home-btn-rules" class="home-link">📜 规则与词条</button>
-          <button id="home-btn-editor" class="home-link">✍️ 自定义卡牌</button>
-          <button id="home-btn-install" class="home-link home-touch-only">📲 全屏玩</button>
-          <button id="home-btn-audio" class="home-link">🔊 音乐开启</button>
+      </header>
+      <nav class="hm-menu" aria-label="模式">
+        <button id="home-btn-pve" class="hm-item hm-primary"><em>壹</em><span class="hm-it"><b>单骑出征</b><small>选势力与卡组，与 AI 对决</small></span><i class="hm-arrow" aria-hidden="true"></i></button>
+        <button id="home-btn-pvp" class="hm-item"><em>贰</em><span class="hm-it"><b>群雄逐鹿</b><small>建房或输入房间号，与好友联机</small></span><i class="hm-arrow" aria-hidden="true"></i></button>
+        <button id="home-btn-eve" class="hm-item"><em>叁</em><span class="hm-it"><b>沙盘推演</b><small>观看两路 AI 交锋</small></span><i class="hm-arrow" aria-hidden="true"></i></button>
+        <div class="hm-links">
+          <button id="home-btn-decks" class="hm-link">卡组</button>
+          <button id="home-btn-rules" class="hm-link">规则</button>
+          <button id="home-btn-editor" class="hm-link">工坊</button>
+          <button id="home-btn-install" class="hm-link hm-touch-only">全屏</button>
+          <button id="home-btn-audio" class="hm-link"><span class="hl-label">音乐</span></button>
         </div>
-      </div>
-      <div class="home-gallery" id="home-gallery" aria-hidden="true"></div>
+      </nav>
+      <p class="hm-foot">纯前端 · 可离线 · 局域网 / 公网联机</p>
     </section>
 
     <!-- ================================================================ -->
@@ -494,7 +502,7 @@
           <div id="net-waiting" class="net-waiting hidden">
             <div class="net-waiting-label">房间号</div>
             <div id="net-room-code" class="net-room-code">----</div>
-            <div class="net-waiting-hint">把房间号告诉朋友，对方在「人人对战」里输入即可加入。<span class="net-dots">等待对手加入</span></div>
+            <div class="net-waiting-hint">把房间号告诉朋友，对方在「群雄逐鹿」里输入即可加入。<span class="net-dots">等待对手加入</span></div>
             <button id="net-cancel-room" class="modal-btn btn-secondary">取消房间</button>
           </div>
           <div id="net-lan-share" class="net-lan-share hidden"></div>
@@ -677,7 +685,7 @@
             <p><strong>水域</strong>（容量4）：只有水军可以同时移动和攻击——水军如鱼得水。</p>
             <p><strong>林地</strong>（容量2）：此处单位获得【先登】；此处单位受到的火攻伤害翻倍——埋伏一手，但是怕火。</p>
             <p><strong>山地</strong>（容量2）：此处所有单位视为步兵，并获得【矢石】——行路艰难，但是居高临下。</p>
-            <p><strong>险关</strong>（容量2）：此处单位每回合最多被攻击1次——易守难攻。</p>
+            <p><strong>险关</strong>（容量2）：此处单位获得坚阵+1，且每回合最多被攻击1次——易守难攻。</p>
             <p><strong>主城</strong>：魏·许昌（平原、平原）、魏·洛阳（平原、险关）；蜀·新野（平原、林地）、蜀·零陵（山地、林地）。主城生命20。</p>
           </section>
           <section class="rule-chapter">
@@ -710,9 +718,13 @@
     <div id="modal-hq-pick" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="选择主城">
       <div class="modal-box hq-pick-box">
         <h2 class="hq-pick-title">选择主城</h2>
-        <p class="hq-pick-sub">双方主城各带2张地形，开局洗混后随机抽3张置于前线，余1张备用。</p>
-        <div class="hq-pick-enemy">我方势力：<span id="hq-pick-self-options"></span></div>
-        <div class="hq-pick-enemy" id="hq-pick-enemy-row">对手势力：<span id="hq-pick-enemy-options"></span></div>
+        <div class="hqp-grid">
+          <span class="hqp-label" id="hq-pick-mode-label">模式</span><div class="hqp-field" id="hq-pick-mode-row"><span id="hq-pick-mode-options" class="hqp-seg"></span></div>
+          <span class="hqp-label" id="hq-pick-self-label">我方</span><div class="hqp-field" id="hq-pick-self-options"></div>
+          <span class="hqp-label" id="hq-pick-enemy-label">对手</span><div class="hqp-field" id="hq-pick-enemy-options"></div>
+          <span class="hqp-label">卡组</span><div class="hqp-field hq-pick-deck"><div id="hq-pick-deck" class="hqp-decks" role="listbox" aria-label="我方卡组"></div><button id="hq-pick-deck-edit" class="db-btn hqp-manage" type="button">管理</button></div>
+        </div>
+        <p class="hq-pick-sub">点主城出征 · 双方主城各带2张地形，开局洗混后随机3张作前线</p>
         <div id="hq-pick-options" class="hq-pick-options"></div>
         <div class="modal-actions">
           <button id="hq-pick-random" class="modal-btn btn-secondary">随机主城</button>

@@ -54,10 +54,10 @@ import {
   actsLikeCavalryOnTerrain,
   getEffectiveActionCost
 } from '../data/terrains.js';
-import { runAbilityTrigger } from './abilities.js';
+import { runAbilityTrigger, runLinkedTriggers } from './abilities.js';
 import {
-  applyEnterKeywords, onUnitEnter, onUnitMoved, prepareTactic, resolveTactic, afterAttack, resolvePick, autoPickCards, randomPickCards, resolveChoice, autoChoiceTarget, activateSkill,
-  processDeaths, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getTacticTargets, refreshAuras, baseId, targetSurcharge
+  applyEnterKeywords, onUnitEnter, onUnitMoved, prepareTactic, resolveTactic, afterAttack, resolvePick, autoPickCards, randomPickCards, resolveChoice, autoChoiceTarget, activateSkill, canDeployToFrontline, isSiegeEngine,
+  processDeaths, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getTacticTargets, refreshAuras, baseId, targetSurcharge, qiMouDiscount, getCardPlayCost
 } from './cardSkills.js';
 
 /** 按指定位置插入（部署/移动时可放在区域内任意卡牌之间或两侧） */
@@ -166,9 +166,9 @@ function dispatchBase(state, action) {
         player.hand.splice(handIdx, 1);
         insertAt(supportSlots, card, action.payload.slotIndex);
       } else {
-        // Frontline deployment (strictly requires 奇袭 keyword)
-        if (!hasKeyword(card, KEYWORDS.QI_XI)) {
-          throw new Error('Only units with 奇袭 can deploy directly to frontline');
+        // 直接部署到前线：需要【奇袭】（空置/己方区域），或器械（己方已占领区域）
+        if (!canDeployToFrontline(state, card, action.playerId, targetZone)) {
+          throw new Error(isSiegeEngine(card) ? '器械只能直接部署到己方已占领且未满的前线区域' : 'Only units with 奇袭 can deploy directly to frontline');
         }
         const zone = state.battlefield.frontline[targetZone];
         if (!zone) throw new Error(`Invalid frontline zone: ${targetZone}`);
@@ -344,15 +344,8 @@ function dispatchBase(state, action) {
       if (handIdx === -1) throw new Error('Tactic card not in hand');
       const card = player.hand[handIdx];
 
-      let cost = card.cost;
-      // 奇谋X aura discount from friendly units
-      const allUnits = getAllUnits(state, action.playerId);
-      for (const u of allUnits) {
-        const qm = u.keywords.find(k => k.startsWith(KEYWORDS.QI_MOU_PREFIX));
-        if (qm) {
-          cost = Math.max(0, cost - parseInt(qm.replace(KEYWORDS.QI_MOU_PREFIX, '') || '1', 10));
-        }
-      }
+      // 奇谋X：未被抑制的己方单位使战法费用降低
+      let cost = Math.max(0, card.cost - qiMouDiscount(state, action.playerId));
 
       if (player.provisions < cost) throw new Error(`Insufficient provisions for tactic (need ${cost})`);
       const prepared = prepareTactic(state, action.playerId, card, action.payload || {});
@@ -380,14 +373,7 @@ function dispatchBase(state, action) {
       if (handIdx === -1) throw new Error('Counter card not in hand');
       const card = player.hand[handIdx];
 
-      let cost = card.cost;
-      const allUnits = getAllUnits(state, action.playerId);
-      for (const u of allUnits) {
-        const qm = u.keywords.find(k => k.startsWith(KEYWORDS.QI_MOU_PREFIX));
-        if (qm) {
-          cost = Math.max(0, cost - parseInt(qm.replace(KEYWORDS.QI_MOU_PREFIX, '') || '1', 10));
-        }
-      }
+      let cost = Math.max(0, card.cost - qiMouDiscount(state, action.playerId));
 
       if (player.provisions < cost) throw new Error(`Insufficient provisions for counter (need ${cost})`);
       player.provisions -= cost;
@@ -500,7 +486,7 @@ export function dispatch(state, action) {
     afterAttack(state, source, result.defenderRef || defender, result, Boolean(result.targetIsHq));
     delete result.defenderRef;
   }
-  if (action.type === ACTION_TYPES.DEPLOY) runAbilityTrigger(state, 'ON_DEPLOY', source, context);
+  if (action.type === ACTION_TYPES.DEPLOY) { runAbilityTrigger(state, 'ON_DEPLOY', source, context); runLinkedTriggers(state, 'DEPLOY', source); }
   else if (action.type === ACTION_TYPES.PLAY_TACTIC) runAbilityTrigger(state, 'ON_PLAY', source, context);
   else if (action.type === ACTION_TYPES.MOVE) runAbilityTrigger(state, 'ON_MOVE', source, context);
   else if (action.type === ACTION_TYPES.ATTACK) {
@@ -511,10 +497,12 @@ export function dispatch(state, action) {
     if (result.defenderDied) {
       runAbilityTrigger(state, 'ON_KILL', source, context);
       runAbilityTrigger(state, 'ON_DEATH', defender, context);
+      runLinkedTriggers(state, 'DEATH', defender);
     }
     if (result.attackerDied) {
       runAbilityTrigger(state, 'ON_KILL', defender, context);
       runAbilityTrigger(state, 'ON_DEATH', source, context);
+      runLinkedTriggers(state, 'DEATH', source);
     }
   }
 
@@ -574,12 +562,9 @@ export function getLegalActions(state, playerId) {
         if (state.battlefield.support[playerId].slots.length < 4) {
           actions.push({ type: ACTION_TYPES.DEPLOY, playerId, payload: { cardInstanceId: card.instanceId, targetZone: 'SUPPORT' } });
         }
-        if (hasKeyword(card, KEYWORDS.QI_XI)) {
-          for (const zk of ['LEFT', 'CENTER', 'RIGHT']) {
-            const z = state.battlefield.frontline[zk];
-            if ((z.occupant === null || z.occupant === playerId) && z.units.length < z.capacity) {
-              actions.push({ type: ACTION_TYPES.DEPLOY, playerId, payload: { cardInstanceId: card.instanceId, targetZone: zk } });
-            }
+        for (const zk of ['LEFT', 'CENTER', 'RIGHT']) {
+          if (canDeployToFrontline(state, card, playerId, zk)) {
+            actions.push({ type: ACTION_TYPES.DEPLOY, playerId, payload: { cardInstanceId: card.instanceId, targetZone: zk } });
           }
         }
       }
@@ -613,10 +598,7 @@ export function getLegalActions(state, playerId) {
   }
 
   // 4. Tactics / Counters
-  const qiMou = units.reduce((sum, u) => {
-    const qm = !u.status?.[STATUS_TYPES.INHIBITED] && u.keywords.find(k => k.startsWith(KEYWORDS.QI_MOU_PREFIX));
-    return sum + (qm ? (parseInt(qm.replace(KEYWORDS.QI_MOU_PREFIX, '') || '1', 10) || 1) : 0);
-  }, 0);
+  const qiMou = qiMouDiscount(state, playerId);
   for (const card of player.hand) {
     if (card.type !== 'TACTIC' && card.type !== 'COUNTER') continue;
     if (player.provisions < Math.max(0, card.cost - qiMou)) continue;

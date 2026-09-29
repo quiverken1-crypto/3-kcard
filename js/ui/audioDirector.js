@@ -167,11 +167,17 @@ export class AudioDirector {
   /** 背景音乐在后台依次下载（不阻塞进入游戏）：先主页乐、再对局乐；下完后切换场景不再联网 */
   loadMusicInBackground() {
     if (this._musicLoading || typeof fetch === 'undefined' || !URL.createObjectURL) return;
+    // 静音时不下载音乐；省流量模式 / 慢网只预取当前场景（约 1MB），其余播放时再边下边播
+    if (this.muted) return;
     this._musicLoading = true;
     this.musicBlobs = this.musicBlobs || {};
-    const order = [...Object.keys(MUSIC_FILES)].sort((a, b) => (a === this.scene ? -1 : b === this.scene ? 1 : 0));
+    const conn = globalThis.navigator?.connection;
+    const lean = Boolean(conn?.saveData) || /(^|-)2g$/.test(conn?.effectiveType || '');
+    let order = [...Object.keys(MUSIC_FILES)].sort((a, b) => (a === this.scene ? -1 : b === this.scene ? 1 : 0));
+    if (lean) order = order.slice(0, 1);
     (async () => {
       for (const scene of order) {
+        if (this.musicBlobs[scene]) continue;
         try {
           const r = await fetch(BASE + musicFile(scene));
           if (!r.ok) continue;
@@ -194,12 +200,28 @@ export class AudioDirector {
     }
   }
 
+  /** 页面切到后台：暂停音乐、挂起音频上下文（省电）；回到前台再恢复 */
+  setBackground(hidden) {
+    this._background = Boolean(hidden);
+    if (hidden) {
+      if (this.music && !this.music.paused) { this._resumeMusic = true; this.music.pause(); }
+      if (this.ctx?.state === 'running') this.ctx.suspend?.().catch?.(() => {});
+    } else {
+      if (this.ctx?.state === 'suspended') this.ctx.resume?.().catch?.(() => {});
+      if (this._resumeMusic && !this.muted && this.music) this.music.play()?.catch?.(() => {});
+      this._resumeMusic = false;
+    }
+  }
+
   setMuted(muted) {
     this.muted = Boolean(muted);
     if (this.music) {
       this.music.volume = this.muted ? 0 : this.volume * 0.36;
       if (this.muted) this.music.pause();
       else this.unlock();
+    }
+    if (!this.muted) {
+      this.loadMusicInBackground?.();
     }
     try { this.storage?.setItem('sanguo-kards-muted', this.muted ? '1' : '0'); } catch {}
   }
