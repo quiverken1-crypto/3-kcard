@@ -17,7 +17,7 @@ import {
 import { findUnit, getAllUnits, removeUnitFromBoard, drawCard } from './state.js';
 import {
   getAttackValue, getActionCost, actsLikeCavalry as skillActsLikeCavalry, ignoresGuardian,
-  isArtillery, isSiege, isIronWall, findBodyguard, effectiveTroop, hasShiShi, fireMultiplier, isGuardedUnit, isGuardedHq, unitTerrain, baseId, ignoresJianZhen, immuneToShiShi, allianceBlocks, targetSurcharge, triggerCounters, hasVanguard as hasVanguardSkill, damageHq
+  isArtillery, isSiege, isIronWall, findBodyguard, effectiveTroop, hasShiShi, fireMultiplier, isGuardedUnit, isGuardedHq, unitTerrain, baseId, ignoresJianZhen, immuneToShiShi, allianceBlocks, targetSurcharge, triggerCounters, hasVanguard as hasVanguardSkill, damageHq, zhaXiang, retreatUnit
 } from './cardSkills.js';
 
 const getAttackStyle = unit => unit.keywords.includes(KEYWORDS.HUO_GONG) || unit.keywords.includes(KEYWORDS.SHI_SHI) || ['ARCHER', 'STRATEGIST'].includes(unit.troopType)
@@ -184,6 +184,9 @@ export function validateAttack(state, attackerId, targetId, actingPlayerId = nul
       throw new Error('Target is protected by adjacent 守护 (Guardian)');
     }
   }
+
+  // 黄盖·诈降：首次攻击前不能成为敌方指向的目标
+  if (zhaXiang(defender)) throw new Error('黄盖·诈降：首次攻击前不能被指向');
 
   // 帷幄 (Curtain) Rule: Cannot be targeted before its first action, unless attacker has 攻心
   if (defender.keywords.includes(KEYWORDS.WEI_WO) && defender.status[STATUS_TYPES.ACTIONS_USED] === 0 && !attacker.keywords.includes(KEYWORDS.GONG_XIN)) {
@@ -374,6 +377,22 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
   if (!findUnit(state, attacker.instanceId)) {
     state.combatLog.push({ type: 'COMBAT_DAMAGE', attackerName: attacker.name, defenderName: defender.name, playerId, attackerId: attacker.instanceId, defenderId: defender.instanceId, attackerTroopType: attacker.troopType, audioCue: attacker.audioCue, attackStyle: getAttackStyle(attacker), attackerCardId: attacker.cardId, attackerKeywords: [...attacker.keywords], damageDealt: 0, counterDealt: 0, attackerDied: true, defenderDied: false });
     return { success: true, attackerDied: true, defenderDied: false, damageDealt: 0, counterDealt: 0 };
+  }
+
+  // 游击：敌方回合首次受到攻击时可撤退，并使该次攻击无效（自动在“这一击会致命”时发动）
+  if (hasKeyword(defender, KEYWORDS.YOU_JI) && !defender.status[STATUS_TYPES.INHIBITED] && targetLoc.zoneType === 'FRONTLINE' &&
+      defender.faction !== state.activePlayer && defender._evadeTurn !== state.turnNumber &&
+      state.battlefield.support[defender.faction].slots.length < 5) {
+    const jz = defender.keywords.find(k => k.startsWith(KEYWORDS.JIAN_ZHEN_PREFIX));
+    const reduce = jz && !attacker.keywords.includes(KEYWORDS.GONG_XIN) ? (parseInt(jz.replace(KEYWORDS.JIAN_ZHEN_PREFIX, '') || '1', 10) || 1) : 0;
+    const lethal = getEffectiveAttack(state, attacker, loc, defender) - reduce >= defender.hp ||
+      (baseId(attacker.cardId) === 'gsz_you_zhou_tu_qi' && defender.status[STATUS_TYPES.SUPPRESSED]);
+    if (lethal) {
+      defender._evadeTurn = state.turnNumber;
+      retreatUnit(state, defender, '游击');
+      state.combatLog.push({ type: 'SKILL', playerId: defender.faction, message: `【${defender.name}】游击：撤回支援阵线，本次攻击无效` });
+      return { success: true, attackerDied: false, defenderDied: false, damageDealt: 0, counterDealt: 0, evaded: true };
+    }
   }
 
   // 幽州突骑：攻击被压制的敌军时直接将其消灭

@@ -711,10 +711,11 @@ export function refreshAuras(state) {
 function gszAuras(state) {
   for (const pid of [FACTIONS.WEI, FACTIONS.SHU]) {
     const units = getAllUnits(state, pid);
-    // 严纲：己方骑兵获得突袭
+    // 严纲·猛进：己方骑兵获得突袭；周瑜·左督：己方水军获得突袭
     const yanGang = units.some(u => isId(u, 'gsz_yan_gang') && active(u));
+    const zhouYu = units.some(u => isId(u, 'wu_zhou_yu') && active(u));
     for (const u of units) {
-      const want = yanGang && u.troopType === TROOP_TYPES.CAVALRY && active(u);
+      const want = active(u) && ((yanGang && u.troopType === TROOP_TYPES.CAVALRY) || (zhouYu && u.troopType === TROOP_TYPES.NAVY));
       if (want && !u._auraTuXi && !u.keywords.includes('突袭')) { u.keywords.push('突袭'); u._auraTuXi = true; }
       else if (!want && u._auraTuXi) { u.keywords = u.keywords.filter(k => k !== '突袭'); u._auraTuXi = false; }
     }
@@ -1044,10 +1045,13 @@ export function triggerCounters(state, event, ctx) {
 /** 敌方战法/反制能否指向该单位（警戒、背面） */
 let _stateForTarget = null;
 /** 武将技能指向：【警戒】只防战法/反制，技能只排除潜伏(背面)单位 */
-export const canSkillTarget = u => !u?.status?.[STATUS_TYPES.IS_FACE_DOWN];
+export const canSkillTarget = u => !u?.status?.[STATUS_TYPES.IS_FACE_DOWN] && !zhaXiang(u);
+/** 黄盖·诈降：首次攻击前，不能成为敌方指向的目标 */
+export const zhaXiang = u => Boolean(u && isId(u, 'wu_huang_gai') && active(u) && !u._hasAttacked);
 
 export const canTargetEnemy = u => {
   if (active(u) && hasKeyword(u, '警戒')) return false;
+  if (zhaXiang(u)) return false;
   if (u.status?.[STATUS_TYPES.IS_FACE_DOWN]) return false;
   // 高顺·禁酒：己方步兵获得警戒
   if (_stateForTarget && effectiveTroop(_stateForTarget, u) === TROOP_TYPES.INFANTRY && getAllUnits(_stateForTarget, u.faction).some(x => isId(x, 'lb_gao_shun'))) return false;
@@ -1343,10 +1347,8 @@ export const TACTICS = {
     precheck: (state, owner) => state.players[owner].hp < 6,
     precheckMsg: '己方主城生命低于6时才能使用',
     play(state, owner) {
-      for (const u of [...getAllUnits(state, owner), ...getAllUnits(state, opp(owner))]) damageUnit(state, u, 4, '孤注一掷');
-      const p = state.players[owner];
-      if (p._shenGou) { p.hqFortify = 0; p._shenGou = false; log(state, owner, '孤注一掷：解除深沟固垒（主城生命不变）'); }
-      log(state, owner, '孤注一掷：对双方所有单位造成4点伤害');
+      for (const u of [...getAllUnits(state, owner), ...getAllUnits(state, opp(owner))]) damageUnit(state, u, 3, '孤注一掷');
+      log(state, owner, '孤注一掷：对所有单位（不分敌我）造成3点伤害');
     }
   },
   gsz_yan_zhen: {
@@ -1365,6 +1367,20 @@ export const TACTICS = {
         let killed = 0;
         for (const u of targets) if (damageUnit(state, u, 1, '连弩迭射')) killed++;
         log(state, owner, `连弩迭射 第${round}轮：消灭${killed}个敌军`);
+        processDeaths(state);
+        if (!killed) break;
+      }
+    }
+  },
+  // 火烧连营（吴）：对所有敌军造成1点伤害，若有单位被消灭，重复
+  wu_huo_shao: {
+    play(state, owner) {
+      for (let round = 1; round <= 12; round++) {
+        const targets = getAllUnits(state, opp(owner)).filter(u => !u.status[STATUS_TYPES.IS_FACE_DOWN]);
+        if (!targets.length) break;
+        let killed = 0;
+        for (const u of targets) if (damageUnit(state, u, 1, '火烧连营')) killed++;
+        log(state, owner, `火烧连营 第${round}轮：消灭${killed}个敌军`);
         processDeaths(state);
         if (!killed) break;
       }
@@ -1558,6 +1574,18 @@ export function afterAttack(state, attacker, defender, result, targetIsHq) {
   }
   // 孙策·霸王：每击败1敌军，声望+1
   if (!targetIsHq && attackerAlive && result.defenderDied && isId(attacker, 'wu_sun_ce')) { adjustPrestige(state, attacker.faction, 1); log(state, attacker.faction, '孙策·霸王：声望+1'); }
+  // 黄盖·诈降：攻击过一次后失效
+  if (attacker) attacker._hasAttacked = true;
+  // 许攸·贪冒：每次攻击后，行动花费+1
+  if (attackerAlive && isId(attacker, 'wei_xu_you')) { attacker.actionCost = (attacker.actionCost ?? 1) + 1; log(state, attacker.faction, '许攸·贪冒：行动花费+1'); }
+  // 陆逊·韬隐：每次对战后战力翻倍，最多3次
+  for (const u of targetIsHq ? [] : [attacker, defender]) {
+    if (u && isOnBoard(state, u) && isId(u, 'wu_lu_xun') && active(u) && (u._taoYin || 0) < 3) {
+      u._taoYin = (u._taoYin || 0) + 1;
+      u.atk *= 2;
+      log(state, u.faction, `陆逊·韬隐：战力翻倍（第${u._taoYin}次）`);
+    }
+  }
   // 白马义从：攻击后压制被攻击的敌军
   if (!targetIsHq && attackerAlive && defenderAlive && isId(attacker, 'gsz_bai_ma_yi_cong')) suppressUnit(state, defender, '白马义从');
   // 孙坚·破虏：压制被自己攻击的单位
@@ -1636,8 +1664,8 @@ export function processDeaths(state) {
         }
       }
     }
-    // 公孙瓒·威烈：每当1个敌军被击败，压制1个敌军
-    if (!rec.banish) {
+    // 公孙瓒·威烈：每当敌军被消灭时，压制1个敌军
+    {
       for (const gz of unitsWith(state, opp(owner), 'gsz_gong_sun_zan')) {
         if (!active(gz)) continue;
         const list = getAllUnits(state, owner).filter(u => !u.status?.[STATUS_TYPES.SUPPRESSED] && canBeSuppressed(state, u) && canSkillTarget(u));
@@ -1645,11 +1673,11 @@ export function processDeaths(state) {
       }
     }
     if (!rec.banish && wasActive) {
-      // 公孙瓒·自焚：被击败后，对己方主城造成3点伤害
-      if (id === 'gsz_gong_sun_zan') damageHq(state, owner, 3, '公孙瓒·自焚', { noRedirect: true });
+      // 公孙瓒·焚亡：离场时，对己方主城造成3点伤害（见下方，含被斩将移除）
       // 公孙续·遗志：被击败时，使1个友军+1+1
       if (id === 'gsz_gong_sun_xu') queueChoice(state, owner, 'yiZhi', null, getAllUnits(state, owner));
     }
+    if (id === 'gsz_gong_sun_zan' && wasActive) damageHq(state, owner, 3, '公孙瓒·焚亡', { noRedirect: true });
     // 黄权·权变：每当己方单位离场时，对敌方主城造成1伤害
     for (const hq of unitsWith(state, owner, 'shu_huang_quan')) damageHq(state, opp(owner), 1, '黄权·权变');
     if (!rec.banish && wasActive) {

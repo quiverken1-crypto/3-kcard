@@ -122,7 +122,7 @@ export class DeckBuilder {
           ${sel('type', [['all', '全部类型'], ...Object.entries(TYPE_LABEL)], f.type)}
           ${sel('troop', [['all', '全部兵种'], ...Object.entries(TROOP_LABEL)], f.troop)}
           ${sel('cost', [['all', '全部费用'], ...COST_BUCKETS.slice(1).map(([v, l]) => [v, `${l}费`])], f.cost)}
-          ${sel('src', [['all', '全部来源'], ['base', '实体卡'], ['extra', '旧图鉴']], f.src)}
+          ${sel('src', [['all', '全部来源'], ['base', '实体卡'], ['extra', '旧图鉴/新卡']], f.src)}
           <input class="db-search2" type="search" placeholder="🔍 卡名 / 技能 / 词条" value="${escapeHtml(f.q)}">
         </div>
       </div>
@@ -136,7 +136,7 @@ export class DeckBuilder {
       if (!list.length) { grid.innerHTML = '<p class="db-empty">没有符合筛选的卡牌</p>'; return; }
       for (const def of list) {
         const card = createCard(def, { faction: 'WEI', kingdom: def.kingdom || k, instanceId: `cx_${def.id}` });
-        const tag = def.extra ? '<span class="db-tile-src">旧图鉴</span>' : /通用战法补足/.test(def.inferred || '') ? '<span class="db-tile-src fill">通用补足</span>' : def.custom ? '<span class="db-tile-src">自定义</span>' : '';
+        const tag = def.extra ? `<span class="db-tile-src">${def.extraLabel || '旧图鉴'}</span>` : /通用战法补足/.test(def.inferred || '') ? '<span class="db-tile-src fill">通用补足</span>' : def.custom ? '<span class="db-tile-src">自定义</span>' : '';
         const tile = h(`<div class="db-tile db-codex-tile" data-id="${def.id}"><div class="db-tile-card"></div><span class="db-tile-badge some">×${def.copies || 1}</span>${tag}</div>`);
         tile.querySelector('.db-tile-card').appendChild(renderHandCard(card));
         tile.addEventListener('click', (e) => { if (e.target.closest('.card-info-button')) return; showCardDetails(card); });
@@ -405,14 +405,14 @@ export class DeckBuilder {
             <div class="db-fgroup"><span>类型</span>${chip('type', 'all', '全部', f.type)}${Object.entries(TYPE_LABEL).map(([v, l]) => chip('type', v, l, f.type)).join('')}</div>
             <div class="db-fgroup"><span>兵种</span>${chip('troop', 'all', '全部', f.troop)}${Object.entries(TROOP_LABEL).map(([v, l]) => chip('troop', v, l, f.troop)).join('')}</div>
             <div class="db-fgroup"><span>费用</span>${COST_BUCKETS.map(([v, l]) => chip('cost', v, l, f.cost)).join('')}</div>
-            <div class="db-fgroup"><span>来源</span>${chip('src', 'all', '全部', f.src)}${chip('src', 'base', '实体卡', f.src)}${chip('src', 'extra', '旧图鉴', f.src)}</div>
+            <div class="db-fgroup"><span>来源</span>${chip('src', 'all', '全部', f.src)}${chip('src', 'base', '实体卡', f.src)}${chip('src', 'extra', '旧图鉴/新卡', f.src)}</div>
             <input class="db-search" placeholder="搜索卡名 / 技能 / 词条" value="${escapeHtml(f.q)}">
             <div class="db-fselects">
               ${deck.mode === 'dual' ? sel('side', [['all', '阵营'], ['main', `主·${KINGDOMS[k].name}`], ['sub', `副·${KINGDOMS[deck.subKingdom].name}`]], f.side || 'all') : ''}
               ${sel('type', [['all', '类型'], ...Object.entries(TYPE_LABEL)], f.type)}
               ${sel('troop', [['all', '兵种'], ...Object.entries(TROOP_LABEL)], f.troop)}
               ${sel('cost', [['all', '费用'], ...COST_BUCKETS.slice(1).map(([v, l]) => [v, `${l}费`])], f.cost)}
-              ${deck.mode === 'dual' ? '' : sel('src', [['all', '来源'], ['base', '实体卡'], ['extra', '旧图鉴']], f.src)}
+              ${deck.mode === 'dual' ? '' : sel('src', [['all', '来源'], ['base', '实体卡'], ['extra', '旧图鉴/新卡']], f.src)}
               <input class="db-search2" type="search" placeholder="🔍 搜索" value="${escapeHtml(f.q)}">
             </div>
           </aside>
@@ -488,7 +488,7 @@ export class DeckBuilder {
     if (!list.length) { pool.innerHTML = '<p class="db-empty">没有符合筛选的卡牌</p>'; return; }
     for (const def of list) {
       const card = createCard(def, { faction: 'WEI', kingdom: def.kingdom || k, instanceId: `lib_${def.id}` });
-      const tile = h(`<div class="db-tile" data-id="${def.id}"><div class="db-tile-card"></div><span class="db-tile-badge"></span>${def.extra ? '<span class="db-tile-src">旧图鉴</span>' : ''}</div>`);
+      const tile = h(`<div class="db-tile" data-id="${def.id}"><div class="db-tile-card"></div><span class="db-tile-badge"></span>${def.extra ? `<span class="db-tile-src">${def.extraLabel || '旧图鉴'}</span>` : ''}</div>`);
       const el = renderHandCard(card);
       tile.querySelector('.db-tile-card').appendChild(el);
       tile.addEventListener('click', (e) => {
