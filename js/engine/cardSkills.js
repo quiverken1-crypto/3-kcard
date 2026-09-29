@@ -24,11 +24,11 @@ const FACTION_NAME = { WEI: '魏', SHU: '蜀' };
 
 const active = unit => unit && !unit.status?.[STATUS_TYPES.INHIBITED];
 const isOnBoard = (state, unit) => Boolean(unit && findUnit(state, unit.instanceId));
-const isId = (unit, id) => active(unit) && baseId(unit.cardId) === id;
+export const isId = (unit, id) => active(unit) && baseId(unit.cardId) === id;
 const isMilitary = unit => unit.troopType !== TROOP_TYPES.STRATEGIST;
 const hasBadge = (unit, badge) => Array.isArray(unit.badges) && unit.badges.includes(badge);
 
-function log(state, playerId, message, extra = {}) {
+export function log(state, playerId, message, extra = {}) {
   state.combatLog.push({ type: 'SKILL', playerId, message, ...extra });
 }
 
@@ -154,7 +154,7 @@ export function resetCardState(card) {
   return card;
 }
 
-function buff(unit, atk, hp) {
+export function buff(unit, atk, hp) {
   unit.atk += atk;
   unit.maxHp += hp;
   unit.hp += hp;
@@ -187,6 +187,21 @@ function randomPick(state, arr) {
 // ==========================================
 // 主动技能（己方回合内由玩家发动，每回合1次）
 // ==========================================
+/**
+ * 插件钩子（开放接口）：外部脚本可以不改核心代码，按卡牌 id 追加行为。
+ *   PLUGIN_HOOKS.onEnter.push((state, unit) => {...})              单位进场（部署/召唤/换防）后
+ *   PLUGIN_HOOKS.afterAttack.push((state, attacker, defender, result, targetIsHq) => {...})  每次攻击结算后
+ *   PLUGIN_HOOKS.onDeath.push((state, unit, owner, { banish }) => {...})  单位离场（阵亡/被移除）时
+ *   PLUGIN_HOOKS.onTurnEnd.push((state, playerId) => {...})         某方回合结束时
+ * 钩子里可以调用本文件导出的工具函数（damageUnit、suppressUnit、damageHq、log 等，见 window.SGK.skills）。
+ */
+export const PLUGIN_HOOKS = { onEnter: [], afterAttack: [], onDeath: [], onTurnEnd: [] };
+function runHooks(name, ...args) {
+  for (const fn of PLUGIN_HOOKS[name] || []) {
+    try { fn(...args); } catch (err) { console.warn(`插件钩子 ${name} 出错：`, err); }
+  }
+}
+
 export const ACTIVE_SKILLS = {
   // 程昱·捕粮：弃置1张手牌（自选），额外获得2粮草
   wei_cheng_yu: {
@@ -253,7 +268,7 @@ export function activateSkill(state, pid, payload = {}) {
 // ==========================================
 // 结算中途的目标选择（孙权·御将、法正·谋主）：玩家选，15 秒未选则随机
 // ==========================================
-const CHOICE_SPECS = {
+export const CHOICE_SPECS = {
   sunQuan: {
     source: '孙权·御将', prompt: '选择1个敌军，造成1点伤害',
     auto: list => [...list].sort((a, b) => a.hp - b.hp)[0],
@@ -376,7 +391,7 @@ export function getCardPlayCost(state, owner, card) {
 }
 
 let _choiceSeq = 0;
-function queueChoice(state, pid, kind, sourceUnit, candidates, extra = {}) {
+export function queueChoice(state, pid, kind, sourceUnit, candidates, extra = {}) {
   const list = candidates.filter(Boolean);
   if (!list.length) return;
   const spec = CHOICE_SPECS[kind];
@@ -492,7 +507,7 @@ export function damageHq(state, playerId, amount, source = '', opts = {}) {
   return dmg;
 }
 
-function healHq(state, playerId, amount, allowOverMax = false) {
+export function healHq(state, playerId, amount, allowOverMax = false) {
   const player = state.players[playerId];
   if (allowOverMax) {
     player.hp += amount;
@@ -797,7 +812,7 @@ function scout(state, unit, n) {
 }
 
 /** 从牌组检索指定卡加入手牌 */
-function searchDeck(state, pid, id, who) {
+export function searchDeck(state, pid, id, who) {
   const deck = state.players[pid].deck;
   const idx = deck.findIndex(c => baseId(c.cardId) === id);
   if (idx === -1) { log(state, pid, `${who}：牌组中已无可检索的卡`); return false; }
@@ -808,7 +823,7 @@ function searchDeck(state, pid, id, who) {
 }
 
 /** 进场技能的目标：玩家选中的优先，其次（AI/超时）自动挑选 */
-function chosenOr(list, unit, fallback) {
+export function chosenOr(list, unit, fallback) {
   const id = unit?._skillTargetId;
   if (unit) delete unit._skillTargetId;
   return (id && list.find(u => u.instanceId === id)) || fallback(list);
@@ -860,7 +875,7 @@ function persuade(state, unit, who) {
   damageUnit(state, t, hasBadge(t, '二心') ? 4 : 2, who);
 }
 
-const DEPLOY_SKILLS = {
+export const DEPLOY_SKILLS = {
   gsz_shan_jing(state, unit) {
     const list = getAllUnits(state, opp(unit.faction)).filter(u => canSkillTarget(u) && !u._pinnedBy);
     const t = chosenOr(list, unit, l => [...l].sort(byValueDesc)[0]);
@@ -959,6 +974,7 @@ export function onUnitEnter(state, unit, opts = {}) {
   const fn = DEPLOY_SKILLS[baseId(unit.cardId)];
   if (fn) fn(state, unit);
   delete unit._skillTargetId;
+  runHooks('onEnter', state, unit);
   refreshAuras(state);
   // 严纲：进场的己方骑兵获得突袭，本回合即可行动
   if (unit._auraTuXi && unit.status[STATUS_TYPES.DEPLOYED_THIS_TURN] && unit.status[STATUS_TYPES.ACTIONS_USED] === 1 && !unit.status.attacksThisTurn && !unit.status[STATUS_TYPES.MOVED_THIS_TURN]) {
@@ -985,7 +1001,7 @@ export function onUnitMoved(state, unit, fromZoneType, toZoneType) {
 // 7. 反制战法
 // ==========================================
 
-const COUNTERS = {
+export const COUNTERS = {
   // 逆击：敌军发起攻击时，先对其造成3点伤害
   gsz_ni_ji: {
     event: 'ENEMY_ATTACK',
@@ -1574,6 +1590,7 @@ export function afterAttack(state, attacker, defender, result, targetIsHq) {
   }
   // 孙策·霸王：每击败1敌军，声望+1
   if (!targetIsHq && attackerAlive && result.defenderDied && isId(attacker, 'wu_sun_ce')) { adjustPrestige(state, attacker.faction, 1); log(state, attacker.faction, '孙策·霸王：声望+1'); }
+  runHooks('afterAttack', state, attacker, defender, result, targetIsHq);
   // 黄盖·诈降：攻击过一次后失效
   if (attacker) attacker._hasAttacked = true;
   // 许攸·贪冒：每次攻击后，行动花费+1
@@ -1632,6 +1649,7 @@ export function processDeaths(state) {
     const rec = state.pendingDeaths.shift();
     const unit = rec.unit;
     const owner = rec.owner;
+    runHooks('onDeath', state, unit, owner, { banish: Boolean(rec.banish) });
     const wasActive = !unit.status?.[STATUS_TYPES.INHIBITED];
     const id = baseId(unit.cardId);
 
@@ -1735,6 +1753,7 @@ function afterRefill(state, pid) {
 }
 
 function onTurnEnd(state, pid) {
+  runHooks('onTurnEnd', state, pid);
   const fx = ensureTurnFx(state)[pid];
   const p = state.players[pid];
   const units = getAllUnits(state, pid);

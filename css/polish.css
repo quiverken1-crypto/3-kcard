@@ -337,3 +337,9 @@ body.m-land #player-dock .hand-card-fan.hand-scroll .card-hand.selected { transf
 .db-hub .db-seg .db-tab.active { background: #6b440c; }
 .db-hub .db-listbar .db-kfilter { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 @media (max-width: 520px) { .db-hub .db-seg { display: grid; grid-template-columns: 1fr 1fr; width: 100%; } .db-hub .db-seg .db-tab { text-align: center; } }
+.hm-repo { color: #d9c69c; text-decoration: none; border-bottom: 1px solid rgba(217,179,106,.5); }
+.hm-repo:hover { color: #fff3cf; }
+@media (max-height: 520px) and (orientation: landscape) { .hm-foot { display: block !important; grid-column: 1 / -1; font-size: 10px; margin-top: 4px; } }
+.rule-repo { margin: 0 0 12px; padding: 8px 10px; border: 1px dashed rgba(217,179,106,.45); border-radius: 8px; font-size: 13px; line-height: 1.7; color: #e6d6b3; }
+.rule-repo a { color: #f3d892; word-break: break-all; }
+.rule-repo code { background: rgba(0,0,0,.35); padding: 0 4px; border-radius: 4px; }

@@ -1,5 +1,12 @@
 # 三国KARDS
 
+纯前端的三国题材战线卡牌游戏（参考 KARDS 玩法）：人机、局域网/公网联机、AI 沙盘推演，内置魏、蜀、吴、吕布、公孙瓒五个势力，支持自组卡组、双阵营测试模式、自定义工坊。
+
+**完全开源**：代码以 MIT 许可发布（美术与音频素材另行授权，见 `LICENSE`）。
+- 继续开发请先读 [ARCHITECTURE.md](ARCHITECTURE.md)（目录、数据流、接口、怎么加卡/加势力/写技能）和 [CONTRIBUTING.md](CONTRIBUTING.md)。
+- 浏览器控制台里的 `window.SGK` 是开放接口（源码 `js/api.js`）：查卡、跑引擎、注册技能、插件钩子。
+- 自定义卡包格式见 [CARD_PACK_SCHEMA.md](CARD_PACK_SCHEMA.md)。
+
 ## 启动
 
 Windows 上双击 `一键启动游戏.cmd` 即可，不需要 Node.js；保持启动窗口打开，游戏会在默认浏览器出现。如果 8088 端口已被占用，启动器会自动尝试 8089–8100。也可以安装 Node.js 后进入本文件夹运行 `node server.js`，打开 `http://localhost:8088`。联机时双方各自启动游戏，并通过游戏内“联机设置”交换连接码。
