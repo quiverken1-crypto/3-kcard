@@ -704,7 +704,7 @@ export class AppCoordinator {
         }
         return null;
       };
-      const chips = mine ? mine.targetIds.map(id => ({ id, label: mine.labels?.[id] && mine.pool === 'hand' ? mine.labels[id] : nameOf(id) })).filter(c => c.label)
+      const chips = mine ? mine.targetIds.map(id => ({ id, label: mine.labels?.[id] && mine.pool !== 'board' ? mine.labels[id] : nameOf(id) })).filter(c => c.label)
         .map(c => `<button type="button" class="choice-chip" data-id="${c.id}">${escapeHtml(c.label)}</button>`).join('') : '';
       bar.innerHTML = mine
         ? `<div class="choice-head"><b>【${escapeHtml(choice.source)}】</b>${escapeHtml(choice.prompt)}<span class="choice-timer">15</span></div>

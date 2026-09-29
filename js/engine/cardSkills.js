@@ -214,6 +214,14 @@ const CHOICE_SPECS = {
     auto: list => [...list].sort((a, b) => a.hp - b.hp)[0],
     apply(state, pid, t) { damageUnit(state, t, 1, '孙权·御将'); }
   },
+  luLue: {
+    source: '掳掠', prompt: '击败敌军：选择获得粮草或抽1张牌', pool: 'option',
+    auto: (list, state, pid) => (state?.players?.[pid]?.hand?.length ?? 0) < 4 ? list.find(o => o.instanceId === 'draw') : list.find(o => o.instanceId === 'grain'),
+    apply(state, pid, opt, choice) {
+      if (opt.instanceId === 'draw') { drawCard(state, pid); log(state, pid, '掳掠：抽1张牌'); }
+      else { const n = choice?.amount ?? 2; state.players[pid].provisions += n; log(state, pid, `掳掠：获得${n}粮草`); }
+    }
+  },
   chengYu: {
     source: '程昱·捕粮', prompt: '选择弃置1张最低费手牌，额外获得2粮草', pool: 'hand',
     auto: list => list[0],
@@ -235,23 +243,25 @@ const CHOICE_SPECS = {
 };
 
 let _choiceSeq = 0;
-function queueChoice(state, pid, kind, sourceUnit, candidates) {
+function queueChoice(state, pid, kind, sourceUnit, candidates, extra = {}) {
   const list = candidates.filter(Boolean);
   if (!list.length) return;
   const spec = CHOICE_SPECS[kind];
   // 只有1个候选（或手牌候选全是同一张卡）时无需询问
   const sameCard = spec.pool === 'hand' && list.every(c => baseId(c.cardId) === baseId(list[0].cardId));
-  if (list.length === 1 || sameCard) { spec.apply(state, pid, list[0]); return; }
+  if (list.length === 1 || sameCard) { spec.apply(state, pid, list[0], extra); return; }
   const p = state.players[pid];
   (p.pendingChoices ||= []).push({
     id: `ch_${state.turnNumber}_${++_choiceSeq}_${Math.floor(Math.random() * 1e6)}`,
     kind, source: spec.source, prompt: spec.prompt, sourceId: sourceUnit?.instanceId, pool: spec.pool || 'board',
     labels: Object.fromEntries(list.map(u => [u.instanceId, spec.pool === 'hand' ? `${u.name}（${u.cost ?? 0}费）` : u.name])),
+    ...extra,
     targetIds: list.map(u => u.instanceId)
   });
 }
 
 function liveChoiceTargets(state, pid, choice) {
+  if (choice.pool === 'option') return choice.targetIds.map(id => ({ instanceId: id, name: choice.labels?.[id] || id }));
   if (choice.pool === 'hand') return choice.targetIds.map(id => state.players[pid].hand.find(c => c.instanceId === id)).filter(Boolean);
   return choice.targetIds.map(id => findUnit(state, id)?.unit).filter(Boolean);
 }
@@ -269,12 +279,12 @@ export function resolveChoice(state, pid, { choiceId, targetId, mode } = {}) {
     t = live.find(u => u.instanceId === targetId);
     if (!t) throw new Error('目标不合法');
   } else if (mode === 'random') t = randomPick(state, live);
-  else t = spec.auto(live);
+  else t = spec.auto(live, state, pid);
   p.pendingChoices.shift();
   if (t) {
     const name = t.name;
     if (mode === 'random') log(state, pid, `${choice.source}：超时，随机选择了【${name}】`);
-    spec.apply(state, pid, t);
+    spec.apply(state, pid, t, choice);
   }
   processDeaths(state);
   refreshAuras(state);
@@ -284,7 +294,7 @@ export function resolveChoice(state, pid, { choiceId, targetId, mode } = {}) {
 export function autoChoiceTarget(state, pid) {
   const choice = state.players[pid]?.pendingChoices?.[0];
   if (!choice) return null;
-  return CHOICE_SPECS[choice.kind].auto(liveChoiceTargets(state, pid, choice))?.instanceId || null;
+  return CHOICE_SPECS[choice.kind].auto(liveChoiceTargets(state, pid, choice), state, pid)?.instanceId || null;
 }
 
 /** 选牌超时：随机挑选至多 max 张 */
@@ -1252,6 +1262,12 @@ export function afterAttack(state, attacker, defender, result, targetIsHq) {
   const attackerAlive = isOnBoard(state, attacker);
   const defenderAlive = defender && isOnBoard(state, defender);
   const enemy = opp(attacker.faction);
+
+  // 【掳掠】击败敌军后二选一：获得 2×本单位行动费 的粮草，或抽1张牌
+  if (!targetIsHq && result.defenderDied && active(attacker) && hasKeyword(attacker, '掳掠')) {
+    const amount = 2 * (attacker.actionCost ?? 1);
+    queueChoice(state, attacker.faction, 'luLue', attacker, [{ instanceId: 'grain', name: `获得${amount}粮草` }, { instanceId: 'draw', name: '抽1张牌' }], { amount });
+  }
 
   // 曹洪·贪吝：每次交战后行动花费+1
   if (!targetIsHq && attackerAlive && isId(attacker, 'wei_cao_hong')) { attacker.actionCost = (attacker.actionCost ?? 1) + 1; }
