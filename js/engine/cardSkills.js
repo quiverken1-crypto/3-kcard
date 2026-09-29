@@ -1356,8 +1356,8 @@ function afterRefill(state, pid) {
     }
     // 贾逵·筑城：回合开始时，己方主城+1防
     if (isId(u, 'wei_jia_kui')) { healHq(state, pid, 1, true); log(state, pid, '贾逵·筑城：主城+1'); }
-    // 程昱·捕粮：手牌充裕时弃1张最低费手牌，额外获得2粮草
-    if (isId(u, 'wei_cheng_yu') && p.hand.length >= 6) {
+    // 程昱·捕粮：己方回合开始时，弃1张最低费手牌，额外获得2粮草
+    if (isId(u, 'wei_cheng_yu') && p.hand.length > 0) {
       const min = Math.min(...p.hand.map(c => c.cost || 0));
       // 同为最低费的有多张时由玩家挑选弃哪张
       queueChoice(state, pid, 'chengYu', u, p.hand.filter(c => (c.cost || 0) === min));
