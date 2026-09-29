@@ -11,12 +11,19 @@
 const TROOP = { I: 'INFANTRY', C: 'CAVALRY', N: 'NAVY', S: 'STRATEGIST', E: 'ARCHER', '-': 'NONE' };
 const TYPE = { U: 'UNIT', T: 'TACTIC', C: 'COUNTER' };
 
-export const KINGDOMS = Object.freeze({
+/** 势力表：内置四家；自定义势力运行时通过 registerKingdom 加入 */
+export const KINGDOMS = {
   wei: { key: 'wei', name: '魏', army: '魏武军', leader: '曹操', color: 'wei' },
   shu: { key: 'shu', name: '蜀', army: '蜀汉军', leader: '刘备', color: 'shu' },
   wu: { key: 'wu', name: '吴', army: '江东军', leader: '孙权', color: 'wu' },
   lb: { key: 'lb', name: '吕', army: '吕布军', leader: '吕布', color: 'lb' }
-});
+};
+export const BUILTIN_KINGDOMS = Object.freeze(Object.keys(KINGDOMS));
+export function registerKingdom(def) {
+  if (!def?.key || BUILTIN_KINGDOMS.includes(def.key)) return;
+  KINGDOMS[def.key] = Object.freeze({ key: def.key, name: def.name, army: def.army, leader: def.leader || '', color: def.color || '#8a6a3a', custom: true });
+}
+export function unregisterKingdom(key) { if (!BUILTIN_KINGDOMS.includes(key)) delete KINGDOMS[key]; }
 
 /* ---------------------------------------------------------------- 通用战法 */
 const COMMON = {

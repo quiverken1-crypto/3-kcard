@@ -13,9 +13,9 @@
 import { KINGDOMS } from '../data/cardDB.js';
 import { cardKingdom, kingdomOf } from './seats.js';
 
-export const KEYWORD_GLOSSARY = Object.freeze({
+/** 词条释义：内置词条 + 自定义词条（registerKeyword 加入，不覆盖内置） */
+export const KEYWORD_GLOSSARY = ({
   '奋战': '【奋战】每回合可以攻击2次。',
-  '掳掠': '【掳掠】击败敌军后二选一：获得“2×本单位行动费”的粮草，或抽1张牌。',
   '斩将': '【斩将】攻击时，若自身战力大于敌军则将其移除；对伏击、潜袭单位无效。',
   '冲阵': '【冲阵】首次攻击敌军时不受反击，而后失去冲阵；对伏击无效。',
   '先登': '【先登】攻击时先造成伤害，若将其击败则自身不受反击；对伏击、潜袭单位无效。',
@@ -45,6 +45,12 @@ export const KEYWORD_GLOSSARY = Object.freeze({
   '使节': '【使节】在场时己方主城免受伤害。',
   '溢出转移': '【溢出转移】击杀敌军后溢出伤害转移到敌方主城。'
 });
+const BUILTIN_KEYWORDS = Object.freeze(Object.keys(KEYWORD_GLOSSARY));
+export const builtinKeywords = () => [...BUILTIN_KEYWORDS];
+export function registerKeyword(name, description) {
+  if (!name || BUILTIN_KEYWORDS.includes(name)) return;
+  KEYWORD_GLOSSARY[name] = `【${name}】${description || '自定义词条'}`;
+}
 
 export const TRAIT_GLOSSARY = Object.freeze({
   '名士': '性格·名士',
@@ -125,7 +131,8 @@ export function escapeHtml(str) {
 
 export function getCardDescription(card) {
   const description = card?.skill?.description?.trim();
-  if (description) return description;
+  // 工坊里标“待实现”的文字技能：对局中暂不生效，卡面注明
+  if (description) return card.pending ? `${description}（技能待实现）` : description;
   if (LEGACY_CARD_DESCRIPTIONS[card?.cardId]) return LEGACY_CARD_DESCRIPTIONS[card.cardId];
   const keywords = Array.isArray(card?.keywords) ? card.keywords : [];
   return keywords.length ? keywords.map(kw => KEYWORD_GLOSSARY[kw.replace(/[0-9]/g, '')] || `【${kw}】当前对局尚未实现此词条效果。`).join(' ') : '无特殊能力';

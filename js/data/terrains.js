@@ -65,7 +65,8 @@ export const TERRAINS = Object.freeze({
 });
 
 /** 主城：每座主城带2张地形牌（见实体卡） */
-export const HQ_CARDS = Object.freeze({
+/** 主城表：内置四家；自定义势力运行时通过 registerHqs 加入 */
+export const HQ_CARDS = {
   wei: Object.freeze([
     Object.freeze({ id: 'xuchang', name: '许昌', hp: 20, terrains: ['PLAIN', 'PLAIN'] }),
     Object.freeze({ id: 'luoyang', name: '洛阳', hp: 20, terrains: ['PLAIN', 'PASS'] })
@@ -82,7 +83,13 @@ export const HQ_CARDS = Object.freeze({
     Object.freeze({ id: 'xiapi', name: '下邳', hp: 20, terrains: ['WATER', 'PLAIN'] }),
     Object.freeze({ id: 'puyang', name: '濮阳', hp: 20, terrains: ['PLAIN', 'PLAIN'] })
   ])
-});
+};
+const BUILTIN_HQ_KEYS = Object.freeze(Object.keys(HQ_CARDS));
+export function registerHqs(kingdom, hqs = []) {
+  if (BUILTIN_HQ_KEYS.includes(kingdom)) return;
+  HQ_CARDS[kingdom] = Object.freeze(hqs.map(h => Object.freeze({ id: h.id, name: h.name, hp: 20, terrains: [...h.terrains] })));
+}
+export function unregisterHqs(kingdom) { if (!BUILTIN_HQ_KEYS.includes(kingdom)) delete HQ_CARDS[kingdom]; }
 export function getHqCard(kingdom, hqId) {
   const list = HQ_CARDS[String(kingdom).toLowerCase()] || [];
   return list.find(h => h.id === hqId) || null;

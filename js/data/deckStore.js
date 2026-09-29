@@ -7,6 +7,12 @@
  */
 import { CARDS_BY_KINGDOM, DB_DECKS, DB_CARD_MAP, KINGDOMS } from './cardDB.js';
 import { EXTRA_PRESETS } from './presetDecks.js';
+import { getCustomCard, customCardsOf, customFactions, guestCardsOf, pickSubset, mergePack } from './customContent.js';
+
+/** 卡牌定义：官方卡牌库 + 本机自定义卡 */
+export const getCardDef = id => DB_CARD_MAP[id] || getCustomCard(id);
+/** 所有势力（内置 + 已注册的自定义势力） */
+export const allKingdomKeys = () => [...KINGDOM_KEYS, ...customFactions().map(f => f.key).filter(k => KINGDOMS[k])];
 
 export const DECK_SIZE = 40;
 /** 双阵营（测试）：主阵营 30 张 + 副阵营 20 张，主城 30 血 */
@@ -22,11 +28,11 @@ const storage = () => { try { return globalThis.localStorage || null; } catch { 
 /** 某势力可用的卡牌（按类型、费用排序） */
 export function libraryFor(kingdom) {
   const order = { UNIT: 0, TACTIC: 1, COUNTER: 2 };
-  return [...(CARDS_BY_KINGDOM[kingdom] || [])].sort((a, b) => (order[a.type] - order[b.type]) || (a.cost - b.cost) || a.name.localeCompare(b.name, 'zh'));
+  return [...(CARDS_BY_KINGDOM[kingdom] || []), ...customCardsOf(kingdom)].sort((a, b) => (order[a.type] - order[b.type]) || (a.cost - b.cost) || a.name.localeCompare(b.name, 'zh'));
 }
 
 /** 单张卡在卡组中的上限：实体卡张数 */
-export const cardLimit = id => DB_CARD_MAP[id]?.copies ?? 1;
+export const cardLimit = id => getCardDef(id)?.copies ?? 1;
 
 const countsFromList = ids => ids.reduce((m, id) => { m[id] = (m[id] || 0) + 1; return m; }, {});
 
@@ -111,11 +117,11 @@ export function validateDeck(deck) {
   const total = deckTotal(deck);
   const dual = deck?.mode === 'dual';
   const kingdoms = dual ? [deck.kingdom, deck.subKingdom] : [deck?.kingdom];
-  const lib = new Set(kingdoms.flatMap(k => (CARDS_BY_KINGDOM[k] || []).map(c => c.id)));
+  const lib = new Set(kingdoms.flatMap(k => [...libraryFor(k), ...guestCardsOf(k)].map(c => c.id)));
   let units = 0;
   const perKingdom = {};
   for (const [id, n] of Object.entries(deck?.cards || {})) {
-    const def = DB_CARD_MAP[id];
+    const def = getCardDef(id);
     if (!def) { errors.push(`未知卡牌：${id}`); continue; }
     if (!lib.has(id)) errors.push(`【${def.name}】不属于${kingdoms.map(k => KINGDOMS[k]?.name || '').join('、')}势力`);
     if (n > cardLimit(id)) errors.push(`【${def.name}】最多${cardLimit(id)}张（当前${n}张）`);
@@ -139,7 +145,7 @@ export function validateDeck(deck) {
 export function kingdomCounts(deck) {
   const out = {};
   for (const [id, n] of Object.entries(deck?.cards || {})) {
-    const k = DB_CARD_MAP[id]?.kingdom;
+    const k = getCardDef(id)?.kingdom;
     if (k) out[k] = (out[k] || 0) + n;
   }
   return out;
@@ -181,7 +187,7 @@ export function dualPresets() {
 export function deckCardDefs(deck) {
   const out = [];
   for (const [id, n] of Object.entries(deck.cards)) {
-    const def = DB_CARD_MAP[id];
+    const def = getCardDef(id);
     if (def) for (let i = 0; i < n; i++) out.push(def);
   }
   return out;
@@ -192,7 +198,7 @@ export function deckStats(deck) {
   const byType = { UNIT: 0, TACTIC: 0, COUNTER: 0 };
   const curve = Array(8).fill(0);
   for (const [id, n] of Object.entries(deck?.cards || {})) {
-    const def = DB_CARD_MAP[id];
+    const def = getCardDef(id);
     if (!def) continue;
     byType[def.type] = (byType[def.type] || 0) + n;
     curve[Math.min(7, def.cost ?? 0)] += n;
@@ -226,12 +232,24 @@ export async function encodeDeck(deck) {
     .map(([id, n]) => `${short(id)}${n > 1 ? `*${n}` : ''}`).join(',');
   const payload = { v: 1, m: deck.mode || 'single', k: deck.kingdom, n: deck.name, c };
   if (deck.subKingdom) payload.s = deck.subKingdom;
+  // 用到的自定义卡（及自定义势力）一起打包，对方导入时自动加入其自定义内容
+  const x = customPayloadFor(deck);
+  if (x) payload.x = x;
   const json = JSON.stringify(payload);
   const raw = new TextEncoder().encode(json);
   if (typeof CompressionStream !== 'undefined') {
     try { return `SGK1-${b64url(await pipe(raw, CompressionStream, 'deflate-raw'))}`; } catch { /* fall through */ }
   }
   return `SGK0-${b64url(raw)}`;
+}
+
+/** 卡组用到的自定义卡（及自定义势力）；没有则 null */
+export function customPayloadFor(deck) {
+  const customIds = Object.keys(deck?.cards || {}).filter(id => !DB_CARD_MAP[id] && getCustomCard(id));
+  const needFaction = [deck?.kingdom, deck?.subKingdom].filter(k => k && !KINGDOM_KEYS.includes(k));
+  if (!customIds.length && !needFaction.length) return null;
+  const sub = pickSubset({ cardIds: customIds, factionKeys: needFaction });
+  return { factions: sub.factions, cards: sub.cards.map(({ cardId, maxHp, custom, updatedAt, ...rest }) => rest) };
 }
 
 /** 分享码 / 含 ?deck= 的链接 → 卡组（未保存） */
@@ -247,15 +265,20 @@ export async function decodeDeck(input) {
     bytes = await pipe(bytes, DecompressionStream, 'deflate-raw');
   }
   const data = JSON.parse(new TextDecoder().decode(bytes));
-  if (data.v !== 1 || !KINGDOM_KEYS.includes(data.k)) throw new Error('分享码版本或势力无效');
+  if (data.v !== 1) throw new Error('分享码版本无效');
+  // 附带的自定义内容：先并入本机自定义卡（同标识不同内容时另存副本并改用新标识）
+  let remap = {};
+  if (data.x) remap = mergePack({ schemaVersion: 2, factions: data.x.factions || [], cards: data.x.cards || [] }, 'copy').remap;
+  if (!KINGDOMS[data.k]) throw new Error('分享码中的势力在本机不存在');
   const cards = {};
   for (const part of String(data.c || '').split(',').filter(Boolean)) {
     const [idPart, nPart] = part.split('*');
     const id = idPart.startsWith('!') ? idPart.slice(1) : idPart.startsWith('~') ? `${data.s}_${idPart.slice(1)}` : `${data.k}_${idPart}`;
-    cards[id] = (cards[id] || 0) + (parseInt(nPart || '1', 10) || 1);
+    const rid = remap[id] || id;
+    cards[rid] = (cards[rid] || 0) + (parseInt(nPart || '1', 10) || 1);
   }
   const deck = { id: null, name: String(data.n || '导入的卡组').slice(0, 24), mode: data.m || 'single', kingdom: data.k, cards };
-  if (data.s && KINGDOM_KEYS.includes(data.s)) deck.subKingdom = data.s;
+  if (data.s && KINGDOMS[data.s]) deck.subKingdom = data.s;
   return deck;
 }
 

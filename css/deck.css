@@ -128,3 +128,73 @@ body.deck-builder-open { overflow: hidden; }
 .db-sum-dual { display: flex; align-items: center; gap: 6px; font: 700 13px var(--font-mono-numbers, monospace); color: #f3e2b5; margin-bottom: 4px; }
 .db-sum-dual .db-seal { width: 20px; height: 20px; font-size: 11px; margin-left: 0; }
 .db-rc-k { width: 16px; height: 16px; border-radius: 50%; font-size: 9px; color: #fff; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+
+/* ==========================================================================
+   自定义工坊（卡牌 / 势力 / 导入导出）
+   ========================================================================== */
+.db-toast.bad { border-color: #d0674f; color: #ffc4b4; }
+.ws-tabs { margin-left: auto; }
+.ws-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ws-split { flex: 1; min-height: 0; display: grid; grid-template-columns: 260px 1fr; gap: 12px; }
+.ws-list { display: flex; flex-direction: column; gap: 8px; min-height: 0; border: 1px solid rgba(217,179,106,.25); border-radius: 10px; padding: 8px; background: rgba(20,14,8,.6); }
+.ws-items { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.ws-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; border: 1px solid transparent; background: #1d150d; color: #f0e2bf; cursor: pointer; text-align: left; }
+.ws-item:hover { border-color: rgba(217,179,106,.5); }
+.ws-item.active { border-color: #f0cf6a; background: #3a2a18; }
+.ws-item-name { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 14px; font-weight: 700; overflow: hidden; }
+.ws-item-name small { font-weight: 400; font-size: 11px; color: #bfae86; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-tag { flex: none; font-size: 11px; padding: 1px 6px; border-radius: 6px; border: 1px solid #7da57f; color: #b8e3ba; }
+.ws-tag.pending { border-color: #d49b3a; color: #ffd28a; }
+.ws-editor { min-height: 0; overflow-y: auto; }
+.ws-form-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 14px; align-items: start; }
+.ws-form { display: flex; flex-direction: column; gap: 8px; }
+.ws-form.ws-narrow { max-width: 560px; }
+.ws-form label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #cbb98f; }
+.ws-form input, .ws-form select, .ws-form textarea { background: #0f0a06; color: #f3e2b5; border: 1px solid rgba(217,179,106,.4); border-radius: 6px; padding: 5px 7px; font-size: 14px; min-width: 0; box-sizing: border-box; }
+.ws-form input[type=color] { padding: 0; height: 32px; width: 60px; }
+.ws-form input[type=radio] { padding: 0; }
+.ws-form textarea { resize: vertical; font-family: inherit; }
+.ws-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.ws-wide { width: 100%; }
+.ws-form.not-unit .unit-only { display: none; }
+.ws-sub { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: #e6d3a4; border-top: 1px dashed rgba(217,179,106,.25); padding-top: 6px; }
+.ws-sub .db-btn { padding: 3px 10px; font-size: 12px; }
+.ws-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ws-row > input, .ws-row > select { flex: 1 1 90px; }
+.ws-row .ckw-name { flex: 0 1 90px; }
+.ws-row .ab-amount { flex: 0 0 60px; }
+.ws-row .ab-keyword { flex: 0 1 80px; }
+.ws-ab, .ws-ckw .ws-row, .ws-hq { padding: 4px; border-radius: 6px; background: rgba(255,255,255,.03); }
+.ws-impl { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #e6d3a4; }
+.ws-impl label { flex-direction: row; align-items: center; gap: 6px; font-size: 13px; color: #e6d3a4; cursor: pointer; }
+.ws-err { color: #ff9a86; font-size: 13px; min-height: 1em; }
+.ws-actions { position: sticky; bottom: 0; padding: 6px 0; background: linear-gradient(transparent, #150e08 30%); }
+.ws-preview { position: sticky; top: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ws-preview-card { width: 150px; }
+.ws-preview-card > * { position: relative !important; transform: none !important; margin: 0 auto; }
+.ws-kw-chips .db-chip { padding: 2px 8px; font-size: 11px; }
+.ws-io { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; overflow-y: auto; }
+.ws-card { border: 1px solid rgba(217,179,106,.3); border-radius: 10px; padding: 10px 12px; background: rgba(28,20,12,.9); display: flex; flex-direction: column; gap: 8px; }
+.ws-card h3 { margin: 0; color: #f3d892; font-size: 16px; }
+.ws-card > label.db-btn { align-self: flex-start; }
+.ws-checklist { max-height: 42vh; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; border: 1px solid rgba(217,179,106,.2); border-radius: 8px; padding: 6px; }
+.ws-group { font-size: 12px; color: #bfae86; margin-top: 4px; }
+.ws-check { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; padding: 2px 0; }
+.ws-check .db-seal { width: 20px; height: 20px; font-size: 11px; }
+.ws-item .db-seal { width: 24px; height: 24px; font-size: 13px; }
+
+@media (max-width: 760px), (max-height: 520px) {
+  .ws-split { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .ws-list { max-height: 30vh; }
+  .ws-form-wrap { grid-template-columns: 1fr; }
+  .ws-preview { position: static; order: -1; }
+  .ws-preview-card { width: 120px; }
+  .ws-io { grid-template-columns: 1fr; }
+  .ws-tabs { margin-left: 0; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  .ws-split { grid-template-columns: 200px 1fr; grid-template-rows: none; }
+  .ws-list { max-height: none; }
+  .ws-form-wrap { grid-template-columns: minmax(0, 1fr) 130px; }
+  .ws-preview { position: sticky; order: 0; }
+}
