@@ -29,7 +29,7 @@ import {
 } from '../engine/rulesEngine.js';
 import { getValidTargets, validateAttack, getEffectiveAttack } from '../engine/combat.js';
 import { evaluateBoard, DEFAULT_EVALUATION_WEIGHTS } from './evaluator.js';
-import { autoPickCards, autoChoiceTarget, getActiveSkill, activeSkillBlockReason } from '../engine/cardSkills.js';
+import { autoPickCards, autoChoiceTarget, getActiveSkill, activeSkillBlockReason, canDeployToFrontline } from '../engine/cardSkills.js';
 import { PRNG } from '../engine/prng.js';
 
 /**
@@ -217,10 +217,9 @@ export class HeuristicBot {
             });
           }
           // Deploy to Frontline (奇袭)
-          if (hasKeyword(card, KEYWORDS.QI_XI)) {
+          {
             for (const zk of ['LEFT', 'CENTER', 'RIGHT']) {
-              const zone = state.battlefield.frontline[zk];
-              if ((zone.occupant === null || zone.occupant === botFaction) && zone.units.length < zone.capacity) {
+              if (canDeployToFrontline(state, card, botFaction, zk)) {
                 actions.push({
                   type: ACTION_TYPES.DEPLOY,
                   playerId: botFaction,

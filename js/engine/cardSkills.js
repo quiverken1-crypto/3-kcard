@@ -67,18 +67,42 @@ export function isGuardedHq(state, faction) {
   return Boolean(first && active(first) && hasKeyword(first, '守护'));
 }
 
-function terrainOf(state, loc) {
+/** 器械（霹雳车、发石车等）：完全不受地形影响 */
+export const isSiegeEngine = unit => unit?.troopType === TROOP_TYPES.ARCHER;
+export const ignoresTerrain = unit => Boolean(unit) && isSiegeEngine(unit);
+/** 张郃·巧变：自己无视地形负面效果（山地视为步兵、林地火攻翻倍），地形增益照常 */
+const ignoresTerrainPenalty = unit => ignoresTerrain(unit) || isId(unit, 'wei_zhang_he');
+
+/** 地形；忽略地形的单位视为没有地形 */
+function terrainOf(state, loc, unit = null) {
+  if (unit && ignoresTerrain(unit)) return null;
   return loc?.zoneType === 'FRONTLINE' ? state.battlefield.frontline[loc.zoneKey]?.terrain : null;
 }
+export function unitTerrain(state, unit, loc = null) {
+  loc ||= findUnit(state, unit?.instanceId);
+  return terrainOf(state, loc, unit);
+}
 
-const onMountain = (state, loc) => terrainOf(state, loc)?.type === 'MOUNTAIN';
-const inForest = (state, loc) => terrainOf(state, loc)?.type === 'FOREST';
+const onMountain = (state, loc, unit = null) => terrainOf(state, loc, unit)?.type === 'MOUNTAIN';
+const inForest = (state, loc, unit = null) => terrainOf(state, loc, unit)?.type === 'FOREST';
+
+/**
+ * 能否从手牌直接部署到某条前线：
+ * 【奇袭】可部署到空置或己方占领的区域；器械可直接部署到己方已占领的区域。
+ */
+export function canDeployToFrontline(state, card, owner, zoneKey) {
+  const z = state.battlefield.frontline?.[zoneKey];
+  if (!z || z.units.length >= z.capacity) return false;
+  if (hasKeyword(card, '奇袭') && (z.occupant === null || z.occupant === owner)) return true;
+  if (isSiegeEngine(card) && z.occupant === owner) return true;
+  return false;
+}
 
 /** 山地：此处所有单位视为步兵 */
 export function effectiveTroop(state, unit, loc = null) {
   if (!unit) return null;
   loc ||= findUnit(state, unit.instanceId);
-  return onMountain(state, loc) ? TROOP_TYPES.INFANTRY : unit.troopType;
+  return onMountain(state, loc, unit) && !ignoresTerrainPenalty(unit) ? TROOP_TYPES.INFANTRY : unit.troopType;
 }
 
 /** 矢石：自身词条，或位于山地（居高临下） */
@@ -86,13 +110,13 @@ export function hasShiShi(state, unit, loc = null) {
   if (!unit) return false;
   if (Array.isArray(unit.keywords) && unit.keywords.includes('矢石')) return true;
   loc ||= findUnit(state, unit.instanceId);
-  return onMountain(state, loc);
+  return onMountain(state, loc, unit);
 }
 
 /** 林地：火攻伤害翻倍 */
 export function fireMultiplier(state, unit, loc = null) {
   loc ||= findUnit(state, unit.instanceId);
-  return inForest(state, loc) ? 2 : 1;
+  return inForest(state, loc, unit) && !ignoresTerrainPenalty(unit) ? 2 : 1;
 }
 
 function ensureTurnFx(state) {
@@ -461,7 +485,7 @@ export function getAttackValue(state, unit, loc = null, foe = null) {
   if (unit.troopType === TROOP_TYPES.NAVY && getAllUnits(state, unit.faction).some(u => isId(u, 'wu_cheng_pu'))) atk += 2;
 
   // 黄忠·烈弓：山地战力+2（张郃·巧变无视敌方地形增益）
-  if (isId(unit, 'shu_huang_zhong') && onMountain(state, loc) && !(foe && isId(foe, 'wei_zhang_he'))) atk += 2;
+  if (isId(unit, 'shu_huang_zhong') && onMountain(state, loc, unit) && !(foe && isId(foe, 'wei_zhang_he'))) atk += 2;
 
   if (foe) {
     if (isId(unit, 'wei_zang_ba') && foe.troopType === unit.troopType) atk *= 2;
@@ -477,15 +501,15 @@ export function getAttackValue(state, unit, loc = null, foe = null) {
 export function hasVanguard(state, unit, loc = null) {
   if (unit.keywords.includes('先登')) return true;
   loc ||= findUnit(state, unit.instanceId);
-  if (inForest(state, loc)) return true; // 林地：获得先登
-  return isId(unit, 'shu_huang_zhong') && onMountain(state, loc);
+  if (inForest(state, loc, unit)) return true; // 林地：获得先登
+  return isId(unit, 'shu_huang_zhong') && onMountain(state, loc, unit);
 }
 
 export function getActionCost(state, unit, loc = null) {
   let cost = unit.actionCost ?? 1;
   loc ||= findUnit(state, unit.instanceId);
   if (!loc) return cost;
-  if (isId(unit, 'shu_wu_dang_fei_jun') && onMountain(state, loc)) cost = 0;
+  if (isId(unit, 'shu_wu_dang_fei_jun') && onMountain(state, loc, unit)) cost = 0;
   // 并州铁骑：场上有己方步兵时行动花费-1
   if (isId(unit, 'lb_bing_zhou') && getAllUnits(state, unit.faction).some(u => u !== unit && effectiveTroop(state, u) === TROOP_TYPES.INFANTRY)) cost -= 1;
   // 治军：相同兵种的其他友军行动花费-1
@@ -500,10 +524,10 @@ export function getActionCost(state, unit, loc = null) {
 /** 关羽可同时视为水军 */
 export function actsLikeCavalry(state, unit, loc = null) {
   loc ||= findUnit(state, unit.instanceId);
-  if (onMountain(state, loc)) return false; // 山地：视为步兵
+  if (onMountain(state, loc, unit) && !ignoresTerrainPenalty(unit)) return false; // 山地：视为步兵
   if (unit.troopType === TROOP_TYPES.CAVALRY) return true;
   if (isId(unit, 'wu_gan_ning')) return true; // 锦帆：可同时视为骑兵
-  const water = terrainOf(state, loc)?.type === 'WATER';
+  const water = terrainOf(state, loc, unit)?.type === 'WATER';
   const navy = unit.troopType === TROOP_TYPES.NAVY || isId(unit, 'shu_guan_yu');
   return navy && water;
 }

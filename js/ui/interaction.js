@@ -13,7 +13,7 @@
 import { ACTION_TYPES, KEYWORDS, STATUS_TYPES, hasKeyword } from '../engine/constants.js';
 import { getValidTargets, validateAttack } from '../engine/combat.js';
 import { findUnit, getAllUnits } from '../engine/state.js';
-import { getTacticTargets, getDeployTargets, tacticBlockReason, getActiveSkill, activeSkillBlockReason, getActionCost, actsLikeCavalry as skillActsLikeCavalry } from '../engine/cardSkills.js';
+import { getTacticTargets, getDeployTargets, tacticBlockReason, getActiveSkill, activeSkillBlockReason, canDeployToFrontline, getActionCost, actsLikeCavalry as skillActsLikeCavalry } from '../engine/cardSkills.js';
 import { CardInspector } from './cardRenderer.js';
 import { getUnitMoveZones, unitHasUsefulAction } from '../engine/unitOptions.js';
 import { previewAction, estimateAttack } from '../engine/preview.js';
@@ -287,13 +287,8 @@ export class InteractionController {
       }
 
       // Frontline deployment (requires 奇袭)
-      if (hasKeyword(card, KEYWORDS.QI_XI)) {
-        for (const zk of ['LEFT', 'CENTER', 'RIGHT']) {
-          const zone = bf.frontline?.[zk];
-          if (zone && (zone.occupant === null || zone.occupant === this.localPlayerId) && zone.units.length < zone.capacity) {
-            this.legalDropZones.add(zk);
-          }
-        }
+      for (const zk of ['LEFT', 'CENTER', 'RIGHT']) {
+        if (canDeployToFrontline(this.gameState, card, this.localPlayerId, zk)) this.legalDropZones.add(zk);
       }
     } else if (card.type === 'TACTIC' || card.type === 'COUNTER') {
       this.legalDropZones.add('BATTLEFIELD');

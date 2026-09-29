@@ -17,7 +17,7 @@ import {
 import { findUnit, getAllUnits, removeUnitFromBoard, drawCard } from './state.js';
 import {
   getAttackValue, getActionCost, actsLikeCavalry as skillActsLikeCavalry, ignoresGuardian,
-  isArtillery, isSiege, isIronWall, findBodyguard, effectiveTroop, hasShiShi, fireMultiplier, isGuardedUnit, isGuardedHq, ignoresJianZhen, immuneToShiShi, allianceBlocks, targetSurcharge, triggerCounters, hasVanguard as hasVanguardSkill, damageHq
+  isArtillery, isSiege, isIronWall, findBodyguard, effectiveTroop, hasShiShi, fireMultiplier, isGuardedUnit, isGuardedHq, unitTerrain, baseId, ignoresJianZhen, immuneToShiShi, allianceBlocks, targetSurcharge, triggerCounters, hasVanguard as hasVanguardSkill, damageHq
 } from './cardSkills.js';
 
 const getAttackStyle = unit => unit.keywords.includes(KEYWORDS.HUO_GONG) || unit.keywords.includes(KEYWORDS.SHI_SHI) || ['ARCHER', 'STRATEGIST'].includes(unit.troopType)
@@ -199,7 +199,7 @@ export function validateAttack(state, attackerId, targetId, actingPlayerId = nul
   }
 
   // 险关：此处单位每回合最多被攻击1次
-  if (targetLoc.zoneType === 'FRONTLINE' && state.battlefield.frontline[targetLoc.zoneKey]?.terrain?.type === 'PASS' &&
+  if (targetLoc.zoneType === 'FRONTLINE' && unitTerrain(state, defender, targetLoc)?.type === 'PASS' && baseId(attacker.cardId) !== 'wei_zhang_he' &&
       defender._attackedOnTurn === state.turnNumber) {
     throw new Error('险关：该单位本回合已被攻击过');
   }

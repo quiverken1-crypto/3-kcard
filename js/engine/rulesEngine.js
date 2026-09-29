@@ -56,7 +56,7 @@ import {
 } from '../data/terrains.js';
 import { runAbilityTrigger } from './abilities.js';
 import {
-  applyEnterKeywords, onUnitEnter, onUnitMoved, prepareTactic, resolveTactic, afterAttack, resolvePick, autoPickCards, randomPickCards, resolveChoice, autoChoiceTarget, activateSkill,
+  applyEnterKeywords, onUnitEnter, onUnitMoved, prepareTactic, resolveTactic, afterAttack, resolvePick, autoPickCards, randomPickCards, resolveChoice, autoChoiceTarget, activateSkill, canDeployToFrontline, isSiegeEngine,
   processDeaths, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getTacticTargets, refreshAuras, baseId, targetSurcharge
 } from './cardSkills.js';
 
@@ -166,9 +166,9 @@ function dispatchBase(state, action) {
         player.hand.splice(handIdx, 1);
         insertAt(supportSlots, card, action.payload.slotIndex);
       } else {
-        // Frontline deployment (strictly requires 奇袭 keyword)
-        if (!hasKeyword(card, KEYWORDS.QI_XI)) {
-          throw new Error('Only units with 奇袭 can deploy directly to frontline');
+        // 直接部署到前线：需要【奇袭】（空置/己方区域），或器械（己方已占领区域）
+        if (!canDeployToFrontline(state, card, action.playerId, targetZone)) {
+          throw new Error(isSiegeEngine(card) ? '器械只能直接部署到己方已占领且未满的前线区域' : 'Only units with 奇袭 can deploy directly to frontline');
         }
         const zone = state.battlefield.frontline[targetZone];
         if (!zone) throw new Error(`Invalid frontline zone: ${targetZone}`);
@@ -574,12 +574,9 @@ export function getLegalActions(state, playerId) {
         if (state.battlefield.support[playerId].slots.length < 4) {
           actions.push({ type: ACTION_TYPES.DEPLOY, playerId, payload: { cardInstanceId: card.instanceId, targetZone: 'SUPPORT' } });
         }
-        if (hasKeyword(card, KEYWORDS.QI_XI)) {
-          for (const zk of ['LEFT', 'CENTER', 'RIGHT']) {
-            const z = state.battlefield.frontline[zk];
-            if ((z.occupant === null || z.occupant === playerId) && z.units.length < z.capacity) {
-              actions.push({ type: ACTION_TYPES.DEPLOY, playerId, payload: { cardInstanceId: card.instanceId, targetZone: zk } });
-            }
+        for (const zk of ['LEFT', 'CENTER', 'RIGHT']) {
+          if (canDeployToFrontline(state, card, playerId, zk)) {
+            actions.push({ type: ACTION_TYPES.DEPLOY, playerId, payload: { cardInstanceId: card.instanceId, targetZone: zk } });
           }
         }
       }

@@ -5,10 +5,10 @@
  * 紧凑格式：
  *   [id, 名称, 类型, 兵种, 部署, 行动, 战力, 生命, 词条[], 性格[], 技能名, 技能描述, 张数, inferred?]
  *   类型：U 单位 / T 战法(!) / C 反制战法(?)
- *   兵种：I 步兵 / C 骑兵 / N 水军 / S 谋士 / - 无
+ *   兵种：I 步兵 / C 骑兵 / N 水军 / S 谋士 / E 器械 / - 无
  */
 
-const TROOP = { I: 'INFANTRY', C: 'CAVALRY', N: 'NAVY', S: 'STRATEGIST', '-': 'NONE' };
+const TROOP = { I: 'INFANTRY', C: 'CAVALRY', N: 'NAVY', S: 'STRATEGIST', E: 'ARCHER', '-': 'NONE' };
 const TYPE = { U: 'UNIT', T: 'TACTIC', C: 'COUNTER' };
 
 export const KINGDOMS = Object.freeze({
@@ -62,6 +62,19 @@ const WEI = [
   common('tuqi', 'wei', 2), common('tuchi', 'wei', 2), common('shengdong', 'wei', 1)
 ];
 
+/** 旧图鉴补充：进入卡牌库（可组卡），但不在默认预设卡组里 */
+const WEI_EXTRA = [
+  ['wei_li_tong', '李通', 'U', 'I', 2, 1, 3, 3, ['先登'], [], '砺战', '敌方回合结束时若在前线，获得+1+1。', 1, '旧图鉴数据'],
+  ['wei_zang_ba', '臧霸', 'U', 'I', 2, 1, 2, 3, ['先登'], [], '骁勇', '与相同兵种对战时，战力翻倍。', 1, '旧图鉴数据'],
+  ['wei_jia_kui', '贾逵', 'U', 'I', 2, 1, 1, 4, ['坚阵1'], [], '筑城', '回合开始时，己方主城+1防。', 1, '旧图鉴数据'],
+  ['wei_zhang_he', '张郃', 'U', 'C', 5, 2, 5, 5, ['警戒'], [], '巧变', '无视敌军的地形增益；自己无视地形负面效果。', 1, '旧图鉴数据'],
+  ['wei_man_chong', '满宠', 'U', 'I', 3, 1, 2, 4, ['坚阵1', '侦查1'], [], '驻防', '对抗水军时，战力+3。', 1, '旧图鉴数据'],
+  ['wei_wen_pin', '文聘', 'U', 'N', 4, 2, 3, 5, ['坚阵1'], [], '镇守', '压制任何受到其伤害的敌军。', 1, '旧图鉴数据'],
+  ['wei_pi_li_che', '霹雳车', 'U', 'E', 5, 2, 5, 4, ['矢石'], [], '抛射/攻城', '抛射：可攻击任意敌方目标。攻城：攻击并消灭1个敌军后，溢出伤害转移给敌方主城。', 2, '旧图鉴数据'],
+  ['wei_wang_mei_zhi_ke', '望梅止渴', 'T', '-', 3, 0, 0, 0, [], [], '止渴', '本回合中，前线己方单位战力+1，行动花费-1。', 2, '旧图鉴数据'],
+  ['wei_hong_men_yan', '鸿门宴', 'T', '-', 3, 0, 0, 0, [], [], '设局', '对1个敌军造成2伤害，若其在支援阵线伤害翻倍。', 2, '旧图鉴数据'],
+];
+
 /* ---------------------------------------------------------------- 蜀 */
 const SHU = [
   ['shu_liu_bei', '刘备', 'U', 'I', 4, 1, 2, 5, ['督战', '声望1'], ['皇亲'], '枭雄', '每次交战并存活后，+2战力；被击败后返回牌堆顶。', 1],
@@ -91,6 +104,26 @@ const SHU = [
   ['shu_shou_long', '收拢亡卒', 'T', '-', 2, 0, 0, 0, [], [], '收拢', '完全恢复己方支援阵线的1个单位，摸1张牌。', 2],
   common('jueshui', 'shu', 1), common('cefan', 'shu', 2), common('chengsheng', 'shu', 1),
   common('shipo', 'shu', 1), common('shanjia', 'shu', 1), common('youdi', 'shu', 1)
+];
+
+/** 旧图鉴补充：进入卡牌库（可组卡），但不在默认预设卡组里 */
+const SHU_EXTRA = [
+  ['shu_zhu_ge_liang', '诸葛亮', 'U', 'S', 5, 2, 3, 6, ['治军', '声望1', '警戒'], ['名士'], '料敌', '敌方使用战法时，对其主城造成等同于其花费的伤害。', 1, '旧图鉴数据'],
+  ['shu_ma_chao', '马超', 'U', 'C', 7, 3, 7, 6, ['突袭', '坚阵1'], [], '铁骑', '攻击时无视【守护】。', 1, '旧图鉴数据'],
+  ['shu_huang_zhong', '黄忠', 'U', 'I', 6, 2, 5, 6, ['突袭', '矢石'], [], '狙击', '在山地时战力+2并获得【先登】。', 1, '旧图鉴数据'],
+  ['shu_wei_yan', '魏延', 'U', 'I', 6, 2, 6, 5, ['奇袭'], ['狂傲'], '破军', '每次攻击后，获得+2+2。', 1, '旧图鉴数据'],
+  ['shu_fa_zheng', '法正', 'U', 'S', 4, 2, 3, 3, ['奇谋1'], ['名士'], '谋主', '己方使用战法时，使1友方单位+1+1。', 1, '旧图鉴数据'],
+  ['shu_deng_zhi', '邓芝', 'U', 'S', 3, 1, 1, 4, [], [], '使节', '在场时，己方主城免受伤害。', 1, '旧图鉴数据'],
+  ['shu_ma_dai', '马岱', 'U', 'C', 4, 2, 4, 3, ['突袭', '坚阵1'], [], '铁骑', '攻击时无视【守护】。', 1, '旧图鉴数据'],
+  ['shu_lian_nu_ying', '连弩营', 'U', 'I', 2, 1, 2, 3, ['矢石', '奋战'], [], '掩射', '进场时，若敌方有突袭单位，自己获得【突袭】。', 2, '旧图鉴数据'],
+  ['shu_wu_dang_fei_jun', '无当飞军', 'U', 'I', 3, 1, 3, 3, ['矢石', '坚阵1'], [], '山地精锐', '在山地时，行动花费-1。', 2, '旧图鉴数据'],
+  ['shu_fa_shi_che', '发石车', 'U', 'E', 3, 1, 2, 2, ['矢石'], [], '抛射/掩护', '抛射：可攻击任意敌方目标。掩护：若前线有友方单位，获得+1+1。', 2, '旧图鉴数据'],
+  ['shu_zha_bai', '诈败', 'T', '-', 1, 0, 0, 0, [], [], '退避', '使1个前线友军撤退，移除所有伤害，本回合该单位可再次行动。', 2, '旧图鉴数据'],
+  ['shu_chuan_xi_zhi_ji', '喘息之机', 'T', '-', 4, 0, 0, 0, [], [], '修整', '所有友方单位完全恢复，每实际恢复1个单位，抽1张牌。', 2, '旧图鉴数据'],
+  ['shu_lian_nu_lian_she', '连弩迭射', 'T', '-', 4, 0, 0, 0, [], [], '齐射', '对所有敌军造成1点伤害，若有单位被消灭，重复此效果。', 2, '旧图鉴数据'],
+  ['shu_long_zhong_dui', '隆中对', 'T', '-', 5, 0, 0, 0, [], [], '天下三分', '己方每占领1个前线区域，抽1张牌、粮草上限+1。', 2, '旧图鉴数据'],
+  ['shu_shu_si_yi_zhan', '殊死一战', 'T', '-', 3, 0, 0, 0, [], [], '决死', '使己方所有军队的战力与其防御力互换，直到回合结束。', 2, '旧图鉴数据'],
+  ['shu_huo_gong', '火攻', 'T', '-', 3, 0, 0, 0, [], [], '烈焰', '对1个前线敌军造成3火伤害，若将其击败，则对其1个相邻单位重复上述效果。', 2, '旧图鉴数据'],
 ];
 
 /* ---------------------------------------------------------------- 吴 */
@@ -162,8 +195,11 @@ function build(rows, kingdom) {
   });
 }
 
+const markExtra = cards => cards.map(c => Object.freeze({ ...c, extra: true }));
 export const CARDS_BY_KINGDOM = Object.freeze({
-  wei: build(WEI, 'wei'), shu: build(SHU, 'shu'), wu: build(WU, 'wu'), lb: build(LB, 'lb')
+  wei: [...build(WEI, 'wei'), ...markExtra(build(WEI_EXTRA, 'wei'))],
+  shu: [...build(SHU, 'shu'), ...markExtra(build(SHU_EXTRA, 'shu'))],
+  wu: build(WU, 'wu'), lb: build(LB, 'lb')
 });
 
 export const ALL_DB_CARDS = Object.freeze(Object.values(CARDS_BY_KINGDOM).flat());
@@ -173,7 +209,7 @@ export const DB_CARD_MAP = Object.freeze(Object.fromEntries(ALL_DB_CARDS.map(c =
 export const DB_DECKS = Object.freeze(Object.fromEntries(Object.entries(CARDS_BY_KINGDOM).map(([k, cards]) => [
   k, Object.freeze({
     id: `${k}_physical`, kingdom: k,
-    main: Object.freeze(cards.flatMap(c => Array(c.copies).fill(c.id))),
+    main: Object.freeze(cards.filter(c => !c.extra).flatMap(c => Array(c.copies).fill(c.id))),
     reserve: Object.freeze(k === 'shu' ? ['shu_bai_er_jun'] : [])
   })
 ])));
