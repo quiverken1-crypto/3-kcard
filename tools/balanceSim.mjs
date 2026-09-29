@@ -7,7 +7,7 @@
 import { RulesEngine } from '../js/engine/rulesEngine.js';
 import { HeuristicBot } from '../js/bot/heuristicBot.js';
 import { startTurn, createCard, createKingdomDeck } from '../js/engine/state.js';
-import { getDeck, deckCardDefs } from '../js/data/deckStore.js';
+import { getDeck, deckCardDefs, DUAL } from '../js/data/deckStore.js';
 import { readFileSync } from 'node:fs';
 
 export function loadDeck(ref) {
@@ -20,12 +20,15 @@ export function loadDeck(ref) {
 
 function playOne(deckA, deckB, seed, aFirst) {
   const seats = aFirst ? { WEI: deckA, SHU: deckB } : { WEI: deckB, SHU: deckA };
-  const build = (d, seat) => deckCardDefs(d).map(def => createCard(def, { faction: seat, kingdom: d.kingdom }));
+  const build = (d, seat) => deckCardDefs(d).map(def => createCard(def, { faction: seat, kingdom: def.kingdom || d.kingdom }));
+  const reserve = (d, seat) => [d.kingdom, d.subKingdom].filter(Boolean).flatMap(k => createKingdomDeck(k, seat).reservePool);
+  const dual = deckA.mode === 'dual' || deckB.mode === 'dual';
   const re = new RulesEngine({
     autoInit: true, seed, shuffleDecks: true, randomTerrains: true, weiHq: 'RANDOM', shuHq: 'RANDOM',
     weiKingdom: seats.WEI.kingdom, shuKingdom: seats.SHU.kingdom, firstPlayer: 'WEI',
     weiDeck: build(seats.WEI, 'WEI'), shuDeck: build(seats.SHU, 'SHU'),
-    weiReserve: createKingdomDeck(seats.WEI.kingdom, 'WEI').reservePool, shuReserve: createKingdomDeck(seats.SHU.kingdom, 'SHU').reservePool
+    weiReserve: reserve(seats.WEI, 'WEI'), shuReserve: reserve(seats.SHU, 'SHU'),
+    initialHp: dual ? DUAL.HQ_HP : 20
   });
   const s = re.state;
   if (s.phase === 'MULLIGAN') startTurn(s, s.firstPlayer);

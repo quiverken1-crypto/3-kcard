@@ -123,3 +123,8 @@ body.deck-builder-open { overflow: hidden; }
 /* 选主城弹窗里的卡组下拉 */
 .hq-pick-deck select { max-width: 60vw; background: #0f0a06; color: #f3e2b5; border: 1px solid rgba(217,179,106,.5); border-radius: 6px; padding: 3px 6px; font-size: 13px; }
 .hq-pick-deck .db-btn { padding: 3px 8px; font-size: 12px; margin-left: 6px; }
+/* 双阵营 */
+.db-seal-sub { width: 20px; height: 20px; font-size: 11px; margin-left: -6px; border: 2px solid #1b140c; opacity: .9; }
+.db-sum-dual { display: flex; align-items: center; gap: 6px; font: 700 13px var(--font-mono-numbers, monospace); color: #f3e2b5; margin-bottom: 4px; }
+.db-sum-dual .db-seal { width: 20px; height: 20px; font-size: 11px; margin-left: 0; }
+.db-rc-k { width: 16px; height: 16px; border-radius: 50%; font-size: 9px; color: #fff; display: inline-flex; align-items: center; justify-content: center; flex: none; }

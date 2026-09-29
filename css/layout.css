@@ -800,3 +800,16 @@ body.choice-hand .choice-bar { bottom: auto !important; top: calc(46px + env(saf
   box-shadow: 0 4px 12px rgba(0,0,0,.6); cursor: pointer; touch-action: manipulation; }
 .skill-activate-btn.disabled { background: #2a2622; border-color: #6b6150; color: #b3a88f; font-weight: 500; }
 body.skill-hand-select .card-hand { outline: 3px solid #ffd76a; outline-offset: 2px; box-shadow: 0 0 16px rgba(255,200,80,.8) !important; }
+/* 选主城：加了模式/卡组两行后，矮屏再压缩一点，保证按钮不出屏 */
+@media (max-height: 430px) {
+  .hq-pick-title { font-size: 15px !important; margin: 0 0 2px !important; }
+  .hq-pick-enemy { margin: 2px 0 !important; font-size: 12px; }
+  .hq-pick-enemy .enemy-chip { padding: 2px 8px; font-size: 12px; }
+  .hq-card { width: 112px !important; height: 112px !important; padding: 6px !important; }
+  .hq-card-name { font-size: 20px !important; }
+  .hq-card-terrains { margin-top: 4px; }
+  .hq-card-shield { margin-top: 4px !important; width: 32px !important; height: 34px !important; font-size: 15px !important; }
+  .hq-card-grain { display: none; }
+  .hq-pick-options { margin: 4px 0 !important; }
+  .hq-pick-box .modal-actions { margin-top: 2px !important; padding-top: 4px !important; }
+}

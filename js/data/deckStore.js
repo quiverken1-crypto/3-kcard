@@ -9,6 +9,9 @@ import { CARDS_BY_KINGDOM, DB_DECKS, DB_CARD_MAP, KINGDOMS } from './cardDB.js';
 import { EXTRA_PRESETS } from './presetDecks.js';
 
 export const DECK_SIZE = 40;
+/** 双阵营（测试）：主阵营 30 张 + 副阵营 20 张，主城 30 血 */
+export const DUAL = Object.freeze({ MAIN: 30, SUB: 20, TOTAL: 50, HQ_HP: 30 });
+export const deckSize = deck => (deck?.mode === 'dual' ? DUAL.TOTAL : DECK_SIZE);
 export const MIN_UNITS_HINT = 15;
 const STORE_KEY = 'sgk_decks_v1';
 const LAST_KEY = 'sgk_last_deck_v1';
@@ -35,8 +38,8 @@ export function officialPresets() {
     mode: 'single', kingdom: k, official: true,
     cards: countsFromList(DB_DECKS[k].main)
   }));
-  const extra = EXTRA_PRESETS.map(d => ({ ...d, official: true, cards: { ...d.cards } }));
-  return [...standard, ...extra];
+  const extra = EXTRA_PRESETS.filter(d => d.mode !== 'dual').map(d => ({ ...d, official: true, cards: { ...d.cards } }));
+  return [...standard, ...extra, ...dualPresets()];
 }
 
 export function loadUserDecks() {
@@ -92,9 +95,12 @@ export function rememberDeck(kingdom, id) {
     storage()?.setItem(LAST_KEY, JSON.stringify(m));
   } catch { /* ignore */ }
 }
-export function lastDeckId(kingdom) {
-  try { return JSON.parse(storage()?.getItem(LAST_KEY) || '{}')[kingdom] || `preset_${kingdom}_standard`; } catch { return `preset_${kingdom}_standard`; }
+export function lastDeckId(kingdom, mode = 'single') {
+  const fallback = mode === 'dual' ? (dualPresets().find(d => d.kingdom === kingdom)?.id || null) : `preset_${kingdom}_standard`;
+  const key = mode === 'dual' ? `dual:${kingdom}` : kingdom;
+  try { return JSON.parse(storage()?.getItem(LAST_KEY) || '{}')[key] || fallback; } catch { return fallback; }
 }
+export function rememberDeckFor(kingdom, mode, id) { rememberDeck(mode === 'dual' ? `dual:${kingdom}` : kingdom, id); }
 
 export const deckTotal = deck => Object.values(deck?.cards || {}).reduce((a, n) => a + n, 0);
 
@@ -103,18 +109,72 @@ export function validateDeck(deck) {
   const errors = [];
   const warnings = [];
   const total = deckTotal(deck);
-  const lib = new Set((CARDS_BY_KINGDOM[deck?.kingdom] || []).map(c => c.id));
+  const dual = deck?.mode === 'dual';
+  const kingdoms = dual ? [deck.kingdom, deck.subKingdom] : [deck?.kingdom];
+  const lib = new Set(kingdoms.flatMap(k => (CARDS_BY_KINGDOM[k] || []).map(c => c.id)));
   let units = 0;
+  const perKingdom = {};
   for (const [id, n] of Object.entries(deck?.cards || {})) {
     const def = DB_CARD_MAP[id];
     if (!def) { errors.push(`未知卡牌：${id}`); continue; }
-    if (!lib.has(id)) errors.push(`【${def.name}】不属于${KINGDOMS[deck.kingdom]?.name || ''}势力`);
+    if (!lib.has(id)) errors.push(`【${def.name}】不属于${kingdoms.map(k => KINGDOMS[k]?.name || '').join('、')}势力`);
     if (n > cardLimit(id)) errors.push(`【${def.name}】最多${cardLimit(id)}张（当前${n}张）`);
     if (def.type === 'UNIT') units += n;
+    perKingdom[def.kingdom] = (perKingdom[def.kingdom] || 0) + n;
   }
-  if (total !== DECK_SIZE) errors.push(`卡组需要正好${DECK_SIZE}张（当前${total}张）`);
-  if (total && units < MIN_UNITS_HINT) warnings.push(`单位只有${units}张，建议至少${MIN_UNITS_HINT}张`);
-  return { ok: errors.length === 0, total, units, errors, warnings };
+  const size = deckSize(deck);
+  if (dual) {
+    if (!deck.subKingdom || deck.subKingdom === deck.kingdom) errors.push('双阵营需要选择一个不同的副阵营');
+    const m = perKingdom[deck.kingdom] || 0;
+    const sb = perKingdom[deck.subKingdom] || 0;
+    if (m !== DUAL.MAIN) errors.push(`主阵营（${KINGDOMS[deck.kingdom]?.name}）需要正好${DUAL.MAIN}张（当前${m}张）`);
+    if (sb !== DUAL.SUB) errors.push(`副阵营（${KINGDOMS[deck.subKingdom]?.name || '?'}）需要正好${DUAL.SUB}张（当前${sb}张）`);
+  } else if (total !== DECK_SIZE) errors.push(`卡组需要正好${DECK_SIZE}张（当前${total}张）`);
+  const minUnits = Math.round(MIN_UNITS_HINT * size / DECK_SIZE);
+  if (total && units < minUnits) warnings.push(`单位只有${units}张，建议至少${minUnits}张`);
+  return { ok: errors.length === 0, total, size, units, perKingdom, errors, warnings };
+}
+
+/** 各势力在卡组中的张数 */
+export function kingdomCounts(deck) {
+  const out = {};
+  for (const [id, n] of Object.entries(deck?.cards || {})) {
+    const k = DB_CARD_MAP[id]?.kingdom;
+    if (k) out[k] = (out[k] || 0) + n;
+  }
+  return out;
+}
+
+// ==========================================
+// 双阵营：一键生成与推荐预设
+// ==========================================
+/** 从某势力标准卡组里按费用曲线均匀抽掉若干张，保留 n 张（保持曲线与单位/战法比例） */
+function thinStandard(kingdom, n) {
+  const order = { UNIT: 0, TACTIC: 1, COUNTER: 2 };
+  const list = [...DB_DECKS[kingdom].main].map(id => DB_CARD_MAP[id])
+    .sort((a, b) => (order[a.type] - order[b.type]) || (a.cost - b.cost) || a.id.localeCompare(b.id));
+  const drop = list.length - n;
+  const removeIdx = new Set();
+  for (let i = 0; i < drop; i++) removeIdx.add(Math.min(list.length - 1, Math.floor((i + 0.5) * list.length / drop)));
+  let i = list.length - 1;
+  while (removeIdx.size < drop && i >= 0) { removeIdx.add(i); i -= 2; }
+  return countsFromList(list.filter((_, idx) => !removeIdx.has(idx)).map(c => c.id));
+}
+
+export function generateDualDeck(main, sub, name = null) {
+  const cards = { ...thinStandard(main, DUAL.MAIN) };
+  for (const [id, n] of Object.entries(thinStandard(sub, DUAL.SUB))) cards[id] = (cards[id] || 0) + n;
+  return { id: null, name: name || `${KINGDOMS[main].name}主·${KINGDOMS[sub].name}副`, mode: 'dual', kingdom: main, subKingdom: sub, cards };
+}
+
+/** 推荐组合（主→副）：每个势力做主阵营各一套 */
+export const DUAL_RECOMMENDED = [['wei', 'lb'], ['shu', 'wei'], ['wu', 'shu'], ['lb', 'wei']];
+export function dualPresets() {
+  return DUAL_RECOMMENDED.map(([m, sb]) => {
+    const fixed = EXTRA_PRESETS.find(d => d.mode === 'dual' && d.kingdom === m && d.subKingdom === sb);
+    const base = fixed ? { ...fixed, cards: { ...fixed.cards } } : generateDualDeck(m, sb, `${KINGDOMS[m].army}·${KINGDOMS[sb].name}援（推荐）`);
+    return { ...base, id: `preset_dual_${m}_${sb}`, official: true };
+  });
 }
 
 /** 卡组 → 卡牌定义列表（交给对局创建实例） */
@@ -160,9 +220,13 @@ async function pipe(bytes, Stream, fmt) {
 /** 卡组 → 分享码（卡牌 id 去掉本势力前缀以缩短） */
 export async function encodeDeck(deck) {
   const prefix = `${deck.kingdom}_`;
+  const subPrefix = deck.subKingdom ? `${deck.subKingdom}_` : null;
+  const short = id => (id.startsWith(prefix) ? id.slice(prefix.length) : (subPrefix && id.startsWith(subPrefix) ? `~${id.slice(subPrefix.length)}` : `!${id}`));
   const c = Object.entries(deck.cards).filter(([, n]) => n > 0)
-    .map(([id, n]) => `${id.startsWith(prefix) ? id.slice(prefix.length) : `!${id}`}${n > 1 ? `*${n}` : ''}`).join(',');
-  const json = JSON.stringify({ v: 1, m: deck.mode || 'single', k: deck.kingdom, n: deck.name, c });
+    .map(([id, n]) => `${short(id)}${n > 1 ? `*${n}` : ''}`).join(',');
+  const payload = { v: 1, m: deck.mode || 'single', k: deck.kingdom, n: deck.name, c };
+  if (deck.subKingdom) payload.s = deck.subKingdom;
+  const json = JSON.stringify(payload);
   const raw = new TextEncoder().encode(json);
   if (typeof CompressionStream !== 'undefined') {
     try { return `SGK1-${b64url(await pipe(raw, CompressionStream, 'deflate-raw'))}`; } catch { /* fall through */ }
@@ -187,10 +251,12 @@ export async function decodeDeck(input) {
   const cards = {};
   for (const part of String(data.c || '').split(',').filter(Boolean)) {
     const [idPart, nPart] = part.split('*');
-    const id = idPart.startsWith('!') ? idPart.slice(1) : `${data.k}_${idPart}`;
+    const id = idPart.startsWith('!') ? idPart.slice(1) : idPart.startsWith('~') ? `${data.s}_${idPart.slice(1)}` : `${data.k}_${idPart}`;
     cards[id] = (cards[id] || 0) + (parseInt(nPart || '1', 10) || 1);
   }
-  return { id: null, name: String(data.n || '导入的卡组').slice(0, 24), mode: data.m || 'single', kingdom: data.k, cards };
+  const deck = { id: null, name: String(data.n || '导入的卡组').slice(0, 24), mode: data.m || 'single', kingdom: data.k, cards };
+  if (data.s && KINGDOM_KEYS.includes(data.s)) deck.subKingdom = data.s;
+  return deck;
 }
 
 export function shareLink(code) {

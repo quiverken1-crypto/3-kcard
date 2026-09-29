@@ -33,7 +33,7 @@ import { KINGDOMS } from './data/cardDB.js';
 import { setSeatKingdoms, seatArmy } from './ui/seats.js';
 import { preloadAssets } from './ui/preloader.js';
 import { DeckBuilder } from './ui/deckBuilder.js';
-import { listDecks, getDeck, validateDeck, deckCardDefs, lastDeckId, rememberDeck } from './data/deckStore.js';
+import { listDecks, getDeck, validateDeck, deckCardDefs, lastDeckId, rememberDeckFor, dualPresets, generateDualDeck, DUAL } from './data/deckStore.js';
 import { createCard, createKingdomDeck } from './engine/state.js';
 
 const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb'];
@@ -272,7 +272,7 @@ export class AppCoordinator {
     const doc = typeof document !== 'undefined' ? document : globalThis.document;
     if (!doc) return;
     const on = (id, fn) => doc.getElementById(id)?.addEventListener('click', fn);
-    on('home-btn-pve', () => this._pickHq({ lan: false }, (k, hq, enemy, deckId) => this.startSoloMatch({ faction: 'WEI', kingdom: k, hq, enemyKingdom: enemy, deckId })));
+    on('home-btn-pve', () => this._pickHq({ lan: false }, (k, hq, enemy, deckId, mode) => this.startSoloMatch({ faction: 'WEI', kingdom: k, hq, enemyKingdom: enemy, deckId, mode })));
     on('home-btn-pvp', () => this.networkModal.show('tab-host'));
     on('home-btn-eve', () => this.startSandboxMatch({ stepSpeedMs: 750 }));
     on('home-btn-rules', () => doc.getElementById('modal-rulebook')?.classList.remove('hidden'));
@@ -300,14 +300,15 @@ export class AppCoordinator {
     const ALL = ['wei', 'shu', 'wu', 'lb'];
     let kingdom = this._lastKingdom || 'wei';
     let enemy = 'RANDOM';
-    if (!modal || !box) { onPick(kingdom, 'RANDOM', 'RANDOM'); return; }
+    let mode = this._lastMode || 'single';
+    if (!modal || !box) { onPick(kingdom, 'RANDOM', 'RANDOM', null, mode); return; }
     const T = { PLAIN: '平原', WATER: '水域', FOREST: '林地', MOUNTAIN: '山地', PASS: '险关' };
     const close = () => { modal.classList.add('hidden'); this._refreshDeckSelect = null; };
     const deckSel = doc.getElementById('hq-pick-deck');
     const fillDecks = () => {
       if (!deckSel) return;
-      const decks = listDecks({ mode: 'single', kingdom }).filter(d => validateDeck(d).ok);
-      const want = lastDeckId(kingdom);
+      const decks = listDecks({ mode, kingdom }).filter(d => validateDeck(d).ok);
+      const want = lastDeckId(kingdom, mode);
       deckSel.replaceChildren(...decks.map(d => {
         const o = doc.createElement('option');
         o.value = d.id;
@@ -318,11 +319,11 @@ export class AppCoordinator {
     };
     this._refreshDeckSelect = fillDecks;
     const editBtn = doc.getElementById('hq-pick-deck-edit');
-    if (editBtn) editBtn.onclick = () => { this.deckBuilder.kingdomFilter = kingdom; this.deckBuilder.open(); };
+    if (editBtn) editBtn.onclick = () => { this.deckBuilder.kingdomFilter = kingdom; this.deckBuilder.mode = mode; this.deckBuilder.open(); };
     const done = (hq) => {
       const deckId = deckSel?.value || null;
-      if (deckId) rememberDeck(kingdom, deckId);
-      close(); this._lastKingdom = kingdom; onPick(kingdom, hq, enemy, deckId);
+      if (deckId) rememberDeckFor(kingdom, mode, deckId);
+      close(); this._lastKingdom = kingdom; this._lastMode = mode; onPick(kingdom, hq, enemy, deckId, mode);
     };
     const chips = (container, opts, current, onSel) => {
       if (!container) return;
@@ -335,6 +336,9 @@ export class AppCoordinator {
       }));
     };
     const draw = () => {
+      chips(doc.getElementById('hq-pick-mode-options'), [['single', '单阵营'], ['dual', '双阵营·测试（30血）']], mode, m => { mode = m; draw(); });
+      const selfLabel = doc.getElementById('hq-pick-self-label');
+      if (selfLabel) selfLabel.textContent = mode === 'dual' ? '我方主阵营' : '我方势力';
       chips(doc.getElementById('hq-pick-self-options'), ALL.map(k => [k, KINGDOMS[k].name]), kingdom, k => { kingdom = k; if (enemy === k) enemy = 'RANDOM'; draw(); });
       fillDecks();
       const enemyRow = doc.getElementById('hq-pick-enemy-row');
@@ -345,7 +349,7 @@ export class AppCoordinator {
         card.className = `hq-card hq-card-${kingdom}`;
         card.innerHTML = `<span class="hq-card-name">${hq.name}</span>
           <span class="hq-card-terrains">${hq.terrains.map(t => `<i class="terrain-chip chip-${t.toLowerCase()}">${T[t]}</i>`).join('')}</span>
-          <span class="hq-card-shield">${hq.hp}</span>
+          <span class="hq-card-shield">${mode === 'dual' ? DUAL.HQ_HP : hq.hp}</span>
           <span class="hq-card-grain">粮草 1–10</span>`;
         card.onclick = () => done(hq.id);
         return card;
@@ -924,7 +928,7 @@ export class AppCoordinator {
   // Mode Initializers
   // ==========================================
 
-  _newMatchOptions(hqs = {}, kingdoms = {}, decks = {}) {
+  _newMatchOptions(hqs = {}, kingdoms = {}, decks = {}, mode = 'single') {
     const k = { WEI: kingdoms.WEI || 'wei', SHU: kingdoms.SHU || 'shu' };
     setSeatKingdoms(k);
     const opts = {
@@ -934,14 +938,23 @@ export class AppCoordinator {
       ...buildDeckOptions(this.cardPack, k)
     };
     // 选定的卡组（官方预设或自组）：覆盖该座位的默认卡组
+    const dual = mode === 'dual';
+    if (dual) opts.initialHp = DUAL.HQ_HP;
     for (const seat of ['WEI', 'SHU']) {
-      const deck = decks[seat];
-      if (!deck || deck.kingdom !== k[seat] || !validateDeck(deck).ok) continue;
+      let deck = decks[seat];
+      const ok = deck && deck.kingdom === k[seat] && (deck.mode || 'single') === mode && validateDeck(deck).ok;
+      if (!ok) deck = dual ? this._defaultDualDeck(k[seat]) : null;
+      if (!deck) continue;
       const pre = seat === 'WEI' ? 'wei' : 'shu';
-      opts[`${pre}Deck`] = deckCardDefs(deck).map(def => createCard(def, { faction: seat, kingdom: k[seat] }));
-      opts[`${pre}Reserve`] = createKingdomDeck(k[seat], seat).reservePool;
+      opts[`${pre}Deck`] = deckCardDefs(deck).map(def => createCard(def, { faction: seat, kingdom: def.kingdom || k[seat] }));
+      opts[`${pre}Reserve`] = [deck.kingdom, deck.subKingdom].filter(Boolean).flatMap(x => createKingdomDeck(x, seat).reservePool);
     }
     return opts;
+  }
+
+  /** 双阵营默认卡组：该势力做主阵营的推荐预设 */
+  _defaultDualDeck(kingdom) {
+    return dualPresets().find(d => d.kingdom === kingdom) || generateDualDeck(kingdom, KINGDOM_KEYS.find(x => x !== kingdom));
   }
 
   startSoloMatch(cfg = {}) {
@@ -959,7 +972,8 @@ export class AppCoordinator {
     this.rulesEngine = new RulesEngine(this._newMatchOptions(
       { [this.localPlayerId]: cfg.hq || 'RANDOM' },
       { [this.localPlayerId]: myKingdom, [this.opponentPlayerId]: enemyKingdom },
-      { [this.localPlayerId]: cfg.deckId ? getDeck(cfg.deckId) : null }
+      { [this.localPlayerId]: cfg.deckId ? getDeck(cfg.deckId) : null },
+      cfg.mode || 'single'
     ));
     this.lastProcessedLogIndex = 0;
 
@@ -1083,16 +1097,19 @@ export class AppCoordinator {
       unlisten(onLobby);
       const ours = KINGDOM_KEYS.includes(myPick.kingdom) ? myPick.kingdom : 'wei';
       const theirs = KINGDOM_KEYS.includes(theirPick.kingdom) ? theirPick.kingdom : 'shu';
-      const deckOf = (pick, k) => (pick.deck && pick.deck.kingdom === k && validateDeck(pick.deck).ok ? pick.deck : null);
+      // 模式以房主为准；对方卡组模式不符或不合法时，用该势力的默认卡组
+      const mode = myPick.mode === 'dual' ? 'dual' : 'single';
+      const deckOf = (pick, k) => (pick.deck && pick.deck.kingdom === k && (pick.deck.mode || 'single') === mode && validateDeck(pick.deck).ok ? pick.deck : null);
+      if ((theirPick.mode || 'single') !== mode) FX.showTriggerHint(`对方选择的模式与房主不同，按房主的${mode === 'dual' ? '双阵营' : '单阵营'}模式开局`);
       this._beginHostMatch(peerConnection, { WEI: myPick.hq || 'RANDOM', SHU: theirPick.hq || 'RANDOM' }, { WEI: ours, SHU: theirs },
-        { WEI: deckOf(myPick, ours), SHU: deckOf(theirPick, theirs) });
+        { WEI: deckOf(myPick, ours), SHU: deckOf(theirPick, theirs) }, mode);
     };
     listen(onLobby);
     if (!isHost) this._beginClientMatch(peerConnection);
 
-    this._pickHq({ lan: true, onCancel: leave }, (k, hq, _enemy, deckId) => {
+    this._pickHq({ lan: true, onCancel: leave }, (k, hq, _enemy, deckId, mode) => {
       const d = deckId ? getDeck(deckId) : null;
-      myPick = { type: 'LOBBY_PICK', kingdom: k, hq, deck: d ? { kingdom: d.kingdom, name: d.name, cards: d.cards } : null };
+      myPick = { type: 'LOBBY_PICK', kingdom: k, hq, mode, deck: d ? { kingdom: d.kingdom, subKingdom: d.subKingdom, mode: d.mode, name: d.name, cards: d.cards } : null };
       if (!theirPick) FX.showTriggerHint('已选定，等待对方选择…');
       send(myPick);
       if (isHost) { tryStart(); return; }
@@ -1104,9 +1121,9 @@ export class AppCoordinator {
     });
   }
 
-  _beginHostMatch(peerConnection, hqs, kingdoms, decks = {}) {
+  _beginHostMatch(peerConnection, hqs, kingdoms, decks = {}, mode = 'single') {
     {
-      this.rulesEngine = new RulesEngine(this._newMatchOptions(hqs, kingdoms, decks));
+      this.rulesEngine = new RulesEngine(this._newMatchOptions(hqs, kingdoms, decks, mode));
       if (this.rulesEngine.state.phase === PHASES.MULLIGAN) startTurn(this.rulesEngine.state, this.rulesEngine.state.firstPlayer);
       this.hostSync = new HostSyncManager({
         rulesEngine: this.rulesEngine,

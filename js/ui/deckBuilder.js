@@ -7,8 +7,8 @@
  */
 import { KINGDOMS, DB_CARD_MAP } from '../data/cardDB.js';
 import {
-  DECK_SIZE, KINGDOM_KEYS, libraryFor, cardLimit, listDecks, getDeck, saveDeck, deleteDeck, duplicateDeck,
-  validateDeck, deckTotal, deckStats, encodeDeck, decodeDeck, shareLink
+  DECK_SIZE, DUAL, KINGDOM_KEYS, libraryFor, cardLimit, listDecks, getDeck, saveDeck, deleteDeck, duplicateDeck,
+  validateDeck, deckTotal, deckStats, encodeDeck, decodeDeck, shareLink, deckSize, kingdomCounts, generateDualDeck
 } from '../data/deckStore.js';
 import { renderHandCard, escapeHtml, showCardDetails } from './cardRenderer.js';
 import { createCard } from '../engine/state.js';
@@ -36,6 +36,7 @@ export class DeckBuilder {
     this.kingdomFilter = 'all';
     this.filters = { type: 'all', troop: 'all', cost: 'all', src: 'all', q: '' };
     this.tab = 'pool';
+    this.mode = 'single';
   }
 
   // ------------------------------------------------------------
@@ -79,7 +80,7 @@ export class DeckBuilder {
   renderList() {
     this.deck = null;
     const kf = this.kingdomFilter;
-    const decks = listDecks({ mode: 'single', kingdom: kf === 'all' ? null : kf });
+    const decks = listDecks({ mode: this.mode, kingdom: kf === 'all' ? null : kf });
     const root = this._ensureRoot();
     root.innerHTML = `
       <div class="db-shell db-list-view">
@@ -92,9 +93,10 @@ export class DeckBuilder {
           </div>
         </header>
         <div class="db-mode-tabs">
-          <button class="db-tab active">单阵营（40张）</button>
-          <button class="db-tab" disabled title="第4步加入">双阵营（测试）· 即将开放</button>
+          <button class="db-tab${this.mode === 'single' ? ' active' : ''}" data-mode="single">单阵营（40张）</button>
+          <button class="db-tab${this.mode === 'dual' ? ' active' : ''}" data-mode="dual">双阵营·测试（主30+副20）</button>
         </div>
+        ${this.mode === 'dual' ? '<p class="db-hint">双阵营（测试）：主阵营 30 张 + 副阵营 20 张，主城 30 血；主城从主阵营选。势力筛选按主阵营。</p>' : ''}
         <div class="db-chips db-kfilter">
           ${[['all', '全部'], ...KINGDOM_KEYS.map(k => [k, KINGDOMS[k].army])].map(([k, l]) => `<button class="db-chip${kf === k ? ' active' : ''}" data-kf="${k}">${l}</button>`).join('')}
         </div>
@@ -107,6 +109,7 @@ export class DeckBuilder {
     root.querySelector('[data-act="new"]').onclick = () => this.renderNew();
     root.querySelector('[data-act="import"]').onclick = () => this.renderImport();
     root.querySelectorAll('[data-kf]').forEach(b => { b.onclick = () => { this.kingdomFilter = b.dataset.kf; this.renderList(); }; });
+    root.querySelectorAll('[data-mode]').forEach(b => { b.onclick = () => { this.mode = b.dataset.mode; this.renderList(); }; });
     root.querySelectorAll('.db-deck-card').forEach(el => {
       const d = getDeck(el.dataset.id);
       el.querySelectorAll('[data-deck-act]').forEach(btn => {
@@ -119,12 +122,13 @@ export class DeckBuilder {
     const v = validateDeck(d);
     const { byType, curve } = deckStats(d);
     const k = KINGDOMS[d.kingdom];
+    const sub = d.mode === 'dual' && d.subKingdom ? `<span class="db-seal db-seal-sub seal-${d.subKingdom}" title="副阵营">${KINGDOMS[d.subKingdom]?.name || '?'}</span>` : '';
     return `
       <div class="db-deck-card deck-${d.kingdom}${d.official ? ' official' : ''}" data-id="${d.id}">
         <div class="db-deck-top">
-          <span class="db-seal seal-${d.kingdom}">${k?.name || '?'}</span>
+          <span class="db-seal seal-${d.kingdom}">${k?.name || '?'}</span>${sub}
           <div class="db-deck-name">${d.official ? '🔒 ' : ''}${escapeHtml(d.name)}</div>
-          <span class="db-count ${v.ok ? 'ok' : 'bad'}">${v.total}/${DECK_SIZE}</span>
+          <span class="db-count ${v.ok ? 'ok' : 'bad'}">${v.total}/${deckSize(d)}</span>
         </div>
         <div class="db-deck-mid">
           <span>单位 ${byType.UNIT} · 战法 ${byType.TACTIC} · 反制 ${byType.COUNTER}</span>
@@ -153,27 +157,42 @@ export class DeckBuilder {
   // ------------------------------------------------------------
   renderNew() {
     const root = this.root;
+    const dual = this.mode === 'dual';
     root.innerHTML = `
       <div class="db-shell db-narrow">
-        <header class="db-head"><button class="db-btn db-back" data-act="back">← 卡组</button><h2 class="db-title">新建卡组</h2></header>
-        <p class="db-hint">选择势力：</p>
+        <header class="db-head"><button class="db-btn db-back" data-act="back">← 卡组</button><h2 class="db-title">新建${dual ? '双阵营（测试）' : ''}卡组</h2></header>
+        <p class="db-hint">${dual ? `主阵营（${DUAL.MAIN}张，主城从这里选）：` : '选择势力：'}</p>
         <div class="db-chips db-kpick">${KINGDOM_KEYS.map(k => `<button class="db-chip db-chip-big deck-${k}" data-k="${k}">${KINGDOMS[k].army}</button>`).join('')}</div>
+        ${dual ? `<p class="db-hint">副阵营（${DUAL.SUB}张）：</p>
+        <div class="db-chips db-spick">${KINGDOM_KEYS.map(k => `<button class="db-chip db-chip-big deck-${k}" data-s="${k}">${KINGDOMS[k].army}</button>`).join('')}</div>` : ''}
         <p class="db-hint">起点：</p>
         <div class="db-chips">
-          <button class="db-chip active" data-start="preset">从标准预设开始改</button>
+          <button class="db-chip active" data-start="preset">${dual ? '一键生成（按费用曲线从两家标准卡组均衡抽取）' : '从标准预设开始改'}</button>
           <button class="db-chip" data-start="empty">空白卡组</button>
         </div>
         <div class="db-row"><button class="db-btn db-primary" data-act="go" disabled>开始编辑</button></div>
       </div>`;
     let k = null;
+    let sub = null;
     let start = 'preset';
     const go = root.querySelector('[data-act="go"]');
+    const refresh = () => {
+      root.querySelectorAll('[data-s]').forEach(x => { x.disabled = x.dataset.s === k; if (x.dataset.s === k && sub === k) { sub = null; } x.classList.toggle('active', x.dataset.s === sub); });
+      go.disabled = !k || (dual && !sub);
+    };
     root.querySelector('[data-act="back"]').onclick = () => this.renderList();
-    root.querySelectorAll('[data-k]').forEach(b => { b.onclick = () => { k = b.dataset.k; root.querySelectorAll('[data-k]').forEach(x => x.classList.toggle('active', x === b)); go.disabled = false; }; });
+    root.querySelectorAll('[data-k]').forEach(b => { b.onclick = () => { k = b.dataset.k; root.querySelectorAll('[data-k]').forEach(x => x.classList.toggle('active', x === b)); refresh(); }; });
+    root.querySelectorAll('[data-s]').forEach(b => { b.onclick = () => { sub = b.dataset.s; refresh(); }; });
     root.querySelectorAll('[data-start]').forEach(b => { b.onclick = () => { start = b.dataset.start; root.querySelectorAll('[data-start]').forEach(x => x.classList.toggle('active', x === b)); }; });
     go.onclick = () => {
-      const preset = getDeck(`preset_${k}_standard`);
-      const deck = { id: null, name: `我的${KINGDOMS[k].army}`, mode: 'single', kingdom: k, cards: start === 'preset' ? { ...preset.cards } : {} };
+      let deck;
+      if (dual) {
+        deck = start === 'preset' ? generateDualDeck(k, sub, `我的${KINGDOMS[k].name}主·${KINGDOMS[sub].name}副`)
+          : { id: null, name: `我的${KINGDOMS[k].name}主·${KINGDOMS[sub].name}副`, mode: 'dual', kingdom: k, subKingdom: sub, cards: {} };
+      } else {
+        const preset = getDeck(`preset_${k}_standard`);
+        deck = { id: null, name: `我的${KINGDOMS[k].army}`, mode: 'single', kingdom: k, cards: start === 'preset' ? { ...preset.cards } : {} };
+      }
       this.renderEditor(deck, true);
     };
   }
@@ -222,11 +241,11 @@ export class DeckBuilder {
         const v = validateDeck(deck);
         out.innerHTML = `
           <div class="db-deck-card deck-${deck.kingdom}">
-            <div class="db-deck-top"><span class="db-seal seal-${deck.kingdom}">${KINGDOMS[deck.kingdom].name}</span><div class="db-deck-name">${escapeHtml(deck.name)}</div><span class="db-count ${v.ok ? 'ok' : 'bad'}">${v.total}/${DECK_SIZE}</span></div>
+            <div class="db-deck-top"><span class="db-seal seal-${deck.kingdom}">${KINGDOMS[deck.kingdom].name}</span>${deck.subKingdom ? `<span class="db-seal db-seal-sub seal-${deck.subKingdom}">${KINGDOMS[deck.subKingdom].name}</span>` : ''}<div class="db-deck-name">${escapeHtml(deck.name)}${deck.mode === 'dual' ? '（双阵营）' : ''}</div><span class="db-count ${v.ok ? 'ok' : 'bad'}">${v.total}/${deckSize(deck)}</span></div>
             ${v.errors.length ? `<div class="db-deck-warn">${v.errors.map(escapeHtml).join('<br>')}</div>` : ''}
             <div class="db-deck-actions"><button class="db-btn db-primary" data-act="save">保存到我的卡组</button><button class="db-btn" data-act="edit">打开编辑</button></div>
           </div>`;
-        out.querySelector('[data-act="save"]').onclick = () => { const s = saveDeck(deck); this._toast(`已保存【${s.name}】`); this.onChange(); this.renderList(); };
+        out.querySelector('[data-act="save"]').onclick = () => { const s = saveDeck(deck); this.mode = s.mode || 'single'; this._toast(`已保存【${s.name}】`); this.onChange(); this.renderList(); };
         out.querySelector('[data-act="edit"]').onclick = () => this.renderEditor(deck, true);
       } catch (err) {
         out.innerHTML = `<p class="db-error">${escapeHtml(err.message || '解析失败')}</p>`;
@@ -251,7 +270,7 @@ export class DeckBuilder {
       <div class="db-shell db-editor deck-${k}" data-tab="pool">
         <header class="db-head">
           <button class="db-btn db-back" data-act="back">← 卡组</button>
-          <span class="db-seal seal-${k}">${KINGDOMS[k].name}</span>
+          <span class="db-seal seal-${k}">${KINGDOMS[k].name}</span>${deck.mode === 'dual' ? `<span class="db-seal db-seal-sub seal-${deck.subKingdom}" title="副阵营">${KINGDOMS[deck.subKingdom].name}</span>` : ''}
           <input class="db-name" maxlength="24" value="${escapeHtml(deck.name)}" aria-label="卡组名称">
           <div class="db-head-actions">
             <button class="db-btn" data-act="share">分享码</button>
@@ -260,10 +279,11 @@ export class DeckBuilder {
         </header>
         <div class="db-mobile-tabs">
           <button class="db-tab active" data-tab="pool">卡池</button>
-          <button class="db-tab" data-tab="deck">卡组 <b class="db-tab-count">0/40</b></button>
+          <button class="db-tab" data-tab="deck">卡组 <b class="db-tab-count">0/${deckSize(deck)}</b></button>
         </div>
         <div class="db-body">
           <aside class="db-filters">
+            ${deck.mode === 'dual' ? `<div class="db-fgroup"><span>阵营</span>${chip('side', 'all', '全部', f.side || 'all')}${chip('side', 'main', `主·${KINGDOMS[k].name}`, f.side || 'all')}${chip('side', 'sub', `副·${KINGDOMS[deck.subKingdom].name}`, f.side || 'all')}</div>` : ''}
             <div class="db-fgroup"><span>类型</span>${chip('type', 'all', '全部', f.type)}${Object.entries(TYPE_LABEL).map(([v, l]) => chip('type', v, l, f.type)).join('')}</div>
             <div class="db-fgroup"><span>兵种</span>${chip('troop', 'all', '全部', f.troop)}${Object.entries(TROOP_LABEL).map(([v, l]) => chip('troop', v, l, f.troop)).join('')}</div>
             <div class="db-fgroup"><span>费用</span>${COST_BUCKETS.map(([v, l]) => chip('cost', v, l, f.cost)).join('')}</div>
@@ -300,6 +320,10 @@ export class DeckBuilder {
 
   _matches(def) {
     const f = this.filters;
+    if (this.deck.mode === 'dual' && f.side && f.side !== 'all') {
+      if (f.side === 'main' && def.kingdom !== this.deck.kingdom) return false;
+      if (f.side === 'sub' && def.kingdom !== this.deck.subKingdom) return false;
+    }
     if (f.type !== 'all' && def.type !== f.type) return false;
     if (f.troop !== 'all' && def.troopType !== f.troop) return false;
     if (f.src === 'base' && def.extra) return false;
@@ -319,11 +343,12 @@ export class DeckBuilder {
     const pool = this.root.querySelector('.db-pool');
     if (!pool) return;
     const k = this.deck.kingdom;
-    const list = libraryFor(k).filter(d => this._matches(d));
+    const kingdoms = this.deck.mode === 'dual' ? [k, this.deck.subKingdom] : [k];
+    const list = kingdoms.flatMap(x => libraryFor(x)).filter(d => this._matches(d));
     pool.replaceChildren();
     if (!list.length) { pool.innerHTML = '<p class="db-empty">没有符合筛选的卡牌</p>'; return; }
     for (const def of list) {
-      const card = createCard(def, { faction: k.toUpperCase(), kingdom: k, instanceId: `lib_${def.id}` });
+      const card = createCard(def, { faction: 'WEI', kingdom: def.kingdom || k, instanceId: `lib_${def.id}` });
       const tile = h(`<div class="db-tile" data-id="${def.id}"><div class="db-tile-card"></div><span class="db-tile-badge"></span>${def.extra ? '<span class="db-tile-src">旧图鉴</span>' : ''}</div>`);
       const el = renderHandCard(card);
       tile.querySelector('.db-tile-card').appendChild(el);
@@ -351,7 +376,12 @@ export class DeckBuilder {
   _add(id) {
     const n = this.deck.cards[id] || 0;
     if (n >= cardLimit(id)) { this._toast(`【${DB_CARD_MAP[id].name}】最多${cardLimit(id)}张`); return; }
-    if (deckTotal(this.deck) >= DECK_SIZE) { this._toast(`卡组已满 ${DECK_SIZE} 张，先移除一些`); return; }
+    if (this.deck.mode === 'dual') {
+      const kc = kingdomCounts(this.deck);
+      const kd = DB_CARD_MAP[id].kingdom;
+      const cap = kd === this.deck.kingdom ? DUAL.MAIN : DUAL.SUB;
+      if ((kc[kd] || 0) >= cap) { this._toast(`${kd === this.deck.kingdom ? '主' : '副'}阵营已满 ${cap} 张，先移除一些`); return; }
+    } else if (deckTotal(this.deck) >= DECK_SIZE) { this._toast(`卡组已满 ${DECK_SIZE} 张，先移除一些`); return; }
     this.deck.cards[id] = n + 1;
     this.dirty = true;
     this._renderDeck(id);
@@ -371,8 +401,11 @@ export class DeckBuilder {
     const v = validateDeck(deck);
     const { byType, curve } = deckStats(deck);
     const summary = this.root.querySelector('.db-summary');
-    summary.innerHTML = `
-      <div class="db-sum-top"><span class="db-count big ${v.ok ? 'ok' : 'bad'}">${v.total}/${DECK_SIZE}</span>
+    const size = deckSize(deck);
+    const dualLine = deck.mode === 'dual'
+      ? `<div class="db-sum-dual"><span class="db-seal seal-${deck.kingdom}">${KINGDOMS[deck.kingdom].name}</span> ${v.perKingdom[deck.kingdom] || 0}/${DUAL.MAIN}　<span class="db-seal db-seal-sub seal-${deck.subKingdom}">${KINGDOMS[deck.subKingdom].name}</span> ${v.perKingdom[deck.subKingdom] || 0}/${DUAL.SUB}</div>` : '';
+    summary.innerHTML = `${dualLine}
+      <div class="db-sum-top"><span class="db-count big ${v.ok ? 'ok' : 'bad'}">${v.total}/${size}</span>
         <span class="db-sum-types">单位 ${byType.UNIT}<br>战法 ${byType.TACTIC}<br>反制 ${byType.COUNTER}</span>${curveSvg(curve, 120, 30)}</div>`;
     const rows = this.root.querySelector('.db-rows');
     const entries = Object.entries(deck.cards).map(([id, n]) => [DB_CARD_MAP[id], n]).filter(([d]) => d)
@@ -380,7 +413,7 @@ export class DeckBuilder {
     rows.innerHTML = entries.length ? entries.map(([d, n]) => `
       <div class="db-row-card type-${d.type.toLowerCase()}${d.id === flashId ? ' flash' : ''}" data-id="${d.id}">
         <span class="db-rc-cost">${d.cost}</span>
-        <button class="db-rc-name" data-act="info">${escapeHtml(d.name)}<small>${d.type === 'UNIT' ? TROOP_LABEL[d.troopType] || '' : TYPE_LABEL[d.type]}</small></button>
+        ${deck.mode === 'dual' ? `<span class="db-rc-k seal-${d.kingdom}">${KINGDOMS[d.kingdom]?.name || ''}</span>` : ''}<button class="db-rc-name" data-act="info">${escapeHtml(d.name)}<small>${d.type === 'UNIT' ? TROOP_LABEL[d.troopType] || '' : TYPE_LABEL[d.type]}</small></button>
         <span class="db-rc-n">×${n}</span>
         <button class="db-rc-btn" data-act="minus" aria-label="减少">−</button>
         <button class="db-rc-btn" data-act="plus" aria-label="增加"${n >= cardLimit(d.id) ? ' disabled' : ''}>＋</button>
@@ -389,14 +422,14 @@ export class DeckBuilder {
       const id = r.dataset.id;
       r.querySelector('[data-act="minus"]').onclick = () => this._remove(id);
       r.querySelector('[data-act="plus"]').onclick = () => this._add(id);
-      r.querySelector('[data-act="info"]').onclick = () => showCardDetails(createCard(DB_CARD_MAP[id], { faction: deck.kingdom.toUpperCase(), kingdom: deck.kingdom }));
+      r.querySelector('[data-act="info"]').onclick = () => showCardDetails(createCard(DB_CARD_MAP[id], { faction: 'WEI', kingdom: DB_CARD_MAP[id].kingdom || deck.kingdom }));
     });
     const bar = this.root.querySelector('.db-statusbar');
     const msg = v.errors[0] || v.warnings[0] || '卡组完整，可以保存并用于开局';
-    bar.innerHTML = `<span class="db-count ${v.ok ? 'ok' : 'bad'}">${v.total}/${DECK_SIZE}</span><span class="db-status-msg ${v.ok ? (v.warnings.length ? 'warn' : 'ok') : 'bad'}">${escapeHtml(msg)}</span><button class="db-btn db-primary" data-act="save2">保存</button>`;
+    bar.innerHTML = `<span class="db-count ${v.ok ? 'ok' : 'bad'}">${v.total}/${size}</span><span class="db-status-msg ${v.ok ? (v.warnings.length ? 'warn' : 'ok') : 'bad'}">${escapeHtml(msg)}</span><button class="db-btn db-primary" data-act="save2">保存</button>`;
     bar.querySelector('[data-act="save2"]').onclick = () => this._save();
     const tc = this.root.querySelector('.db-tab-count');
-    if (tc) tc.textContent = `${v.total}/${DECK_SIZE}`;
+    if (tc) tc.textContent = `${v.total}/${size}`;
   }
 
   _save() {
@@ -404,7 +437,7 @@ export class DeckBuilder {
     const saved = saveDeck(this.deck);
     this.deck = { ...saved, cards: { ...saved.cards } };
     this.dirty = false;
-    this._toast(v.ok ? `已保存【${saved.name}】` : `已保存为未完成卡组（${v.total}/${DECK_SIZE}），补齐后才能用于开局`);
+    this._toast(v.ok ? `已保存【${saved.name}】` : `已保存为未完成卡组（${v.total}/${deckSize(saved)}），补齐后才能用于开局`);
     this.onChange();
   }
 }

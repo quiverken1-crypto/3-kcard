@@ -27,5 +27,18 @@ export const EXTRA_PRESETS = [
       shu_hao_jie_gui_xin: 2, shu_chong_zheng_qi_gu: 1, shu_shao_tun: 1, shu_shou_long: 2, shu_cefan: 2,
       shu_chengsheng: 1, shu_shipo: 1, shu_shanjia: 1, shu_huo_gong: 2
     }
+  },
+  // ---- 双阵营（测试）推荐预设：未在此手工配置的组合由 deckStore.generateDualDeck 自动生成 ----
+  {
+    id: 'preset_dual_lb_wei', name: '吕布军·魏援（推荐）', kingdom: 'lb', subKingdom: 'wei', mode: 'dual',
+    note: '吕布军全部单位 + 精选战法；魏援补齐轻骑与名将',
+    cards: {
+      lb_bing_zhou: 3, lb_wei_xu: 1, lb_song_xian: 1, lb_zhang_liao: 1, lb_gao_shun: 1, lb_cheng_lian: 1, lb_chen_gong: 1,
+      lb_xian_zhen: 3, lb_wei_yue: 1, lb_hou_cheng: 1, lb_hao_meng: 1, lb_cao_xing: 1, lb_lv_bu: 1,
+      lb_ye_xi: 2, lb_shanjia: 2, lb_chengsheng: 2, lb_cefan: 2, lb_tuqi: 2, lb_shipo: 1, lb_tuchi: 1, lb_jueshui: 1,
+      wei_qing_qi_bing: 2, wei_cao_hong: 1, wei_hu_bao_qi: 1, wei_lv_chang: 1, wei_li_dian: 1, wei_pang_de: 1, wei_xu_huang: 1,
+      wei_yue_jin: 1, wei_xia_hou_yuan: 1, wei_cao_ren: 1, wei_zhang_liao: 1, wei_tuqi: 1, wei_shanjia: 1, wei_tun_tian_zhi: 1,
+      wei_wei_kun: 1, wei_tuchi: 1, wei_cefan: 1, wei_tian_zi_zhao_ling: 1, wei_shipo: 1
+    }
   }
 ];
