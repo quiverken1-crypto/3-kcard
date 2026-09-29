@@ -29,7 +29,7 @@ import {
 } from '../engine/rulesEngine.js';
 import { getValidTargets, validateAttack, getEffectiveAttack } from '../engine/combat.js';
 import { evaluateBoard, DEFAULT_EVALUATION_WEIGHTS } from './evaluator.js';
-import { autoPickCards, autoChoiceTarget, getActiveSkill, activeSkillBlockReason, canDeployToFrontline } from '../engine/cardSkills.js';
+import { autoPickCards, autoChoiceTarget, getActiveSkill, getActiveSkills, activeSkillBlockReason, canDeployToFrontline } from '../engine/cardSkills.js';
 import { PRNG } from '../engine/prng.js';
 
 /**
@@ -472,9 +472,10 @@ export class HeuristicBot {
     }
     // 工坊积木主动技：能发动就发动（消耗不会致死，由 activeSkillBlockReason 保证）
     for (const u of getAllUnits(state, botFaction)) {
-      const spec = getActiveSkill(u);
-      if (spec?.custom && !spec.needsHandCard && !activeSkillBlockReason(state, u)) {
-        return { type: ACTION_TYPES.ACTIVATE_SKILL, playerId: botFaction, payload: { unitId: u.instanceId } };
+      for (const spec of getActiveSkills(u)) {
+        if (spec.custom && !spec.needsHandCard && !activeSkillBlockReason(state, u, spec.index)) {
+          return { type: ACTION_TYPES.ACTIVATE_SKILL, playerId: botFaction, payload: { unitId: u.instanceId, skillIndex: spec.index } };
+        }
       }
     }
     // 1. Check immediate lethal strike

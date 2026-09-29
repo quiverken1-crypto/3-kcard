@@ -74,8 +74,6 @@ export function getCardArtUrl(card) {
   const m = id.match(/^(wei|shu|wu|lb|gsz)_([a-z_]+)$/);
   if (!m || NO_ART.has(id)) return '';
   if (COMMON_ART.has(m[2])) return `assets/cards/common_${m[2]}.webp`;
-  // 公孙瓒势力暂无专属卡图（赵云借用蜀版）
-  if (m[1] === 'gsz') return id === 'gsz_zhao_yun' ? 'assets/cards/shu_zhao_yun.webp' : '';
   return `assets/cards/${id}.webp`;
 }
 
@@ -154,21 +152,24 @@ export function showCardDetails(card) {
   const doc = typeof document !== 'undefined' ? document : globalThis.document;
   const modal = doc?.getElementById('modal-card-inspector');
   if (!modal) return;
+  // 详情弹窗挂到 body 顶层：否则在卡组/工坊（body 下的全屏层）里会被压在下面
+  if (modal.parentElement !== doc.body) doc.body.appendChild(modal);
   CardInspector.hide();
   const setText = (id, value) => { const el = doc.getElementById(id); if (el) el.textContent = value; };
   setText('inspector-card-name', card.name || '无名卡牌');
   setText('inspector-faction-badge', `势力：${KINGDOMS[cardKingdom(card)]?.name || ''}`);
   setText('inspector-troop-badge', `类别：${getTroopTypeLabel(card.troopType, card.type)}`);
   setText('inspector-cost-badge', `粮草：${card.cost ?? 0}`);
-  setText('inspector-action-cost-badge', card.type === 'UNIT' ? `行动：${card.actionCost ?? 1}` : '即时战法');
+  setText('inspector-action-cost-badge', card.type === 'UNIT' ? `行动：${card.actionCost ?? 1} · 战力${card.atk ?? 0} / 生命${card.hp ?? 0}` : (card.type === 'COUNTER' ? '反制（暗置）' : '即时战法'));
   setText('inspector-skill-text', getCardDescription(card));
   setText('inspector-flavor-text', card.flavor || '暂无卡牌背景');
   const glossary = doc.getElementById('inspector-keywords-glossary');
   if (glossary) {
     const keywords = Array.isArray(card.keywords) ? card.keywords : [];
-    glossary.replaceChildren(...keywords.map(kw => {
+    const traits = (Array.isArray(card.badges) ? card.badges : []).map(b => TRAIT_GLOSSARY[b] || `性格·${b}`);
+    glossary.replaceChildren(...[...keywords.map(kw => KEYWORD_GLOSSARY[kw.replace(/[0-9]/g, '')] || `【${kw}】`), ...traits].map(t => {
       const item = doc.createElement('p');
-      item.textContent = KEYWORD_GLOSSARY[kw.replace(/[0-9]/g, '')] || `【${kw}】`;
+      item.textContent = t;
       return item;
     }));
     if (!keywords.length) glossary.textContent = '无词条';
@@ -265,7 +266,7 @@ export function renderHandCard(card, options = {}) {
     <div class="card-inner-frame">
       <div class="card-header card-header-bar">
         ${costHtml}
-        <div class="card-name-banner card-title-text" title="${escapeHtml(card.name)}">
+        <div class="card-name-banner card-title-text${String(card.name || "").length >= 4 ? " name-long" : ""}" title="${escapeHtml(card.name)}">
           ${escapeHtml(card.name)}
         </div>
         ${actionCostHtml}

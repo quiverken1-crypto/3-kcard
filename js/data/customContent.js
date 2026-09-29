@@ -81,6 +81,7 @@ function normalizeAbilities(list, where) {
       if (!ACTIVE_COST_CATALOG.some(([v]) => v === ct)) throw new Error(`${where}：主动技消耗类型无效`);
       return {
         trigger, conditions, effects,
+        ...(ab.name ? { name: text(String(ab.name), '主动技名称', 8) } : {}),
         cost: { type: ct, amount: int(ab.cost?.amount, '消耗数值', 0, 20, 1) },
         chance: int(ab.chance, '判定概率', 1, 100, 100),
         limit: ab.limit === 'GAME' ? 'GAME' : 'TURN'

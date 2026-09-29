@@ -67,7 +67,7 @@
 
 **主动技 ACTIVE**：消耗 → 判定 → 获得。
 `"cost": { "type": "NONE"|"PROVISIONS"|"DISCARD"|"SELF_DAMAGE"|"HQ_HP"|"PRESTIGE"|"ACTION", "amount": 2 }`，
-`"chance": 1–100`（判定成功率，默认 100），`"limit": "TURN"|"GAME"`。同一张卡的多条 ACTIVE 合并为一个技能，消耗与判定以第一条为准。
+`"chance": 1–100`（判定成功率，默认 100），`"limit": "TURN"|"GAME"`。可选 `"name"`（按钮上显示的技能名）。一张卡可以有多条 ACTIVE，每条都是独立的主动技（各自的按钮、消耗、判定、次数），每条可含多个效果。
 
 ## 例子
 

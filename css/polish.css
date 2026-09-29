@@ -343,3 +343,25 @@ body.m-land #player-dock .hand-card-fan.hand-scroll .card-hand.selected { transf
 .rule-repo { margin: 0 0 12px; padding: 8px 10px; border: 1px dashed rgba(217,179,106,.45); border-radius: 8px; font-size: 13px; line-height: 1.7; color: #e6d6b3; }
 .rule-repo a { color: #f3d892; word-break: break-all; }
 .rule-repo code { background: rgba(0,0,0,.35); padding: 0 4px; border-radius: 4px; }
+body.deck-builder-open #modal-card-inspector { z-index: 1700 !important; }
+/* 多个主动技按钮 */
+.skill-activate-wrap { position: fixed; z-index: 975; display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+.skill-activate-wrap .skill-activate-btn { position: static !important; }
+/* 工坊：技能块 */
+.ws-skill { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid rgba(217,179,106,.35); border-radius: 10px; background: rgba(255,255,255,.03); margin-bottom: 8px; }
+.ws-skill-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ws-skill-no { color: #f3d892; font-family: var(--font-serif-calligraphy); letter-spacing: 1px; min-width: 42px; }
+.ws-skill-head .ab-trigger { flex: 1 1 140px; }
+.ws-skill-head .ab-name { flex: 0 1 110px; }
+.ws-efs { display: flex; flex-direction: column; gap: 6px; padding-left: 10px; border-left: 2px solid rgba(217,179,106,.3); }
+.ws-ef { display: flex; flex-direction: column; gap: 3px; padding: 5px; border-radius: 8px; background: rgba(0,0,0,.2); }
+.ws-ef .ws-row > select, .ws-ef .ws-row > input { flex: 1 1 90px; }
+.ws-ef .ab-amount { flex: 0 0 56px !important; }
+.ws-ef .ab-keyword { flex: 0 1 80px !important; }
+.ws-skill-foot { display: flex; align-items: flex-start; gap: 8px; }
+.ws-skill-foot .ws-add-ef { flex: none; padding: 3px 10px; font-size: 12px; }
+.ws-skill-foot .ws-ab-desc { flex: 1; }
+.ws-sub-btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.ws-badge-chips .db-chip.active { background: #6b440c; border-color: #f0cf6a; color: #fff3cf; }
+.ws-badge-hint { margin-top: -2px; font-size: 11px; }
+.card-hand .card-name-banner.name-long { font-size: 11px !important; letter-spacing: 0 !important; text-overflow: clip !important; }

@@ -394,19 +394,19 @@ export function auraModifiers(state, unit) {
   return { atk, cost };
 }
 
-/** 主动技：同一张卡的多条“主动技”积木合并为一个技能，消耗/判定/次数以第一条为准 */
-export function activeAbilityOf(unit) {
-  const list = (unit?.abilities || []).filter(a => a.trigger === 'ACTIVE');
-  if (!list.length) return null;
-  const head = list[0];
-  return {
-    cost: head.cost || { type: 'NONE', amount: 0 },
-    chance: Math.max(0, Math.min(100, head.chance ?? 100)),
-    limit: head.limit === 'GAME' ? 'GAME' : 'TURN',
-    conditions: head.conditions || [],
-    effects: list.flatMap(a => a.effects || [])
-  };
+/** 主动技：每条“主动技”积木都是一个独立技能（各自的消耗、判定、次数与效果） */
+export function activeAbilitiesOf(unit) {
+  return (unit?.abilities || []).filter(a => a.trigger === 'ACTIVE').map((a, index) => ({
+    index,
+    name: a.name || '',
+    cost: a.cost || { type: 'NONE', amount: 0 },
+    chance: Math.max(0, Math.min(100, a.chance ?? 100)),
+    limit: a.limit === 'GAME' ? 'GAME' : 'TURN',
+    conditions: a.conditions || [],
+    effects: a.effects || []
+  }));
 }
+export const activeAbilityOf = unit => activeAbilitiesOf(unit)[0] || null;
 
 /** 主动技当前能否支付消耗；可以返回空串 */
 export function activeCostBlock(state, unit, act) {
@@ -445,7 +445,7 @@ export function runActiveAbility(state, unit, act, payload = {}) {
   const roll = act.chance >= 100 ? 100 : state.prng.randomInt(1, 100);
   const success = condOk && roll <= act.chance;
   if (success) for (const ef of act.effects) applyEffect(state, ef, unit.faction, unit, {});
-  state.combatLog.push({ type: 'SKILL', playerId: unit.faction, message: `【${unit.name}】发动主动技${act.chance < 100 ? `（判定 ${roll}/${act.chance}）` : ''}：${success ? '成功' : '判定失败'}` });
+  state.combatLog.push({ type: 'SKILL', playerId: unit.faction, message: `【${unit.name}】发动${act.name ? `【${act.name}】` : '主动技'}${act.chance < 100 ? `（判定 ${roll}/${act.chance}）` : ''}：${success ? '成功' : '判定失败'}` });
   return success;
 }
 
