@@ -146,7 +146,7 @@ export function validateAttack(state, attackerId, targetId, actingPlayerId = nul
     }
 
     // Check 守护 (Guardian) in enemy support protecting HQ
-    if (effectiveTroop(state, attacker) !== TROOP_TYPES.STRATEGIST && !attacker.keywords.includes(KEYWORDS.GONG_XIN) && !ignoresGuardian(attacker)) {
+    if (effectiveTroop(state, attacker) !== TROOP_TYPES.STRATEGIST && !attacker.keywords.includes(KEYWORDS.GONG_XIN) && !ignoresGuardian(attacker, state)) {
       if (isGuardedHq(state, oppFaction)) {
         throw new Error('Cannot attack HQ while protected by 守护 (Guardian)');
       }
@@ -179,7 +179,7 @@ export function validateAttack(state, attackerId, targetId, actingPlayerId = nul
 
   // 守护 (Guardian) Protection Rule:
   // Non-strategist without 攻心 cannot attack non-guardian if guardian is adjacent in same zone
-  if (effectiveTroop(state, attacker) !== TROOP_TYPES.STRATEGIST && !attacker.keywords.includes(KEYWORDS.GONG_XIN) && !ignoresGuardian(attacker)) {
+  if (effectiveTroop(state, attacker) !== TROOP_TYPES.STRATEGIST && !attacker.keywords.includes(KEYWORDS.GONG_XIN) && !ignoresGuardian(attacker, state)) {
     if (isGuardedUnit(state, defender)) {
       throw new Error('Target is protected by adjacent 守护 (Guardian)');
     }
@@ -296,6 +296,12 @@ function resolveHqCombat(state, attacker, loc, player, opponent, oppFaction, pla
   attacker.status[STATUS_TYPES.ATTACKED_THIS_TURN] = attacker.status.attacksThisTurn >= maxAttacks;
   attacker.status[STATUS_TYPES.ACTIONS_USED] += 1;
 
+  // 逆击（反制）：敌军攻击主城时同样先受3点伤害
+  triggerCounters(state, 'ENEMY_ATTACK', { attacker, defender: null });
+  if (!findUnit(state, attacker.instanceId)) {
+    return { success: true, attackerDied: true, defenderDied: false, damageDealt: 0, counterDealt: 0, targetIsHq: true };
+  }
+
   // 主城伤害经由技能结算（邓芝·使节免伤、李典减伤）
   const hqDamage = damageHq(state, oppFaction, getEffectiveAttack(state, attacker, loc), attacker.name, { silent: true });
 
@@ -362,6 +368,21 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
   let attackerDied = false;
   let defenderDied = false;
   let ambushTriggered = false;
+
+  // 逆击（反制）：敌军发起攻击时先受3点伤害；若因此阵亡，攻击不再进行
+  triggerCounters(state, 'ENEMY_ATTACK', { attacker, defender });
+  if (!findUnit(state, attacker.instanceId)) {
+    state.combatLog.push({ type: 'COMBAT_DAMAGE', attackerName: attacker.name, defenderName: defender.name, playerId, attackerId: attacker.instanceId, defenderId: defender.instanceId, attackerTroopType: attacker.troopType, audioCue: attacker.audioCue, attackStyle: getAttackStyle(attacker), attackerCardId: attacker.cardId, attackerKeywords: [...attacker.keywords], damageDealt: 0, counterDealt: 0, attackerDied: true, defenderDied: false });
+    return { success: true, attackerDied: true, defenderDied: false, damageDealt: 0, counterDealt: 0 };
+  }
+
+  // 幽州突骑：攻击被压制的敌军时直接将其消灭
+  if (baseId(attacker.cardId) === 'gsz_you_zhou_tu_qi' && defender.status[STATUS_TYPES.SUPPRESSED] && !attacker.status[STATUS_TYPES.INHIBITED]) {
+    removeUnitFromBoard(state, defender.instanceId);
+    state.combatLog.push({ type: 'SKILL', playerId, message: `幽州突骑：直接消灭被压制的【${defender.name}】` });
+    state.combatLog.push({ type: 'COMBAT_DAMAGE', attackerName: attacker.name, defenderName: defender.name, playerId, attackerId: attacker.instanceId, defenderId: defender.instanceId, attackerTroopType: attacker.troopType, audioCue: attacker.audioCue, attackStyle: getAttackStyle(attacker), attackerCardId: attacker.cardId, attackerKeywords: [...attacker.keywords], damageDealt: defender.hp, counterDealt: 0, attackerDied: false, defenderDied: true });
+    return { success: true, attackerDied: false, defenderDied: true, damageDealt: defender.hp, counterDealt: 0, defenderRef: defender };
+  }
 
   const attackerEffectiveAtk = getEffectiveAttack(state, attacker, loc, defender);
   const defenderEffectiveAtk = getEffectiveAttack(state, defender, targetLoc, attacker);

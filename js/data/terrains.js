@@ -82,6 +82,9 @@ export const HQ_CARDS = {
   lb: Object.freeze([
     Object.freeze({ id: 'xiapi', name: '下邳', hp: 20, terrains: ['WATER', 'PLAIN'] }),
     Object.freeze({ id: 'puyang', name: '濮阳', hp: 20, terrains: ['PLAIN', 'PLAIN'] })
+  ]),
+  gsz: Object.freeze([
+    Object.freeze({ id: 'yijing', name: '易京', hp: 20, terrains: ['PLAIN', 'PASS'] })
   ])
 };
 const BUILTIN_HQ_KEYS = Object.freeze(Object.keys(HQ_CARDS));

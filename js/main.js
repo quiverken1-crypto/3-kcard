@@ -37,7 +37,7 @@ import { registerKeyword } from './ui/cardRenderer.js';
 import { listDecks, getDeck, validateDeck, deckStats, deckCardDefs, lastDeckId, rememberDeckFor, dualPresets, generateDualDeck, DUAL, customPayloadFor } from './data/deckStore.js';
 import { createCard, createKingdomDeck } from './engine/state.js';
 
-const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb'];
+const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb', 'gsz'];
 
 /** 自定义势力的印章/主城配色 */
 function injectFactionStyles() {
@@ -317,7 +317,7 @@ export class AppCoordinator {
     const doc = globalThis.document;
     const modal = doc?.getElementById('modal-hq-pick');
     const box = doc?.getElementById('hq-pick-options');
-    const BUILTIN = ['wei', 'shu', 'wu', 'lb'];
+    const BUILTIN = ['wei', 'shu', 'wu', 'lb', 'gsz'];
     // 自定义势力：有主城即可选择，但需要一套合法卡组才能开局（人机对手只用内置势力）
     const ALL = [...BUILTIN, ...customFactions().map(f => f.key).filter(key => KINGDOMS[key] && HQ_CARDS[key]?.length)];
     let kingdom = ALL.includes(this._lastKingdom) ? this._lastKingdom : 'wei';

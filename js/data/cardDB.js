@@ -1,5 +1,5 @@
 /**
- * cardDB.js — 实体卡版卡牌数据库（魏 / 蜀 / 吴 / 吕布）
+ * cardDB.js — 实体卡版卡牌数据库（魏 / 蜀 / 吴 / 吕布 / 公孙瓒）
  *
  * 数据来源：实体卡照片。被遮挡、看不清的部分为推断，在 inferred 字段中注明。
  * 紧凑格式：
@@ -16,7 +16,8 @@ export const KINGDOMS = {
   wei: { key: 'wei', name: '魏', army: '魏武军', leader: '曹操', color: 'wei' },
   shu: { key: 'shu', name: '蜀', army: '蜀汉军', leader: '刘备', color: 'shu' },
   wu: { key: 'wu', name: '吴', army: '江东军', leader: '孙权', color: 'wu' },
-  lb: { key: 'lb', name: '吕', army: '吕布军', leader: '吕布', color: 'lb' }
+  lb: { key: 'lb', name: '吕', army: '吕布军', leader: '吕布', color: 'lb' },
+  gsz: { key: 'gsz', name: '瓒', army: '公孙瓒军', leader: '公孙瓒', color: 'gsz' }
 };
 export const BUILTIN_KINGDOMS = Object.freeze(Object.keys(KINGDOMS));
 export function registerKingdom(def) {
@@ -185,6 +186,32 @@ const LB = [
   common('tuqi', 'lb', 2), common('shipo', 'lb', 2)
 ];
 
+/* ---------------------------------------------------------------- 公孙瓒 */
+// 实体卡 27 张（单位 15 + 战法 12，含通用的突骑掠阵×3、缮甲厉兵、识破）；
+// 另用通用战法补足到 40 张（标注“通用补足”），实体卡组如有正式补充再替换。
+const FILL = '通用战法补足至40张（实体卡组未含）';
+const GSZ = [
+  ['gsz_you_zhou_tu_qi', '幽州突骑', 'U', 'C', 2, 1, 2, 1, ['冲阵', '突袭', '游击'], [], '突骑', '攻击被压制的敌军时，直接将其消灭。', 3],
+  ['gsz_bai_ma_yi_cong', '白马义从', 'U', 'C', 3, 1, 3, 2, ['矢石', '游击'], [], '压制', '攻击后，压制被攻击的敌军。', 3, '卡面只写“压制”，按攻击后压制目标实现'],
+  ['gsz_guan_jing', '关靖', 'U', 'S', 2, 2, 1, 5, ['帷幄'], [], '殉城', '己方主城受到伤害时，改由关靖承受。', 1],
+  ['gsz_shan_jing', '单经', 'U', 'I', 4, 1, 1, 4, ['守护'], [], '掣肘', '进场时，令1个敌军无法行动，直至单经离场；该敌军离场后，可再掣肘另一个敌军。', 1],
+  ['gsz_zhao_yun', '赵云', 'U', 'C', 4, 1, 4, 4, ['冲阵', '游击'], [], '白马', '己方有冲阵的单位攻击时无视守护。', 1],
+  ['gsz_gong_sun_fan', '公孙范', 'U', 'I', 4, 1, 2, 5, ['游击'], [], '援护', '进场时，使1个友军获得+2+2。', 1],
+  ['gsz_tian_kai', '田楷', 'U', 'C', 4, 2, 3, 4, ['守护', '坚阵1'], [], '驰援', '进场时，使1个友军生命+2。', 1],
+  ['gsz_yan_gang', '严纲', 'U', 'C', 4, 2, 5, 2, ['冲阵', '游击'], [], '先登', '己方骑兵获得突袭。', 1],
+  ['gsz_gong_sun_zan', '公孙瓒', 'U', 'C', 5, 2, 6, 5, ['冲阵', '游击', '掳掠'], ['暴虐', '狂傲'], '威烈/自焚', '威烈：每当1个敌军被击败，压制1个敌军。自焚：被击败后，对己方主城造成3点伤害。', 1],
+  ['gsz_tian_yu', '田豫', 'U', 'C', 6, 2, 4, 8, ['伏击', '守护'], [], '制敌', '被压制的敌军同时被抑制。', 1],
+  ['gsz_gong_sun_xu', '公孙续', 'U', 'C', 2, 1, 2, 2, ['突袭'], [], '遗志', '被击败时，使1个友军获得+1+1。', 1, '部署/行动费被遮挡，推断为2/1'],
+  ['gsz_lu_mang', '鲁莽冲锋', 'T', '-', 1, 0, 0, 0, [], [], '冲锋', '使1个己方骑兵战力+5；回合结束时，该单位被消灭。', 1, '“骑军”字迹潦草，按己方骑兵实现'],
+  ['gsz_shen_gou', '深沟固垒', 'T', '-', 3, 0, 0, 0, [], [], '固垒', '己方主城获得坚阵1、生命+5；己方场上单位失去攻击、机动类词条。', 1],
+  ['gsz_gu_zhu', '孤注一掷', 'T', '-', 3, 0, 0, 0, [], [], '孤注', '己方主城生命低于6时可用：对双方所有单位造成4点伤害；若此前使用过深沟固垒，则解除其效果（主城生命不变）。', 1],
+  ['gsz_yan_zhen', '雁阵驰射', 'T', '-', 3, 0, 0, 0, [], [], '驰射', '对1个敌军及其相邻单位各造成1点伤害，并将其压制。', 2],
+  ['gsz_ni_ji', '逆击', 'C', '-', 1, 0, 0, 0, [], [], '逆击', '敌军发起攻击时，先对其造成3点伤害。', 2],
+  common('tuqi', 'gsz', 3), [...common('shanjia', 'gsz', 2), '实体卡1张，另1张为通用补足'], [...common('shipo', 'gsz', 2), '实体卡1张，另1张为通用补足'],
+  [...common('cefan', 'gsz', 2), FILL], [...common('chengsheng', 'gsz', 2), FILL], [...common('tuchi', 'gsz', 2), FILL],
+  [...common('youdi', 'gsz', 2), FILL], [...common('shengdong', 'gsz', 1), FILL], [...common('andu', 'gsz', 1), FILL], [...common('jueshui', 'gsz', 1), FILL]
+];
+
 /* ---------------------------------------------------------------- 构建 */
 function build(rows, kingdom) {
   return rows.map(r => {
@@ -205,7 +232,7 @@ const markExtra = cards => cards.map(c => Object.freeze({ ...c, extra: true }));
 export const CARDS_BY_KINGDOM = Object.freeze({
   wei: [...build(WEI, 'wei'), ...markExtra(build(WEI_EXTRA, 'wei'))],
   shu: [...build(SHU, 'shu'), ...markExtra(build(SHU_EXTRA, 'shu'))],
-  wu: build(WU, 'wu'), lb: build(LB, 'lb')
+  wu: build(WU, 'wu'), lb: build(LB, 'lb'), gsz: build(GSZ, 'gsz')
 });
 
 export const ALL_DB_CARDS = Object.freeze(Object.values(CARDS_BY_KINGDOM).flat());

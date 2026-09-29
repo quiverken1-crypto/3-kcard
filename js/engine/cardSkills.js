@@ -286,6 +286,21 @@ const CHOICE_SPECS = {
       log(state, pid, `重整旗鼓：【${card.name}】重回手牌`);
     }
   },
+  shanJing: {
+    source: '单经·掣肘', prompt: '选择1个敌军，使其无法行动',
+    auto: list => [...list].sort(byValueDesc)[0],
+    apply(state, pid, t, choice) { pinUnit(state, findUnit(state, choice?.pinnerId)?.unit, t); }
+  },
+  weiLie: {
+    source: '公孙瓒·威烈', prompt: '有敌军被击败：选择1个敌军压制',
+    auto: list => [...list].sort(byValueDesc)[0],
+    apply(state, pid, t) { suppressUnit(state, t, '公孙瓒·威烈'); }
+  },
+  yiZhi: {
+    source: '公孙续·遗志', prompt: '选择1个友军，获得+1+1',
+    auto: list => [...list].sort((a, b) => b.atk - a.atk)[0],
+    apply(state, pid, t) { buff(t, 1, 1); log(state, pid, `公孙续·遗志：【${t.name}】获得+1+1`); }
+  },
   block: {
     source: '技能', prompt: '选择目标',
     auto: (list, state, pid) => {
@@ -419,6 +434,9 @@ function discardRandom(state, playerId, count = 1, reason = '') {
 
 export function hqDamageAfterSkills(state, playerId, amount) {
   if (amount <= 0) return 0;
+  // 深沟固垒：主城坚阵1
+  amount = Math.max(0, amount - (state.players[playerId]?.hqFortify || 0));
+  if (amount <= 0) return 0;
   const units = getAllUnits(state, playerId);
   if (units.some(u => isId(u, 'shu_deng_zhi') || isId(u, 'shu_sun_qian') || (active(u) && u.keywords.includes('使节')))) return 0;
   let reduction = 0;
@@ -430,6 +448,13 @@ export function hqDamageAfterSkills(state, playerId, amount) {
 
 export function damageHq(state, playerId, amount, source = '', opts = {}) {
   const player = state.players[playerId];
+  // 关靖·殉城：己方主城受到伤害时，改由关靖承受
+  const guanJing = amount > 0 && !opts.noRedirect && getAllUnits(state, playerId).find(u => isId(u, 'gsz_guan_jing') && active(u));
+  if (guanJing) {
+    log(state, playerId, `关靖·殉城：代主城承受${amount}点伤害`);
+    damageUnit(state, guanJing, amount, '关靖·殉城');
+    return 0;
+  }
   const dmg = hqDamageAfterSkills(state, playerId, amount);
   if (dmg <= 0) {
     if (amount > 0 && source) log(state, opp(playerId), `${source}：伤害被主城防御抵消`);
@@ -610,7 +635,9 @@ export function actsLikeCavalry(state, unit, loc = null) {
 }
 
 const XIAN_ZHEN = ['wei_pang_de', 'lb_gao_shun', 'lb_xian_zhen'];
-export const ignoresGuardian = unit => isId(unit, 'shu_ma_dai') || isId(unit, 'shu_ma_chao') || XIAN_ZHEN.some(id => isId(unit, id));
+export const ignoresGuardian = (unit, state = null) => isId(unit, 'shu_ma_dai') || isId(unit, 'shu_ma_chao') || XIAN_ZHEN.some(id => isId(unit, id))
+  // 赵云（公孙瓒）·白马：己方有冲阵的单位攻击时无视守护
+  || Boolean(state && hasKeyword(unit, '冲阵') && getAllUnits(state, unit.faction).some(u => isId(u, 'gsz_zhao_yun') && active(u)));
 /** 陷阵：攻击时无视坚阵 */
 export const ignoresJianZhen = unit => XIAN_ZHEN.some(id => isId(unit, id));
 export const isArtillery = unit => isId(unit, 'wei_pi_li_che') || isId(unit, 'shu_fa_shi_che');
@@ -638,6 +665,7 @@ export function findBodyguard(state, defender, attacker) {
 // ==========================================
 
 export function refreshAuras(state) {
+  gszAuras(state);
   for (const pid of [FACTIONS.WEI, FACTIONS.SHU]) {
     const units = getAllUnits(state, pid);
     const frontHasFriend = ['LEFT', 'CENTER', 'RIGHT'].some(zk => state.battlefield.frontline[zk].occupant === pid && state.battlefield.frontline[zk].units.length);
@@ -657,6 +685,64 @@ export function refreshAuras(state) {
       }
     }
   }
+}
+
+/** 公孙瓒势力的持续效果 */
+function gszAuras(state) {
+  for (const pid of [FACTIONS.WEI, FACTIONS.SHU]) {
+    const units = getAllUnits(state, pid);
+    // 严纲：己方骑兵获得突袭
+    const yanGang = units.some(u => isId(u, 'gsz_yan_gang') && active(u));
+    for (const u of units) {
+      const want = yanGang && u.troopType === TROOP_TYPES.CAVALRY && active(u);
+      if (want && !u._auraTuXi && !u.keywords.includes('突袭')) { u.keywords.push('突袭'); u._auraTuXi = true; }
+      else if (!want && u._auraTuXi) { u.keywords = u.keywords.filter(k => k !== '突袭'); u._auraTuXi = false; }
+    }
+    // 田豫：被压制的敌军同时被抑制
+    if (units.some(u => isId(u, 'gsz_tian_yu') && active(u))) {
+      for (const e of getAllUnits(state, opp(pid))) {
+        if (e.status?.[STATUS_TYPES.SUPPRESSED] && !e.status?.[STATUS_TYPES.INHIBITED]) {
+          applyInhibitionLocal(e);
+          log(state, pid, `田豫·制敌：【${e.name}】被压制，同时被抑制`);
+        }
+      }
+    }
+  }
+  // 单经·掣肘：单经离场则解除；被掣肘的敌军离场后，单经可再掣肘另一个敌军
+  for (const pid of [FACTIONS.WEI, FACTIONS.SHU]) {
+    for (const e of getAllUnits(state, pid)) {
+      if (!e._pinnedBy) continue;
+      const pinner = findUnit(state, e._pinnedBy)?.unit;
+      if (!pinner || !active(pinner)) {
+        delete e._pinnedBy;
+        e.status[STATUS_TYPES.SUPPRESSED] = false;
+        e.status.suppressedTurnsLeft = 0;
+        log(state, opp(pid), `掣肘解除：【${e.name}】恢复行动`);
+      } else {
+        e.status[STATUS_TYPES.SUPPRESSED] = true;
+        e.status.suppressedTurnsLeft = Math.max(e.status.suppressedTurnsLeft || 0, 2);
+      }
+    }
+    for (const sj of getAllUnits(state, pid).filter(u => isId(u, 'gsz_shan_jing') && active(u))) {
+      const pinned = sj._pinTarget && findUnit(state, sj._pinTarget)?.unit;
+      if (sj._pinTarget && !pinned && !sj._rePinQueued) {
+        sj._pinTarget = null;
+        sj._rePinQueued = true;
+        const list = getAllUnits(state, opp(pid)).filter(u => canSkillTarget(u) && !u._pinnedBy);
+        queueChoice(state, pid, 'shanJing', sj, list, { pinnerId: sj.instanceId });
+      }
+    }
+  }
+}
+
+function pinUnit(state, pinner, target) {
+  if (!pinner || !target || !isOnBoard(state, target)) return;
+  target._pinnedBy = pinner.instanceId;
+  pinner._pinTarget = target.instanceId;
+  pinner._rePinQueued = false;
+  target.status[STATUS_TYPES.SUPPRESSED] = true;
+  target.status.suppressedTurnsLeft = 2;
+  log(state, pinner.faction, `单经·掣肘：【${target.name}】无法行动，直至单经离场`);
 }
 
 // ==========================================
@@ -720,6 +806,18 @@ export const DEPLOY_TARGETS = {
     list: (state, owner, card) => [...getAllUnits(state, opp(owner)).filter(canSkillTarget), ...getAllUnits(state, owner)]
       .filter(u => u.instanceId !== card?.instanceId && getAttackValue(state, u) <= (card?.atk ?? 0) && !isSteadfast(u))
   },
+  gsz_shan_jing: {
+    prompt: '掣肘：选择1个敌军，使其无法行动',
+    list: (state, owner) => getAllUnits(state, opp(owner)).filter(u => canSkillTarget(u) && !u._pinnedBy)
+  },
+  gsz_gong_sun_fan: {
+    prompt: '援护：选择1个友军，获得+2+2',
+    list: (state, owner, card) => getAllUnits(state, owner).filter(u => u.instanceId !== card?.instanceId)
+  },
+  gsz_tian_kai: {
+    prompt: '驰援：选择1个友军，生命+2',
+    list: (state, owner, card) => getAllUnits(state, owner).filter(u => u.instanceId !== card?.instanceId)
+  },
   lb_zhang_liao: {
     prompt: '协战：选择1个己方步兵，双方行动花费各-1',
     list: (state, owner, card) => getAllUnits(state, owner).filter(u => u.instanceId !== card?.instanceId && effectiveTroop(state, u) === TROOP_TYPES.INFANTRY)
@@ -742,6 +840,21 @@ function persuade(state, unit, who) {
 }
 
 const DEPLOY_SKILLS = {
+  gsz_shan_jing(state, unit) {
+    const list = getAllUnits(state, opp(unit.faction)).filter(u => canSkillTarget(u) && !u._pinnedBy);
+    const t = chosenOr(list, unit, l => [...l].sort(byValueDesc)[0]);
+    pinUnit(state, unit, t);
+  },
+  gsz_gong_sun_fan(state, unit) {
+    const list = getAllUnits(state, unit.faction).filter(u => u !== unit);
+    const t = chosenOr(list, unit, l => [...l].sort((a, b) => b.atk - a.atk)[0]);
+    if (t) { buff(t, 2, 2); log(state, unit.faction, `公孙范·援护：【${t.name}】获得+2+2`); }
+  },
+  gsz_tian_kai(state, unit) {
+    const list = getAllUnits(state, unit.faction).filter(u => u !== unit);
+    const t = chosenOr(list, unit, l => [...l].sort((a, b) => a.hp - b.hp)[0]);
+    if (t) { buff(t, 0, 2); log(state, unit.faction, `田楷·驰援：【${t.name}】生命+2`); }
+  },
   wei_zao_zhi(state, unit) { searchDeck(state, unit.faction, 'wei_tun_tian_zhi', '枣祗·屯田'); },
   wei_zhang_lu(state, unit) {
     if (state.players[unit.faction].prestige > 1) { drawCard(state, unit.faction); log(state, unit.faction, '张鲁·归附：声望>1，摸1张牌'); }
@@ -826,6 +939,10 @@ export function onUnitEnter(state, unit, opts = {}) {
   if (fn) fn(state, unit);
   delete unit._skillTargetId;
   refreshAuras(state);
+  // 严纲：进场的己方骑兵获得突袭，本回合即可行动
+  if (unit._auraTuXi && unit.status[STATUS_TYPES.DEPLOYED_THIS_TURN] && unit.status[STATUS_TYPES.ACTIONS_USED] === 1 && !unit.status.attacksThisTurn && !unit.status[STATUS_TYPES.MOVED_THIS_TURN]) {
+    unit.status[STATUS_TYPES.ACTIONS_USED] = 0;
+  }
 }
 
 // ==========================================
@@ -848,6 +965,12 @@ export function onUnitMoved(state, unit, fromZoneType, toZoneType) {
 // ==========================================
 
 const COUNTERS = {
+  // 逆击：敌军发起攻击时，先对其造成3点伤害
+  gsz_ni_ji: {
+    event: 'ENEMY_ATTACK',
+    check: (state, owner, ctx) => Boolean(ctx.attacker && ctx.attacker.faction !== owner && isOnBoard(state, ctx.attacker)),
+    fire(state, owner, ctx) { damageUnit(state, ctx.attacker, 3, '逆击'); log(state, owner, `反制【逆击】：先对【${ctx.attacker.name}】造成3点伤害`); }
+  },
   // 识破：敌方指令（战法）指向己方目标时，使其无效
   shipo: {
     event: 'ENEMY_TACTIC',
@@ -939,7 +1062,7 @@ function applyInhibitionLocal(unit) {
 
 /** 通用战法（各势力卡组共用同一效果）：wei_xxx / shu_xxx / wu_xxx / lb_xxx */
 function commonTactic(key, spec) {
-  return Object.fromEntries(['wei', 'shu', 'wu', 'lb'].map(k => [`${k}_${key}`, spec]));
+  return Object.fromEntries(['wei', 'shu', 'wu', 'lb', 'gsz'].map(k => [`${k}_${key}`, spec]));
 }
 
 export const TACTICS = {
@@ -1175,6 +1298,45 @@ export const TACTICS = {
     }
   },
   // 连弩迭射：对所有敌军造成1点伤害，若有单位被消灭，重复此效果
+  // ---- 公孙瓒 ----
+  gsz_lu_mang: {
+    targets: (state, owner) => getAllUnits(state, owner).filter(u => u.troopType === TROOP_TYPES.CAVALRY),
+    autoPick: (state, owner, list) => [...list].sort((a, b) => b.atk - a.atk)[0],
+    play(state, owner, card, t) {
+      t._tempAtk = (t._tempAtk || 0) + 5;
+      t._doomTurn = state.turnNumber;
+      log(state, owner, `鲁莽冲锋：【${t.name}】战力+5，回合结束时被消灭`);
+    }
+  },
+  gsz_shen_gou: {
+    play(state, owner) {
+      const p = state.players[owner];
+      p.hqFortify = 1;
+      p._shenGou = true;
+      healHq(state, owner, 5, true);
+      const drop = ['冲阵', '奋战', '斩将', '先登', '矢石', '火攻', '攻心', '掳掠', '突袭', '游击', '奇袭', '潜袭'];
+      for (const u of getAllUnits(state, owner)) u.keywords = u.keywords.filter(k => !drop.includes(k));
+      log(state, owner, '深沟固垒：主城获得坚阵1、生命+5；己方单位失去攻击、机动类词条');
+    }
+  },
+  gsz_gu_zhu: {
+    precheck: (state, owner) => state.players[owner].hp < 6,
+    precheckMsg: '己方主城生命低于6时才能使用',
+    play(state, owner) {
+      for (const u of [...getAllUnits(state, owner), ...getAllUnits(state, opp(owner))]) damageUnit(state, u, 4, '孤注一掷');
+      const p = state.players[owner];
+      if (p._shenGou) { p.hqFortify = 0; p._shenGou = false; log(state, owner, '孤注一掷：解除深沟固垒（主城生命不变）'); }
+      log(state, owner, '孤注一掷：对双方所有单位造成4点伤害');
+    }
+  },
+  gsz_yan_zhen: {
+    targets: (state, owner) => getAllUnits(state, opp(owner)).filter(canTargetEnemy),
+    autoPick: (state, owner, list) => [...list].sort((a, b) => adjacentUnits(state, b).length - adjacentUnits(state, a).length || a.hp - b.hp)[0],
+    play(state, owner, card, t) {
+      const hit = [t, ...adjacentUnits(state, t).filter(u => u.faction !== owner)];
+      for (const u of hit) { const dead = damageUnit(state, u, 1, '雁阵驰射'); if (!dead) suppressUnit(state, u, '雁阵驰射'); }
+    }
+  },
   shu_lian_nu_lian_she: {
     play(state, owner) {
       for (let round = 1; round <= 12; round++) {
@@ -1376,6 +1538,8 @@ export function afterAttack(state, attacker, defender, result, targetIsHq) {
   }
   // 孙策·霸王：每击败1敌军，声望+1
   if (!targetIsHq && attackerAlive && result.defenderDied && isId(attacker, 'wu_sun_ce')) { adjustPrestige(state, attacker.faction, 1); log(state, attacker.faction, '孙策·霸王：声望+1'); }
+  // 白马义从：攻击后压制被攻击的敌军
+  if (!targetIsHq && attackerAlive && defenderAlive && isId(attacker, 'gsz_bai_ma_yi_cong')) suppressUnit(state, defender, '白马义从');
   // 孙坚·破虏：压制被自己攻击的单位
   if (!targetIsHq && attackerAlive && defenderAlive && isId(attacker, 'wu_sun_jian')) suppressUnit(state, defender, '孙坚·破虏');
 
@@ -1451,6 +1615,20 @@ export function processDeaths(state) {
           log(state, owner, '廖化·诈死：洗回牌堆');
         }
       }
+    }
+    // 公孙瓒·威烈：每当1个敌军被击败，压制1个敌军
+    if (!rec.banish) {
+      for (const gz of unitsWith(state, opp(owner), 'gsz_gong_sun_zan')) {
+        if (!active(gz)) continue;
+        const list = getAllUnits(state, owner).filter(u => !u.status?.[STATUS_TYPES.SUPPRESSED] && canBeSuppressed(state, u) && canSkillTarget(u));
+        queueChoice(state, gz.faction, 'weiLie', gz, list);
+      }
+    }
+    if (!rec.banish && wasActive) {
+      // 公孙瓒·自焚：被击败后，对己方主城造成3点伤害
+      if (id === 'gsz_gong_sun_zan') damageHq(state, owner, 3, '公孙瓒·自焚', { noRedirect: true });
+      // 公孙续·遗志：被击败时，使1个友军+1+1
+      if (id === 'gsz_gong_sun_xu') queueChoice(state, owner, 'yiZhi', null, getAllUnits(state, owner));
     }
     // 黄权·权变：每当己方单位离场时，对敌方主城造成1伤害
     for (const hq of unitsWith(state, owner, 'shu_huang_quan')) damageHq(state, opp(owner), 1, '黄权·权变');
@@ -1555,6 +1733,8 @@ function onTurnEnd(state, pid) {
   // 侯成·献酒：临时战力清零
   for (const u of [...getAllUnits(state, FACTIONS.WEI), ...getAllUnits(state, FACTIONS.SHU)]) {
     u._tempAtk = 0;
+    // 鲁莽冲锋：回合结束时被消灭
+    if (u._doomTurn !== undefined && u._doomTurn <= state.turnNumber) { delete u._doomTurn; removeUnitFromBoard(state, u.instanceId); log(state, u.faction, `鲁莽冲锋：【${u.name}】力竭阵亡`); continue; }
     // 积木“到回合结束”获得的词条
     if (u._tempKw?.length) { u.keywords = u.keywords.filter(k => !u._tempKw.includes(k)); u._tempKw = []; }
   }

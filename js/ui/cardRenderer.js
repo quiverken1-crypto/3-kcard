@@ -68,9 +68,11 @@ const COMMON_ART = new Set(['shipo', 'shanjia', 'cefan', 'shengdong', 'jueshui',
 const NO_ART = new Set(['shu_huang_quan', 'shu_yi_shou_wei_gong', 'shu_fu_tong', 'wu_pan_zhang', 'wu_sun_quan', 'wu_zhou_tai', 'wu_cheng_pu', 'lb_chen_gong', 'lb_lv_bu', 'wei_guo_jia_x']);
 export function getCardArtUrl(card) {
   const id = String(card?.cardId || '').replace(/_[0-9]+$/, '');
-  const m = id.match(/^(wei|shu|wu|lb)_([a-z_]+)$/);
+  const m = id.match(/^(wei|shu|wu|lb|gsz)_([a-z_]+)$/);
   if (!m || NO_ART.has(id)) return '';
   if (COMMON_ART.has(m[2])) return `assets/cards/common_${m[2]}.webp`;
+  // 公孙瓒势力暂无专属卡图（赵云借用蜀版）
+  if (m[1] === 'gsz') return id === 'gsz_zhao_yun' ? 'assets/cards/shu_zhao_yun.webp' : '';
   return `assets/cards/${id}.webp`;
 }
 

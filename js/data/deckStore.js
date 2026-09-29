@@ -21,7 +21,7 @@ export const deckSize = deck => (deck?.mode === 'dual' ? DUAL.TOTAL : DECK_SIZE)
 export const MIN_UNITS_HINT = 15;
 const STORE_KEY = 'sgk_decks_v1';
 const LAST_KEY = 'sgk_last_deck_v1';
-export const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb'];
+export const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb', 'gsz'];
 
 const storage = () => { try { return globalThis.localStorage || null; } catch { return null; } };
 
