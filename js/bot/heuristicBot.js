@@ -28,6 +28,7 @@ import {
   findUnit
 } from '../engine/rulesEngine.js';
 import { getValidTargets, validateAttack, getEffectiveAttack } from '../engine/combat.js';
+import { getCardPlayCost } from '../engine/cardSkills.js';
 import { evaluateBoard, DEFAULT_EVALUATION_WEIGHTS } from './evaluator.js';
 import { autoPickCards, autoChoiceTarget, getActiveSkill, getActiveSkills, activeSkillBlockReason, canDeployToFrontline } from '../engine/cardSkills.js';
 import { PRNG } from '../engine/prng.js';
@@ -203,10 +204,7 @@ export class HeuristicBot {
     // 1. DEPLOY Actions
     for (const card of player.hand) {
       if (card.type === 'UNIT') {
-        let cost = card.cost;
-        if (!player.prestigeDiscountUsed && player.prestige > 0) {
-          cost = Math.max(0, cost - player.prestige);
-        }
+        const cost = getCardPlayCost(state, botFaction, card);
         if (player.provisions >= cost) {
           // Deploy to Support
           if (state.battlefield.support[botFaction].slots.length < 4) {

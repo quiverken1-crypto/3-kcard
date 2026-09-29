@@ -1113,7 +1113,10 @@ export class InteractionController {
       if (Array.isArray(targets)) {
         this.cancelSelection();
         if (!targets.length) {
-          this._showToast(`【${card.name}】${tacticBlockReason(this.gameState, this.localPlayerId, card) || '当前没有合法目标'}`);
+          const why = tacticBlockReason(this.gameState, this.localPlayerId, card);
+          if (why) { this._showToast(`【${card.name}】${why}`); return; }
+          // 目标可选的战法（如恩威并施无敌军时打主城）：直接释放
+          this.onAction({ type: ACTION_TYPES.PLAY_TACTIC, playerId: this.localPlayerId, payload: { cardInstanceId } });
           return;
         }
         const ids = targets.map(t => t.instanceId);

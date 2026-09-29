@@ -365,3 +365,55 @@ body.deck-builder-open #modal-card-inspector { z-index: 1700 !important; }
 .ws-badge-chips .db-chip.active { background: #6b440c; border-color: #f0cf6a; color: #fff3cf; }
 .ws-badge-hint { margin-top: -2px; font-size: 11px; }
 .card-hand .card-name-banner.name-long { font-size: 11px !important; letter-spacing: 0 !important; text-overflow: clip !important; }
+
+/* ---- 袁绍 / 黄巾 / 董卓 / 西凉 / 刘表 ---- */
+.card-hand.faction-ys { border-color: #c9822a !important; }
+.card-hand.faction-ys .card-header-bar { background: linear-gradient(180deg, #c9822a, #6e4410) !important; }
+.board-unit.faction-ys { border-color: #f0c98a !important; }
+.board-unit.faction-ys .unit-header-bar { background: linear-gradient(180deg, #c9822af7, #6e4410d9) !important; }
+.faction-emblem.faction-ys { background: radial-gradient(circle at 35% 30%, #f0c98a, #6e4410) !important; border-color: #f0c98a !important; }
+.card-hidden.faction-ys .card-back-pattern { background: radial-gradient(circle at 50% 50%, rgba(217,179,106,.25), transparent 60%), repeating-linear-gradient(45deg, rgba(217,179,106,.08) 0 2px, transparent 2px 9px), linear-gradient(180deg, #c9822a, #6e4410) !important; }
+.card-inspector-tooltip .inspector-card.faction-ys { border-color: #f0c98a; }
+.seal-ys { background: #c9822a; }
+.hm-stripes .s-ys { background: #c9822a; }
+.hqp-field .enemy-chip.k-ys.active { background: #c9822a; border-color: #f0c98a; }
+.card-hand.faction-hj { border-color: #b8962a !important; }
+.card-hand.faction-hj .card-header-bar { background: linear-gradient(180deg, #b8962a, #5e4a0c) !important; }
+.board-unit.faction-hj { border-color: #efdc8e !important; }
+.board-unit.faction-hj .unit-header-bar { background: linear-gradient(180deg, #b8962af7, #5e4a0cd9) !important; }
+.faction-emblem.faction-hj { background: radial-gradient(circle at 35% 30%, #efdc8e, #5e4a0c) !important; border-color: #efdc8e !important; }
+.card-hidden.faction-hj .card-back-pattern { background: radial-gradient(circle at 50% 50%, rgba(217,179,106,.25), transparent 60%), repeating-linear-gradient(45deg, rgba(217,179,106,.08) 0 2px, transparent 2px 9px), linear-gradient(180deg, #b8962a, #5e4a0c) !important; }
+.card-inspector-tooltip .inspector-card.faction-hj { border-color: #efdc8e; }
+.seal-hj { background: #b8962a; }
+.hm-stripes .s-hj { background: #b8962a; }
+.hqp-field .enemy-chip.k-hj.active { background: #b8962a; border-color: #efdc8e; }
+.card-hand.faction-dz { border-color: #4a4346 !important; }
+.card-hand.faction-dz .card-header-bar { background: linear-gradient(180deg, #4a4346, #1e1a1c) !important; }
+.board-unit.faction-dz { border-color: #b9b0b3 !important; }
+.board-unit.faction-dz .unit-header-bar { background: linear-gradient(180deg, #4a4346f7, #1e1a1cd9) !important; }
+.faction-emblem.faction-dz { background: radial-gradient(circle at 35% 30%, #b9b0b3, #1e1a1c) !important; border-color: #b9b0b3 !important; }
+.card-hidden.faction-dz .card-back-pattern { background: radial-gradient(circle at 50% 50%, rgba(217,179,106,.25), transparent 60%), repeating-linear-gradient(45deg, rgba(217,179,106,.08) 0 2px, transparent 2px 9px), linear-gradient(180deg, #4a4346, #1e1a1c) !important; }
+.card-inspector-tooltip .inspector-card.faction-dz { border-color: #b9b0b3; }
+.seal-dz { background: #4a4346; }
+.hm-stripes .s-dz { background: #4a4346; }
+.hqp-field .enemy-chip.k-dz.active { background: #4a4346; border-color: #b9b0b3; }
+.card-hand.faction-xl { border-color: #5f86b8 !important; }
+.card-hand.faction-xl .card-header-bar { background: linear-gradient(180deg, #5f86b8, #26405e) !important; }
+.board-unit.faction-xl { border-color: #c5d8f0 !important; }
+.board-unit.faction-xl .unit-header-bar { background: linear-gradient(180deg, #5f86b8f7, #26405ed9) !important; }
+.faction-emblem.faction-xl { background: radial-gradient(circle at 35% 30%, #c5d8f0, #26405e) !important; border-color: #c5d8f0 !important; }
+.card-hidden.faction-xl .card-back-pattern { background: radial-gradient(circle at 50% 50%, rgba(217,179,106,.25), transparent 60%), repeating-linear-gradient(45deg, rgba(217,179,106,.08) 0 2px, transparent 2px 9px), linear-gradient(180deg, #5f86b8, #26405e) !important; }
+.card-inspector-tooltip .inspector-card.faction-xl { border-color: #c5d8f0; }
+.seal-xl { background: #5f86b8; }
+.hm-stripes .s-xl { background: #5f86b8; }
+.hqp-field .enemy-chip.k-xl.active { background: #5f86b8; border-color: #c5d8f0; }
+.card-hand.faction-lbiao { border-color: #6f9e3a !important; }
+.card-hand.faction-lbiao .card-header-bar { background: linear-gradient(180deg, #6f9e3a, #33501a) !important; }
+.board-unit.faction-lbiao { border-color: #cfe6a8 !important; }
+.board-unit.faction-lbiao .unit-header-bar { background: linear-gradient(180deg, #6f9e3af7, #33501ad9) !important; }
+.faction-emblem.faction-lbiao { background: radial-gradient(circle at 35% 30%, #cfe6a8, #33501a) !important; border-color: #cfe6a8 !important; }
+.card-hidden.faction-lbiao .card-back-pattern { background: radial-gradient(circle at 50% 50%, rgba(217,179,106,.25), transparent 60%), repeating-linear-gradient(45deg, rgba(217,179,106,.08) 0 2px, transparent 2px 9px), linear-gradient(180deg, #6f9e3a, #33501a) !important; }
+.card-inspector-tooltip .inspector-card.faction-lbiao { border-color: #cfe6a8; }
+.seal-lbiao { background: #6f9e3a; }
+.hm-stripes .s-lbiao { background: #6f9e3a; }
+.hqp-field .enemy-chip.k-lbiao.active { background: #6f9e3a; border-color: #cfe6a8; }

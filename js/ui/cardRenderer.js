@@ -34,7 +34,7 @@ export const KEYWORD_GLOSSARY = ({
   '军机': '【军机X】新词条，官方规则尚未公布，暂无效果。',
   '奇袭': '【奇袭】部署时可直接部署在没有敌方单位的前线。',
   '补给': '【补给】在场时，己方粮草上限额外+1，可叠加。',
-  '声望': '【声望X】进场/使用时己方声望+X（对手有声望则改为扣减对手）。',
+  '声望': '【声望X】进场/使用时己方声望+X（对手有声望则改为扣减对手）；己方部署单位时可用声望减免花费，每回合1次。',
   '奇谋': '【奇谋X】在场时，己方战法和反制战法花费-X，可叠加。',
   '治军': '【治军】相同兵种的其他友军行动花费-1。',
   '督战': '【督战】相邻友方军队（不含谋士）战力+1。',
@@ -44,7 +44,8 @@ export const KEYWORD_GLOSSARY = ({
   '护卫': '【护卫】同区域友军被攻击时，改由护卫单位承受此次攻击（谋士与铁骑同样适用）。',
   '侦查': '【侦查X】进场时查看己方牌库顶X张牌，费用过高的牌将被置于牌库底。',
   '使节': '【使节】在场时己方主城免受伤害。',
-  '溢出转移': '【溢出转移】击杀敌军后溢出伤害转移到敌方主城。'
+  '溢出转移': '【溢出转移】击杀敌军后溢出伤害转移到敌方主城。',
+  '铁骑': '【铁骑】攻击时无视守护、帷幄。'
 });
 const BUILTIN_KEYWORDS = Object.freeze(Object.keys(KEYWORD_GLOSSARY));
 export const builtinKeywords = () => [...BUILTIN_KEYWORDS];
@@ -61,7 +62,9 @@ export const TRAIT_GLOSSARY = Object.freeze({
   '皇叔': '性格·皇叔',
   '皇亲': '性格·皇亲',
   '暴虐': '性格·暴虐',
-  '枭雄': '性格·枭雄'
+  '枭雄': '性格·枭雄',
+  '刚愎': '性格·刚愎：与刚直的名士不和（崔琰、田丰）',
+  '谗佞': '性格·谗佞：与刚直的名士不和（崔琰、田丰）'
 });
 
 /** 卡面插画（取自魏蜀图鉴） */
@@ -71,7 +74,7 @@ export function getCardArtUrl(card) {
   // 自定义卡：可填 https 图片链接作为卡面
   if (card?.art && /^https:\/\/[^\s'\"()<>\\]{4,300}$/.test(card.art)) return card.art;
   const id = String(card?.cardId || '').replace(/_[0-9]+$/, '');
-  const m = id.match(/^(wei|shu|wu|lb|gsz)_([a-z_]+)$/);
+  const m = id.match(/^(wei|shu|wu|lb|gsz|ys|hj|dz|xl|lbiao)_([a-z_]+)$/);
   if (!m || NO_ART.has(id)) return '';
   if (COMMON_ART.has(m[2])) return `assets/cards/common_${m[2]}.webp`;
   return `assets/cards/${id}.webp`;

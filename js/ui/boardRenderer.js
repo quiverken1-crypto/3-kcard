@@ -18,7 +18,7 @@ import {
   escapeHtml
 } from './cardRenderer.js';
 import { KEYWORDS, hasKeyword } from '../engine/constants.js';
-import { getAttackValue, getActionCost, qiMouDiscount } from '../engine/cardSkills.js';
+import { getAttackValue, getActionCost, qiMouDiscount, unitDeployCost } from '../engine/cardSkills.js';
 import { kingdomOf, seatChar } from './seats.js';
 
 export const TERRAIN_EFFECTS = Object.freeze({
@@ -166,7 +166,7 @@ export function renderBoard(container, state, viewerFaction = 'WEI', options = {
   // 4. Render Player Hand Cards
   const handContainer = document.getElementById('hand-container');
   if (handContainer && state.players?.[viewerFaction]?.hand) {
-    renderHandFan(handContainer, state.players[viewerFaction], { ...options, tacticDiscount: qiMouDiscount(state, viewerFaction) });
+    renderHandFan(handContainer, state.players[viewerFaction], { ...options, tacticDiscount: qiMouDiscount(state, viewerFaction), unitBaseCost: card => unitDeployCost(state, viewerFaction, card) });
   }
 }
 
@@ -311,9 +311,10 @@ export function renderHandFan(container, playerData, options = {}) {
 
   const cardEls = [];
   hand.forEach((card) => {
+    const skillCut = (card.type === 'UNIT' && options.unitBaseCost) ? Math.max(0, (card.cost ?? 0) - options.unitBaseCost(card)) : 0;
     const cardEl = renderHandCard(card, {
       ...options,
-      prestigeDiscount,
+      prestigeDiscount: prestigeDiscount + skillCut,
       tacticDiscount
     });
     container.appendChild(cardEl);

@@ -50,7 +50,7 @@ SGK.skills.PLUGIN_HOOKS.afterAttack.push((state, atk, def, result) => console.lo
 | `engine/preview.js` | 伤害预演（克隆局面后模拟一次动作） |
 | `engine/prng.js` | 可复现随机数 |
 | **`js/data/`** | **数据** |
-| `data/cardDB.js` | **卡牌数据库**（实体卡）：魏、蜀、吴、吕布、公孙瓒 + 通用战法；紧凑行格式见文件头注释 |
+| `data/cardDB.js` | **卡牌数据库**（实体卡）：魏、蜀、吴、吕布、公孙瓒、袁绍(ys)、黄巾(hj)、董卓(dz)、西凉(xl)、刘表(lbiao) + 通用战法；紧凑行格式见文件头注释 |
 | `data/terrains.js` | 地形定义与各势力主城 `HQ_CARDS` |
 | `data/presetDecks.js` | 手工配置的预设卡组（标准预设由卡牌库自动生成） |
 | `data/deckStore.js` | 卡组：本机存储、校验、双阵营、分享码（`SGK1-…`） |
@@ -133,6 +133,7 @@ AI(heuristicBot.js)      ├─> action ─> rulesEngine.dispatch(state, action)
 | 反制 | `COUNTERS[id] = { event, check(state, owner, ctx), fire(state, owner, ctx) }`，event：`ENEMY_TACTIC` / `ENEMY_MOVE` / `OWN_ATTACKED` / `ENEMY_ATTACK` |
 | 主动技能 | `ACTIVE_SKILLS[id] = { name, desc, needsHandCard?, apply(state, unit, payload) }`（每回合 1 次，界面会自动出现“发动”按钮） |
 | 结算中途让玩家选 | `CHOICE_SPECS[kind] = { source, prompt, pool: 'board'|'hand'|'option', auto(list, state, pid), apply(state, pid, target, choice) }`，调用 `queueChoice(state, pid, kind, sourceUnit, candidates, extra)`；15 秒不选随机 |
+| 整个势力的一批技能 | 参考 `engine/factions2.js`：只用开放注册表（`DEPLOY_SKILLS`/`TACTICS`/`COUNTERS`/`CHOICE_SPECS`）+ `PLUGIN_HOOKS` + 扩展点 `EXT`（战力、行动/部署花费、伤害修正、回合开始、摸牌、主城受伤/增防、光环、游击、掳掠…），不改核心流程 |
 | 攻击后 / 离场 / 回合结束 / 持续光环 | `afterAttack()`、`processDeaths()`、`onTurnEnd()`、`refreshAuras()` / `gszAuras()` 里按 `isId(unit, 'xxx')` 添加 |
 | 数值修正 | 战力 `getAttackValue()`，行动花费 `getActionCost()`，主城减伤 `hqDamageAfterSkills()` |
 | 不想改核心 | `PLUGIN_HOOKS.onEnter / afterAttack / onDeath / onTurnEnd` 数组里 push 函数 |

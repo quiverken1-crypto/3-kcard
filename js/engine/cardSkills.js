@@ -161,8 +161,10 @@ export function buff(unit, atk, hp) {
   if (unit.status?.[STATUS_TYPES.INHIBITED]) unit.status[STATUS_TYPES.BUFFED_AFTER_INHIBIT] = true;
 }
 
-function putInHand(state, playerId, card) {
+export function putInHand(state, playerId, card) {
   const player = state.players[playerId];
+  // 通过技能进入手牌的牌（撤回、检索、捡回）对手已经见过，视为“明牌”
+  card._known = true;
   if (player.hand.length < GAME_CONFIG.HAND_LIMIT) { player.hand.push(card); return true; }
   player.discard.push(card);
   state.combatLog.push({ type: 'CARD_BURNED', playerId, card });
@@ -196,6 +198,32 @@ function randomPick(state, arr) {
  * 钩子里可以调用本文件导出的工具函数（damageUnit、suppressUnit、damageHq、log 等，见 window.SGK.skills）。
  */
 export const PLUGIN_HOOKS = { onEnter: [], afterAttack: [], onDeath: [], onTurnEnd: [] };
+/**
+ * 扩展点（开放接口，factions2.js 等势力模块在这里挂技能）：
+ *   fold 型（返回新值）：attack(atk, state, unit, loc, foe) / actionCost(cost, state, unit, loc) / deployCost(cost, state, owner, card)
+ *                        unitDamage(amount, state, unit, source) / hqDamage(amount, state, playerId, source) / counter(can, state, attacker, defender)
+ *                        hqAttackMult(mult, state, attacker)
+ *   any 型（返回真假）：cannotAttack(state, unit) / longRange(state, unit) / ignoresGuardian(state, unit) / ignoresWeiWo(state, unit) / ignoresJianZhen(unit)
+ *   run 型（无返回）：turnStart(state, pid) / tactic(state, owner, card) / draw(state, pid, card) / moved(state, unit, from, to)
+ *                      hqDamaged(state, pid, dmg, source) / hqGain(state, pid, gained) / unitDamaged(state, unit, amount, source)
+ *                      aura(state) / youJi(state, unit) / luLue(state, pid, choice, opt, amount)
+ */
+export const EXT = {
+  attack: [], actionCost: [], deployCost: [], unitDamage: [], hqDamage: [], counter: [], hqAttackMult: [],
+  cannotAttack: [], longRange: [], ignoresGuardian: [], ignoresWeiWo: [], ignoresJianZhen: [],
+  turnStart: [], tactic: [], draw: [], moved: [], hqDamaged: [], hqGain: [], unitDamaged: [], aura: [], youJi: [], luLue: [], taunt: []
+};
+export function extFold(name, init, ...args) {
+  let v = init;
+  for (const fn of EXT[name] || []) { try { v = fn(v, ...args); } catch (err) { console.warn(`扩展 ${name} 出错：`, err); } }
+  return v;
+}
+export function extAny(name, ...args) {
+  return (EXT[name] || []).some(fn => { try { return fn(...args); } catch (err) { console.warn(`扩展 ${name} 出错：`, err); return false; } });
+}
+export function extRun(name, ...args) {
+  for (const fn of EXT[name] || []) { try { fn(...args); } catch (err) { console.warn(`扩展 ${name} 出错：`, err); } }
+}
 function runHooks(name, ...args) {
   for (const fn of PLUGIN_HOOKS[name] || []) {
     try { fn(...args); } catch (err) { console.warn(`插件钩子 ${name} 出错：`, err); }
@@ -288,6 +316,7 @@ export const CHOICE_SPECS = {
     apply(state, pid, opt, choice) {
       if (opt.instanceId === 'draw') { drawCard(state, pid); log(state, pid, '掳掠：抽1张牌'); }
       else { const n = choice?.amount ?? 2; state.players[pid].provisions += n; log(state, pid, `掳掠：获得${n}粮草`); }
+      extRun('luLue', state, pid, choice, opt, opt.instanceId === 'draw' ? 0 : (choice?.amount ?? 2));
     }
   },
   chengYu: {
@@ -393,9 +422,14 @@ export function qiMouDiscount(state, owner) {
 export function getCardPlayCost(state, owner, card) {
   const p = state.players[owner];
   const base = card?.cost ?? 0;
-  if (card?.type === 'UNIT') return (!p.prestigeDiscountUsed && p.prestige > 0) ? Math.max(0, base - p.prestige) : base;
+  if (card?.type === 'UNIT') { const b = unitDeployCost(state, owner, card); return (!p.prestigeDiscountUsed && p.prestige > 0) ? Math.max(0, b - p.prestige) : b; }
   if (card?.type === 'TACTIC' || card?.type === 'COUNTER') return Math.max(0, base - qiMouDiscount(state, owner));
   return base;
+}
+
+/** 单位的部署花费（未计声望减免）：卡面费用 + 场上技能修正（张梁·人公、王国·合众、张允·副督、蔡夫人·献州…） */
+export function unitDeployCost(state, owner, card) {
+  return Math.max(0, extFold('deployCost', card?.cost ?? 0, state, owner, card));
 }
 
 let _choiceSeq = 0;
@@ -498,7 +532,8 @@ export function damageHq(state, playerId, amount, source = '', opts = {}) {
     damageUnit(state, guanJing, amount, '关靖·殉城');
     return 0;
   }
-  const dmg = hqDamageAfterSkills(state, playerId, amount);
+  if (amount > 0 && state.activePlayer !== playerId) triggerCounters(state, 'OWN_HQ_DAMAGED', { playerId, amount, source });
+  const dmg = extFold('hqDamage', hqDamageAfterSkills(state, playerId, amount), state, playerId, source);
   if (dmg <= 0) {
     if (amount > 0 && source) log(state, opp(playerId), `${source}：伤害被主城防御抵消`);
     return 0;
@@ -506,6 +541,7 @@ export function damageHq(state, playerId, amount, source = '', opts = {}) {
   player.hp = Math.max(0, player.hp - dmg);
   state.battlefield.support[playerId].hq.hp = player.hp;
   if (!opts.silent) state.combatLog.push({ type: 'HQ_DAMAGED', playerId, damage: dmg, source, hqHpRemaining: player.hp });
+  if (player.hp > 0) extRun('hqDamaged', state, playerId, dmg, source);
   // 陈宫·智迟：己方主城受到伤害时，抽1张牌
   if (player.hp > 0) for (const cg of unitsWith(state, playerId, 'lb_chen_gong')) { drawCard(state, playerId); log(state, playerId, '陈宫·智迟：主城受创，抽1张牌'); }
   if (player.hp <= 0 && state.phase !== PHASES.GAME_OVER) {
@@ -517,6 +553,7 @@ export function damageHq(state, playerId, amount, source = '', opts = {}) {
 
 export function healHq(state, playerId, amount, allowOverMax = false) {
   const player = state.players[playerId];
+  const before = player.hp;
   if (allowOverMax) {
     player.hp += amount;
     player.maxHp = Math.max(player.maxHp, player.hp);
@@ -526,6 +563,7 @@ export function healHq(state, playerId, amount, allowOverMax = false) {
   const hq = state.battlefield.support[playerId].hq;
   hq.hp = player.hp;
   hq.maxHp = player.maxHp;
+  if (player.hp > before) extRun('hqGain', state, playerId, player.hp - before);
 }
 
 // ==========================================
@@ -536,6 +574,8 @@ export function healHq(state, playerId, amount, allowOverMax = false) {
 export function damageUnit(state, unit, amount, source = '') {
   if (!isOnBoard(state, unit) || amount <= 0) return false;
   if (String(source).includes('火攻')) amount *= fireMultiplier(state, unit);
+  amount = extFold('unitDamage', amount, state, unit, source);
+  if (amount <= 0 || !isOnBoard(state, unit)) return !isOnBoard(state, unit);
   unit.hp -= amount;
   unit.status[STATUS_TYPES.DAMAGED] = true;
   if (unit.hp > 0 && isId(unit, 'wu_zhou_tai')) unit.atk += amount;
@@ -544,7 +584,8 @@ export function damageUnit(state, unit, amount, source = '') {
     removeUnitFromBoard(state, unit.instanceId);
     return true;
   }
-  return false;
+  extRun('unitDamaged', state, unit, amount, source);
+  return !isOnBoard(state, unit);
 }
 
 export function canBeSuppressed(state, unit) {
@@ -638,6 +679,7 @@ export function getAttackValue(state, unit, loc = null, foe = null) {
     if (isId(unit, 'wei_man_chong') && foe.troopType === TROOP_TYPES.NAVY) atk += 3;
     if (isId(unit, 'wei_man_chong') && baseId(foe.cardId) === 'shu_guan_yu' && active(foe)) atk += 3; // 关羽可视为水军
   }
+  atk = extFold('attack', atk, state, unit, loc, foe);
   return Math.max(0, atk);
 }
 
@@ -663,6 +705,7 @@ export function getActionCost(state, unit, loc = null) {
   if (fx.wangMei && loc.zoneType === 'FRONTLINE') cost -= 1;
   if (fx.tuChi && loc.zoneType === 'FRONTLINE' && unit.troopType === TROOP_TYPES.CAVALRY) cost -= 1;
   cost += auraModifiers(state, unit).cost;
+  cost = extFold('actionCost', cost, state, unit, loc);
   return Math.max(0, cost);
 }
 
@@ -680,9 +723,22 @@ export function actsLikeCavalry(state, unit, loc = null) {
 const XIAN_ZHEN = ['wei_pang_de', 'lb_gao_shun', 'lb_xian_zhen'];
 export const ignoresGuardian = (unit, state = null) => isId(unit, 'shu_ma_dai') || isId(unit, 'shu_ma_chao') || XIAN_ZHEN.some(id => isId(unit, id))
   // 赵云（公孙瓒）·白马：己方有冲阵的单位攻击时无视守护
-  || Boolean(state && hasKeyword(unit, '冲阵') && getAllUnits(state, unit.faction).some(u => isId(u, 'gsz_zhao_yun') && active(u)));
-/** 陷阵：攻击时无视坚阵 */
-export const ignoresJianZhen = unit => XIAN_ZHEN.some(id => isId(unit, id));
+  || Boolean(state && hasKeyword(unit, '冲阵') && getAllUnits(state, unit.faction).some(u => isId(u, 'gsz_zhao_yun') && active(u)))
+  || (active(unit) && hasKeyword(unit, '铁骑')) || Boolean(state && extAny('ignoresGuardian', state, unit));
+/** 铁骑：无视帷幄 */
+export const ignoresWeiWo = (unit, state = null) => (active(unit) && hasKeyword(unit, '铁骑')) || Boolean(state && extAny('ignoresWeiWo', state, unit));
+/** 陷阵 / 攻坚：攻击时无视坚阵 */
+export const ignoresJianZhen = unit => XIAN_ZHEN.some(id => isId(unit, id)) || extAny('ignoresJianZhen', unit);
+/** 无法主动攻击的原因（宋建·自守…），空串表示可以 */
+export const cannotAttack = (state, unit) => extAny('cannotAttack', state, unit);
+/** 可攻击任意阵线（冀州强弩） */
+export const hasLongRange = (state, unit) => extAny('longRange', state, unit);
+/** 攻城倍率（掘子军） */
+export const hqAttackMultiplier = (state, unit) => extFold('hqAttackMult', 1, state, unit);
+/** 反击修正（刘琮·束手、郭汜·劫卿） */
+export const counterOverride = (state, attacker, defender, can) => extFold('counter', can, state, attacker, defender);
+/** 游击触发（撤退或闪避） */
+export function notifyYouJi(state, unit) { extRun('youJi', state, unit); }
 export const isArtillery = unit => isId(unit, 'wei_pi_li_che') || isId(unit, 'shu_fa_shi_che');
 export const isSiege = unit => isId(unit, 'wei_pi_li_che');
 export const isIronWall = unit => ['wei_cao_ren', 'wei_lv_chang', 'wu_zhu_ran'].some(id => isId(unit, id));
@@ -709,6 +765,7 @@ export function findBodyguard(state, defender, attacker) {
 
 export function refreshAuras(state) {
   gszAuras(state);
+  extRun('aura', state);
   refreshAuraKeywords(state);
   for (const pid of [FACTIONS.WEI, FACTIONS.SHU]) {
     const units = getAllUnits(state, pid);
@@ -736,7 +793,7 @@ function gszAuras(state) {
   for (const pid of [FACTIONS.WEI, FACTIONS.SHU]) {
     const units = getAllUnits(state, pid);
     // 严纲·猛进：己方骑兵获得突袭；周瑜·左督：己方水军获得突袭
-    const yanGang = units.some(u => isId(u, 'gsz_yan_gang') && active(u));
+    const yanGang = units.some(u => (isId(u, 'gsz_yan_gang') || isId(u, 'xl_pang_de')) && active(u));
     const zhouYu = units.some(u => isId(u, 'wu_zhou_yu') && active(u));
     for (const u of units) {
       const want = active(u) && ((yanGang && u.troopType === TROOP_TYPES.CAVALRY) || (zhouYu && u.troopType === TROOP_TYPES.NAVY));
@@ -873,7 +930,7 @@ export function getDeployTargets(state, owner, card) {
   _stateForTarget = state;
   const spec = DEPLOY_TARGETS[baseId(card?.cardId)];
   if (!spec || card?.status?.[STATUS_TYPES.INHIBITED]) return null;
-  return { prompt: spec.prompt, targets: spec.list(state, owner, card) };
+  return { prompt: spec.prompt, targets: applyTaunt(state, owner, spec.list(state, owner, card)) };
 }
 
 /** 说降：对敌方支援阵线1个目标造成2伤害，二心翻倍 */
@@ -1002,7 +1059,9 @@ export function onUnitMoved(state, unit, fromZoneType, toZoneType) {
   if (isId(unit, 'shu_liao_hua') && toFront) { buff(unit, 1, 1); log(state, unit.faction, '廖化·先锋：移至前线，获得+1+1'); }
   if (isId(unit, 'wu_sun_jian') && toFront) { buff(unit, 1, 1); log(state, unit.faction, '孙坚·先驱：进入前线，获得+1+1'); }
   if (isId(unit, 'wei_yue_jin') && toFront) { drawCard(state, unit.faction); log(state, unit.faction, '乐进·骁果：进入前线，摸1张牌'); }
-  triggerCounters(state, 'ENEMY_MOVE', { unit });
+  extRun('moved', state, unit, fromZoneType, toZoneType);
+  if (fromZoneType === 'FRONTLINE' && toZoneType === 'SUPPORT' && hasKeyword(unit, '游击')) notifyYouJi(state, unit);
+  if (isOnBoard(state, unit)) triggerCounters(state, 'ENEMY_MOVE', { unit, fromZoneType, toZoneType });
   refreshAuras(state);
 }
 
@@ -1102,7 +1161,7 @@ function raiseCap(state, pid, n) {
   p.provisionsCap = p.mainGranaryCap + p.extraGranaryCap;
 }
 
-function applyInhibitionLocal(unit) {
+export function applyInhibitionLocal(unit) {
   unit.status[STATUS_TYPES.INHIBITED] = true;
   unit.keywords = [];
   unit.atk = unit.baseAtk; unit.maxHp = unit.baseMaxHp; unit.hp = Math.min(unit.hp, unit.baseMaxHp);
@@ -1111,7 +1170,7 @@ function applyInhibitionLocal(unit) {
 
 /** 通用战法（各势力卡组共用同一效果）：wei_xxx / shu_xxx / wu_xxx / lb_xxx */
 function commonTactic(key, spec) {
-  return Object.fromEntries(['wei', 'shu', 'wu', 'lb', 'gsz'].map(k => [`${k}_${key}`, spec]));
+  return Object.fromEntries(['wei', 'shu', 'wu', 'lb', 'gsz', 'ys', 'hj', 'dz', 'xl', 'lbiao'].map(k => [`${k}_${key}`, spec]));
 }
 
 export const TACTICS = {
@@ -1484,10 +1543,10 @@ export function resolvePick(state, owner, cardIds = []) {
   if (ids.some(id => !pick.cards.some(c => c.instanceId === id))) throw new Error('选择的牌不在可选范围内');
   const keep = [];
   for (const c of pick.cards) {
-    if (ids.includes(c.instanceId)) { putInHand(state, owner, c); keep.push(c); } else p.discard.push(c);
+    if (ids.includes(c.instanceId)) { putInHand(state, owner, c); keep.push(c); } else if (pick.restTo === 'bottom') p.deck.push(c); else p.discard.push(c);
   }
   p.pendingPick = null;
-  log(state, owner, `${pick.source}：收入${keep.map(c => '【' + c.name + '】').join('') || '无'}，其余弃置`);
+  log(state, owner, `${pick.source}：收入${keep.map(c => '【' + c.name + '】').join('') || '无'}，其余${pick.restTo === 'bottom' ? '置于牌堆底' : '弃置'}`);
   return keep;
 }
 
@@ -1505,7 +1564,7 @@ export function tacticBlockReason(state, owner, card) {
   const spec = getTacticSpec(card);
   if (!spec) return '';
   if (spec.precheck && !spec.precheck(state, owner, card)) return spec.precheckMsg || '当前没有可用目标';
-  if (spec.targets && !spec.targets(state, owner, card).length) return '当前没有合法目标';
+  if (spec.targets && !spec.optionalTarget && !spec.targets(state, owner, card).length) return '当前没有合法目标';
   return '';
 }
 
@@ -1513,7 +1572,13 @@ export function getTacticTargets(state, owner, card) {
   _stateForTarget = state;
   const spec = getTacticSpec(card);
   if (!spec?.targets) return null;
-  return spec.targets(state, owner, card);
+  return applyTaunt(state, owner, spec.targets(state, owner, card));
+}
+/** 颜良·魔盖等：敌方指向效果只能指向“嘲讽”单位（若它在候选里） */
+export function applyTaunt(state, owner, list) {
+  if (!Array.isArray(list) || !list.length) return list;
+  const forced = list.filter(u => u && u.faction && u.faction !== owner && extAny('taunt', state, u));
+  return forced.length ? forced : list;
 }
 
 /** 校验战法是否可用并确定目标；无合法目标时抛错（在付费之前调用） */
@@ -1524,8 +1589,9 @@ export function prepareTactic(state, owner, card, payload = {}) {
   if (spec.precheck && !spec.precheck(state, owner, card)) throw new Error(`【${card.name}】${spec.precheckMsg || '当前没有可用目标'}`);
   let target = null;
   if (spec.targets) {
-    const list = spec.targets(state, owner, card);
-    if (!list.length) throw new Error(`【${card.name}】当前没有合法目标`);
+    const list = applyTaunt(state, owner, spec.targets(state, owner, card));
+    if (!list.length && !spec.optionalTarget) throw new Error(`【${card.name}】当前没有合法目标`);
+    if (!list.length) return { spec, target: null };
     if (payload.targetId) {
       target = list.find(u => u.instanceId === payload.targetId);
       if (!target) throw new Error(`【${card.name}】目标不合法`);
@@ -1542,6 +1608,8 @@ export function resolveTactic(state, owner, card, prepared, payload = {}) {
   const ctx = { card, target, negated: false };
   if (target) triggerCounters(state, 'ENEMY_TACTIC', ctx);
   if (spec && !ctx.negated) spec.play(state, owner, card, target, payload);
+  processDeaths(state);
+  if (state.phase !== PHASES.GAME_OVER) extRun('tactic', state, owner, card);
   processDeaths(state);
   if (state.phase === PHASES.GAME_OVER) return;
 
@@ -1575,7 +1643,7 @@ export function afterAttack(state, attacker, defender, result, targetIsHq) {
   // 【掳掠】击败敌军后二选一：获得 2×本单位行动费 的粮草，或抽1张牌
   if (!targetIsHq && result.defenderDied && attackerAlive && active(attacker) && hasKeyword(attacker, '掳掠')) {
     const amount = 2 * (attacker.actionCost ?? 1);
-    queueChoice(state, attacker.faction, 'luLue', attacker, [{ instanceId: 'grain', name: `获得${amount}粮草` }, { instanceId: 'draw', name: '抽1张牌' }], { amount });
+    queueChoice(state, attacker.faction, 'luLue', attacker, [{ instanceId: 'grain', name: `获得${amount}粮草` }, { instanceId: 'draw', name: '抽1张牌' }], { amount, sourceId: attacker.instanceId });
   }
 
   // 曹洪·贪吝：每次交战后行动花费+1
@@ -1758,6 +1826,8 @@ function afterRefill(state, pid) {
     // 贾逵·筑城：回合开始时，己方主城+1防
     if (isId(u, 'wei_jia_kui')) { healHq(state, pid, 1, true); log(state, pid, '贾逵·筑城：主城+1'); }
   }
+  extRun('turnStart', state, pid);
+  processDeaths(state);
   refreshAuras(state);
 }
 
@@ -1825,6 +1895,8 @@ function onDraw(state, pid) {
   if (state.phase === PHASES.GAME_OVER) return;
   for (const gn of unitsWith(state, pid, 'wu_gan_ning')) damageHq(state, opp(pid), 1, '甘宁·锦帆');
   for (const hc of unitsWith(state, pid, 'lb_hou_cheng')) { hc._tempAtk = (hc._tempAtk || 0) + 2; log(state, pid, '侯成·献酒：战力+2'); }
+  const hand = state.players[pid].hand;
+  extRun('draw', state, pid, hand[hand.length - 1]);
 }
 
 registerTurnHooks({ beforeRefill, afterRefill, onTurnEnd, onDraw });
@@ -1853,3 +1925,7 @@ registerAbilityHooks({
   }
 });
 const EFFECT_NAMES = { DAMAGE_UNIT: '造成伤害', HEAL_UNIT: '恢复', BUFF_ATTACK: '战力+', DEBUFF_ATTACK: '战力−', TURN_ATTACK: '本回合战力+', BUFF_HEALTH: '生命+', ACTION_COST_DOWN: '行动花费−', ACTION_COST_UP: '行动花费+', APPLY_SUPPRESSION: '压制', APPLY_INHIBITION: '抑制', REVEAL_UNIT: '翻开', RESTORE_ACTION: '恢复行动', GRANT_KEYWORD: '获得', TURN_KEYWORD: '本回合获得', REMOVE_KEYWORD: '移除', RETREAT: '撤退', RETURN_HAND: '返回手牌', DESTROY: '消灭' };
+
+// 新势力技能（袁绍 / 黄巾 / 董卓 / 西凉 / 刘表）：模块内只定义函数，这里在本文件初始化完成后再挂载，避免循环引用
+import { installFactions2 } from './factions2.js';
+installFactions2();

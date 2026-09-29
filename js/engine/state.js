@@ -476,8 +476,11 @@ export function endTurn(state) {
  * @param {string} gainingPlayerId
  * @param {number} [amount=1]
  */
+/** 声望溢出（已到上限仍获得声望）时的钩子：fn(state, playerId, overflow) */
+export const PRESTIGE_OVERFLOW_HOOKS = [];
 export function adjustPrestige(state, gainingPlayerId, amount = 1) {
   const gainer = state.players[gainingPlayerId];
+  let overflow = 0;
   const opponentId = gainingPlayerId === FACTIONS.WEI ? FACTIONS.SHU : FACTIONS.WEI;
   const opponent = state.players[opponentId];
 
@@ -485,6 +488,7 @@ export function adjustPrestige(state, gainingPlayerId, amount = 1) {
     if (opponent.prestige > 0) {
       opponent.prestige -= 1; // Steal: deduct opponent
     } else {
+      if (gainer.prestige >= GAME_CONFIG.MAX_PRESTIGE) overflow++;
       gainer.prestige = Math.min(GAME_CONFIG.MAX_PRESTIGE, gainer.prestige + 1); // Add to self (capped at 2)
     }
   }
@@ -496,6 +500,7 @@ export function adjustPrestige(state, gainingPlayerId, amount = 1) {
     gainerPrestige: gainer.prestige,
     opponentPrestige: opponent.prestige
   });
+  if (overflow > 0) for (const fn of PRESTIGE_OVERFLOW_HOOKS) { try { fn(state, gainingPlayerId, overflow); } catch (err) { console.warn('声望溢出钩子出错：', err); } }
 }
 
 /**

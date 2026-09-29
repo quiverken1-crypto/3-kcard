@@ -17,7 +17,7 @@ import {
 import { findUnit, getAllUnits, removeUnitFromBoard, drawCard } from './state.js';
 import {
   getAttackValue, getActionCost, actsLikeCavalry as skillActsLikeCavalry, ignoresGuardian,
-  isArtillery, isSiege, isIronWall, findBodyguard, effectiveTroop, hasShiShi, fireMultiplier, isGuardedUnit, isGuardedHq, unitTerrain, baseId, ignoresJianZhen, immuneToShiShi, allianceBlocks, targetSurcharge, triggerCounters, hasVanguard as hasVanguardSkill, damageHq, zhaXiang, retreatUnit
+  isArtillery, isSiege, isIronWall, findBodyguard, effectiveTroop, hasShiShi, fireMultiplier, isGuardedUnit, isGuardedHq, unitTerrain, baseId, ignoresJianZhen, ignoresWeiWo, cannotAttack, hasLongRange, hqAttackMultiplier, counterOverride, notifyYouJi, immuneToShiShi, allianceBlocks, targetSurcharge, triggerCounters, hasVanguard as hasVanguardSkill, damageHq, zhaXiang, retreatUnit
 } from './cardSkills.js';
 
 const getAttackStyle = unit => unit.keywords.includes(KEYWORDS.HUO_GONG) || unit.keywords.includes(KEYWORDS.SHI_SHI) || ['ARCHER', 'STRATEGIST'].includes(unit.troopType)
@@ -93,6 +93,7 @@ export function validateAttack(state, attackerId, targetId, actingPlayerId = nul
   if (attacker.status[STATUS_TYPES.SUPPRESSED]) {
     throw new Error('Suppressed unit cannot attack');
   }
+  if (cannotAttack(state, attacker)) throw new Error(`【${attacker.name}】无法主动攻击`);
 
   // Non-突袭 Deploy Sickness
   if (attacker.status[STATUS_TYPES.DEPLOYED_THIS_TURN] && !hasKeyword(attacker, KEYWORDS.TU_XI)) {
@@ -189,14 +190,14 @@ export function validateAttack(state, attackerId, targetId, actingPlayerId = nul
   if (zhaXiang(defender)) throw new Error('黄盖·诈降：首次攻击前不能被指向');
 
   // 帷幄 (Curtain) Rule: Cannot be targeted before its first action, unless attacker has 攻心
-  if (defender.keywords.includes(KEYWORDS.WEI_WO) && defender.status[STATUS_TYPES.ACTIONS_USED] === 0 && !attacker.keywords.includes(KEYWORDS.GONG_XIN)) {
+  if (defender.keywords.includes(KEYWORDS.WEI_WO) && defender.status[STATUS_TYPES.ACTIONS_USED] === 0 && !attacker.keywords.includes(KEYWORDS.GONG_XIN) && !ignoresWeiWo(attacker, state)) {
     throw new Error('Target protected by 帷幄 (cannot be attacked before acting)');
   }
 
   // Range / Adjacency Rule:
   // Non-strategist military units in Support line cannot attack opposing Support line directly without advancing to Frontline unless Ranged/矢石
   // 矢石只免反击，射程与普通单位一样（只能打相邻一线）；谋士与抛射器械除外
-  if (effectiveTroop(state, attacker) !== TROOP_TYPES.STRATEGIST && !isArtillery(attacker) && !options.skipSupportRangeCheck) {
+  if (effectiveTroop(state, attacker) !== TROOP_TYPES.STRATEGIST && !isArtillery(attacker) && !hasLongRange(state, attacker) && !options.skipSupportRangeCheck) {
     if (loc.zoneType === 'SUPPORT' && targetLoc.zoneType === 'SUPPORT') {
       throw new Error('Military unit in support line cannot attack opposing support line directly without advancing to Frontline unless Ranged/矢石');
     }
@@ -210,7 +211,7 @@ export function validateAttack(state, attackerId, targetId, actingPlayerId = nul
 
   // 前线相邻规则：前线区域之间只能攻击相邻区域（左↔中↔右），谋士与抛射器械除外
   if (loc.zoneType === 'FRONTLINE' && targetLoc.zoneType === 'FRONTLINE' &&
-      effectiveTroop(state, attacker) !== TROOP_TYPES.STRATEGIST && !isArtillery(attacker)) {
+      effectiveTroop(state, attacker) !== TROOP_TYPES.STRATEGIST && !isArtillery(attacker) && !hasLongRange(state, attacker)) {
     const order = { LEFT: 0, CENTER: 1, RIGHT: 2 };
     if (Math.abs(order[loc.zoneKey] - order[targetLoc.zoneKey]) > 1) {
       throw new Error('只能攻击相邻前线区域的敌军');
@@ -306,7 +307,7 @@ function resolveHqCombat(state, attacker, loc, player, opponent, oppFaction, pla
   }
 
   // 主城伤害经由技能结算（邓芝·使节免伤、李典减伤）
-  const hqDamage = damageHq(state, oppFaction, getEffectiveAttack(state, attacker, loc), attacker.name, { silent: true });
+  const hqDamage = damageHq(state, oppFaction, getEffectiveAttack(state, attacker, loc) * hqAttackMultiplier(state, attacker), attacker.name, { silent: true });
 
   // 攻心 HQ Provision Steal
   let provisionsStolen = 0;
@@ -390,6 +391,7 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
     if (lethal) {
       defender._evadeTurn = state.turnNumber;
       retreatUnit(state, defender, '游击');
+      notifyYouJi(state, defender);
       state.combatLog.push({ type: 'SKILL', playerId: defender.faction, message: `【${defender.name}】游击：撤回支援阵线，本次攻击无效` });
       return { success: true, attackerDied: false, defenderDied: false, damageDealt: 0, counterDealt: 0, evaded: true };
     }
@@ -517,6 +519,7 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
   if (effectiveTroop(state, attacker) === TROOP_TYPES.STRATEGIST && effectiveTroop(state, defender) !== TROOP_TYPES.STRATEGIST) canCounter = false;
   if (effectiveTroop(state, defender) === TROOP_TYPES.STRATEGIST && effectiveTroop(state, attacker) !== TROOP_TYPES.STRATEGIST) canCounter = false;
   if (hasShiShi(state, attacker) && !hasShiShi(state, defender) && !immuneToShiShi(defender)) canCounter = false;
+  canCounter = counterOverride(state, attacker, defender, canCounter);
 
   if (canCounter) {
     let rawCounterDmg = defenderEffectiveAtk;
