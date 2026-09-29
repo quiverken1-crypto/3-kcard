@@ -18,7 +18,7 @@
  */
 import { KINGDOMS, BUILTIN_KINGDOMS, DB_CARD_MAP, registerKingdom, unregisterKingdom } from './cardDB.js';
 import { registerHqs, unregisterHqs } from './terrains.js';
-import { ABILITY_TRIGGERS, EFFECT_TYPES, EFFECT_TARGETS, CONDITION_FIELDS, PLAYER_EFFECTS, DECK_EFFECTS, KEYWORD_EFFECTS, AURA_EFFECTS, FILTER_CATALOG } from '../engine/abilities.js';
+import { ABILITY_TRIGGERS, EFFECT_TYPES, EFFECT_TARGETS, CONDITION_FIELDS, PLAYER_EFFECTS, DECK_EFFECTS, KEYWORD_EFFECTS, AURA_EFFECTS, FILTER_CATALOG, ACTIVE_COST_CATALOG } from '../engine/abilities.js';
 import { CUSTOM_CARDS_KEY } from './customCards.js';
 
 export const CUSTOM_V2_KEY = 'sgk_custom_v2';
@@ -56,7 +56,7 @@ function normalizeAbilities(list, where) {
       if (!EFFECT_TYPES.includes(type)) throw new Error(`${where}：不支持的效果 ${type}`);
       if (!EFFECT_TARGETS.includes(target)) throw new Error(`${where}：不支持的目标 ${target}`);
       if (!DECK_EFFECTS.has(type) && PLAYER_EFFECTS.has(type) !== PLAYER_TARGETS.includes(target)) throw new Error(`${where}：效果 ${type} 与目标 ${target} 不匹配`);
-      if (trigger === 'AURA' && (!AURA_EFFECTS.has(type) || !AURA_TARGETS.includes(target))) throw new Error(`${where}：光环只支持战力±、行动花费±，目标为自身/友军/敌军`);
+      if (trigger === 'AURA' && (!AURA_EFFECTS.has(type) || !AURA_TARGETS.includes(target))) throw new Error(`${where}：光环只支持战力±、行动花费±、获得词条，目标为自身/友军/敌军`);
       const out = { type, target: DECK_EFFECTS.has(type) ? 'OWNER' : target, amount: int(ef.amount, '效果数值', 0, 20, 1) };
       if (KEYWORD_EFFECTS.has(type)) out.keyword = text(ef.keyword, '词条', 24);
       const f = ef.filter || {};
@@ -76,6 +76,17 @@ function normalizeAbilities(list, where) {
       if (!CONDITION_FIELDS.includes(field) || !['EQ', 'GTE', 'LTE'].includes(op)) throw new Error(`${where}：不支持的条件`);
       return { field, op, value: int(c.value, '条件值', 0, 100) };
     });
+    if (trigger === 'ACTIVE') {
+      const ct = String(ab.cost?.type || 'NONE').toUpperCase();
+      if (!ACTIVE_COST_CATALOG.some(([v]) => v === ct)) throw new Error(`${where}：主动技消耗类型无效`);
+      return {
+        trigger, conditions, effects,
+        ...(ab.name ? { name: text(String(ab.name), '主动技名称', 8) } : {}),
+        cost: { type: ct, amount: int(ab.cost?.amount, '消耗数值', 0, 20, 1) },
+        chance: int(ab.chance, '判定概率', 1, 100, 100),
+        limit: ab.limit === 'GAME' ? 'GAME' : 'TURN'
+      };
+    }
     return { trigger, conditions, effects };
   });
 }
@@ -125,6 +136,7 @@ function normalizeCard(raw, i, kingdomsOk) {
     customKeywords,
     skill: { name: text(raw.skill?.name || raw.skillName, '技能名', 12, { optional: true }), description: text(raw.skill?.description || raw.description, '技能描述', 300, { optional: true }) },
     abilities: normalizeAbilities(raw.abilities, `${name}`),
+    ...(typeof raw.art === 'string' && /^https:\/\/[^\s'\"()<>\\]{4,300}$/.test(raw.art.trim()) ? { art: raw.art.trim() } : {}),
     pending: Boolean(raw.pending),
     custom: true,
     updatedAt: Number(raw.updatedAt) || Date.now()

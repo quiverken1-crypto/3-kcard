@@ -13,7 +13,7 @@
 import { ACTION_TYPES, KEYWORDS, STATUS_TYPES, hasKeyword } from '../engine/constants.js';
 import { getValidTargets, validateAttack } from '../engine/combat.js';
 import { findUnit, getAllUnits } from '../engine/state.js';
-import { getTacticTargets, getDeployTargets, tacticBlockReason, getActiveSkill, activeSkillBlockReason, canDeployToFrontline, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getCardPlayCost } from '../engine/cardSkills.js';
+import { getTacticTargets, getDeployTargets, tacticBlockReason, getActiveSkill, getActiveSkills, activeSkillBlockReason, canDeployToFrontline, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getCardPlayCost } from '../engine/cardSkills.js';
 import { CardInspector } from './cardRenderer.js';
 import { getUnitMoveZones, unitHasUsefulAction } from '../engine/unitOptions.js';
 import { previewAction, estimateAttack } from '../engine/preview.js';
@@ -250,7 +250,7 @@ export class InteractionController {
       if (typeof e.preventDefault === 'function') e.preventDefault();
       const ps = this.pendingSkill;
       this._endSkillMode();
-      this.onAction({ type: ACTION_TYPES.ACTIVATE_SKILL, playerId: this.localPlayerId, payload: { unitId: ps.unitId, cardId: cardEl.dataset?.instanceId } });
+      this.onAction({ type: ACTION_TYPES.ACTIVATE_SKILL, playerId: this.localPlayerId, payload: { unitId: ps.unitId, cardId: cardEl.dataset?.instanceId, skillIndex: ps.skillIndex || 0 } });
       return;
     }
 
@@ -654,27 +654,33 @@ export class InteractionController {
   _showSkillButton(unit, unitEl) {
     const doc = globalThis.document;
     this._hideSkillButton();
-    const spec = getActiveSkill(unit);
-    if (!spec || !doc || !this.gameState) return;
-    const reason = activeSkillBlockReason(this.gameState, unit);
-    const btn = doc.createElement('button');
-    btn.type = 'button';
-    btn.className = `skill-activate-btn${reason ? ' disabled' : ''}`;
-    btn.textContent = reason ? (reason.includes(spec.name) ? reason : `【${spec.name}】${reason}`) : `⚡ 发动【${spec.name}】`;
-    btn.title = spec.desc;
+    const specs = getActiveSkills(unit);
+    if (!specs.length || !doc || !this.gameState) return;
+    // 多个主动技：竖排多个按钮，各自发动、各自消耗
+    const wrap = doc.createElement('div');
+    wrap.className = 'skill-activate-wrap';
+    for (const spec of specs) {
+      const reason = activeSkillBlockReason(this.gameState, unit, spec.index);
+      const btn = doc.createElement('button');
+      btn.type = 'button';
+      btn.className = `skill-activate-btn${reason ? ' disabled' : ''}`;
+      btn.textContent = reason ? (reason.includes(spec.name) ? reason : `【${spec.name}】${reason}`) : `⚡ 发动【${spec.name}】${spec.desc ? ` · ${spec.desc}` : ''}`;
+      btn.title = spec.desc;
+      btn.addEventListener('pointerdown', ev => ev.stopPropagation());
+      btn.addEventListener('click', ev => {
+        ev.stopPropagation();
+        if (reason) { this._showToast(reason); return; }
+        this._hideSkillButton();
+        this.cancelSelection();
+        this._beginSkillMode(unit, spec);
+      });
+      wrap.appendChild(btn);
+    }
     const r = unitEl.getBoundingClientRect();
-    doc.body.appendChild(btn);
-    const w = btn.offsetWidth;
-    Object.assign(btn.style, { left: `${Math.max(6, Math.min(r.left + r.width / 2 - w / 2, (globalThis.innerWidth || 800) - w - 6))}px`, top: `${Math.max(4, r.top - btn.offsetHeight - 6)}px` });
-    btn.addEventListener('pointerdown', ev => ev.stopPropagation());
-    btn.addEventListener('click', ev => {
-      ev.stopPropagation();
-      if (reason) { this._showToast(reason); return; }
-      this._hideSkillButton();
-      this.cancelSelection();
-      this._beginSkillMode(unit, spec);
-    });
-    this.skillBtn = btn;
+    doc.body.appendChild(wrap);
+    const w = wrap.offsetWidth;
+    Object.assign(wrap.style, { left: `${Math.max(6, Math.min(r.left + r.width / 2 - w / 2, (globalThis.innerWidth || 800) - w - 6))}px`, top: `${Math.max(4, r.top - wrap.offsetHeight - 6)}px` });
+    this.skillBtn = wrap;
   }
 
   _hideSkillButton() {
@@ -684,9 +690,11 @@ export class InteractionController {
 
   _beginSkillMode(unit, spec) {
     const doc = globalThis.document;
-    this.pendingSkill = { unitId: unit.instanceId, name: spec.name };
+    // 不需要选手牌的主动技：直接发动
+    if (!spec.needsHandCard) { this.onAction({ type: ACTION_TYPES.ACTIVATE_SKILL, playerId: this.localPlayerId, payload: { unitId: unit.instanceId, skillIndex: spec.index || 0 } }); return; }
+    this.pendingSkill = { unitId: unit.instanceId, name: spec.name, skillIndex: spec.index || 0 };
     doc?.body?.classList.add('skill-hand-select');
-    this._showToast(`【${spec.name}】点一张手牌弃置，额外获得2粮草（点战场取消）`);
+    this._showToast(`【${spec.name}】${spec.handPrompt || '点一张手牌弃置，额外获得2粮草'}（点战场取消）`);
   }
 
   _endSkillMode() {
@@ -1105,7 +1113,10 @@ export class InteractionController {
       if (Array.isArray(targets)) {
         this.cancelSelection();
         if (!targets.length) {
-          this._showToast(`【${card.name}】${tacticBlockReason(this.gameState, this.localPlayerId, card) || '当前没有合法目标'}`);
+          const why = tacticBlockReason(this.gameState, this.localPlayerId, card);
+          if (why) { this._showToast(`【${card.name}】${why}`); return; }
+          // 目标可选的战法（如恩威并施无敌军时打主城）：直接释放
+          this.onAction({ type: ACTION_TYPES.PLAY_TACTIC, playerId: this.localPlayerId, payload: { cardInstanceId } });
           return;
         }
         const ids = targets.map(t => t.instanceId);

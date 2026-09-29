@@ -82,7 +82,17 @@ export const HQ_CARDS = {
   lb: Object.freeze([
     Object.freeze({ id: 'xiapi', name: '下邳', hp: 20, terrains: ['WATER', 'PLAIN'] }),
     Object.freeze({ id: 'puyang', name: '濮阳', hp: 20, terrains: ['PLAIN', 'PLAIN'] })
-  ])
+  ]),
+  gsz: Object.freeze([
+    Object.freeze({ id: 'yijing', name: '易京', hp: 20, terrains: ['PLAIN', 'PASS'] })
+  ]),
+  // 以下五家官方未公布主城，按史实与兵种推断
+  ys: Object.freeze([Object.freeze({ id: 'yecheng', name: '邺城', hp: 20, terrains: ['PLAIN', 'PASS'] })]),
+  hj: Object.freeze([Object.freeze({ id: 'julu', name: '巨鹿', hp: 20, terrains: ['MOUNTAIN', 'PLAIN'] })]),
+  dz: Object.freeze([Object.freeze({ id: 'meiwu', name: '郿坞', hp: 20, terrains: ['PLAIN', 'PASS'] })]),
+  xl: Object.freeze([Object.freeze({ id: 'wuwei', name: '武威', hp: 20, terrains: ['PLAIN', 'PLAIN'] })]),
+  lbiao: Object.freeze([Object.freeze({ id: 'xiangyang', name: '襄阳', hp: 20, terrains: ['WATER', 'WATER'] })]),
+  yshu: Object.freeze([Object.freeze({ id: 'shouchun', name: '寿春', hp: 20, terrains: ['PLAIN', 'WATER'] })])
 };
 const BUILTIN_HQ_KEYS = Object.freeze(Object.keys(HQ_CARDS));
 export function registerHqs(kingdom, hqs = []) {

@@ -28,8 +28,9 @@ import {
   findUnit
 } from '../engine/rulesEngine.js';
 import { getValidTargets, validateAttack, getEffectiveAttack } from '../engine/combat.js';
+import { getCardPlayCost } from '../engine/cardSkills.js';
 import { evaluateBoard, DEFAULT_EVALUATION_WEIGHTS } from './evaluator.js';
-import { autoPickCards, autoChoiceTarget, getActiveSkill, activeSkillBlockReason, canDeployToFrontline } from '../engine/cardSkills.js';
+import { autoPickCards, autoChoiceTarget, getActiveSkill, getActiveSkills, activeSkillBlockReason, canDeployToFrontline } from '../engine/cardSkills.js';
 import { PRNG } from '../engine/prng.js';
 
 /**
@@ -203,10 +204,7 @@ export class HeuristicBot {
     // 1. DEPLOY Actions
     for (const card of player.hand) {
       if (card.type === 'UNIT') {
-        let cost = card.cost;
-        if (!player.prestigeDiscountUsed && player.prestige > 0) {
-          cost = Math.max(0, cost - player.prestige);
-        }
+        const cost = getCardPlayCost(state, botFaction, card);
         if (player.provisions >= cost) {
           // Deploy to Support
           if (state.battlefield.support[botFaction].slots.length < 4) {
@@ -464,9 +462,17 @@ export class HeuristicBot {
     const hand = state.players?.[botFaction]?.hand || [];
     if (hand.length >= 5) {
       for (const u of getAllUnits(state, botFaction)) {
-        if (getActiveSkill(u) && !activeSkillBlockReason(state, u)) {
+        if (getActiveSkill(u)?.needsHandCard && !activeSkillBlockReason(state, u)) {
           const cheap = [...hand].sort((a, b) => (a.cost || 0) - (b.cost || 0))[0];
           return { type: ACTION_TYPES.ACTIVATE_SKILL, playerId: botFaction, payload: { unitId: u.instanceId, cardId: cheap.instanceId } };
+        }
+      }
+    }
+    // 工坊积木主动技：能发动就发动（消耗不会致死，由 activeSkillBlockReason 保证）
+    for (const u of getAllUnits(state, botFaction)) {
+      for (const spec of getActiveSkills(u)) {
+        if (spec.custom && !spec.needsHandCard && !activeSkillBlockReason(state, u, spec.index)) {
+          return { type: ACTION_TYPES.ACTIVATE_SKILL, playerId: botFaction, payload: { unitId: u.instanceId, skillIndex: spec.index } };
         }
       }
     }

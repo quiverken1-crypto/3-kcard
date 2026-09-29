@@ -95,6 +95,7 @@ export function createCard(def = {}, overrides = {}) {
     audioCue: def.audioCue || 'auto',
     abilities: Array.isArray(def.abilities) ? structuredClone(def.abilities) : [],
     ...(def.pending ? { pending: true } : {}),
+    ...(def.art ? { art: def.art } : {}),
     onDeploy: def.onDeploy || null,
     onKill: def.onKill || null,
     onDeath: def.onDeath || null,
@@ -362,6 +363,7 @@ export function drawCard(state, playerId) {
   }
 
   const drawn = player.deck.shift();
+  if (drawn) delete drawn._known; // 从牌堆摸上来的是暗牌
 
   // Hand Cap 9: Overflow Burn
   if (player.hand.length >= GAME_CONFIG.HAND_LIMIT) {
@@ -427,6 +429,9 @@ export function startTurn(state, playerId) {
   // Rule: 1st player on turn 1 skips draw
   if (state.turnNumber === 1 && playerId === state.firstPlayer) {
     state.combatLog.push({ type: 'DRAW_SKIPPED', playerId, reason: 'P1 Turn 1 skip' });
+  } else if (player.skipNextDraw) {
+    player.skipNextDraw = false;
+    state.combatLog.push({ type: 'SKILL', playerId, message: '纪灵·压境：本回合跳过抽牌' });
   } else {
     drawCard(state, playerId);
   }
@@ -475,8 +480,11 @@ export function endTurn(state) {
  * @param {string} gainingPlayerId
  * @param {number} [amount=1]
  */
+/** 声望溢出（已到上限仍获得声望）时的钩子：fn(state, playerId, overflow) */
+export const PRESTIGE_OVERFLOW_HOOKS = [];
 export function adjustPrestige(state, gainingPlayerId, amount = 1) {
   const gainer = state.players[gainingPlayerId];
+  let overflow = 0;
   const opponentId = gainingPlayerId === FACTIONS.WEI ? FACTIONS.SHU : FACTIONS.WEI;
   const opponent = state.players[opponentId];
 
@@ -484,6 +492,7 @@ export function adjustPrestige(state, gainingPlayerId, amount = 1) {
     if (opponent.prestige > 0) {
       opponent.prestige -= 1; // Steal: deduct opponent
     } else {
+      if (gainer.prestige >= GAME_CONFIG.MAX_PRESTIGE) overflow++;
       gainer.prestige = Math.min(GAME_CONFIG.MAX_PRESTIGE, gainer.prestige + 1); // Add to self (capped at 2)
     }
   }
@@ -495,6 +504,7 @@ export function adjustPrestige(state, gainingPlayerId, amount = 1) {
     gainerPrestige: gainer.prestige,
     opponentPrestige: opponent.prestige
   });
+  if (overflow > 0) for (const fn of PRESTIGE_OVERFLOW_HOOKS) { try { fn(state, gainingPlayerId, overflow); } catch (err) { console.warn('声望溢出钩子出错：', err); } }
 }
 
 /**

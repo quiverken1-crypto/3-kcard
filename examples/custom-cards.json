@@ -1,42 +1,66 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "factions": [
+    {
+      "key": "f_jin",
+      "name": "晋",
+      "army": "晋军",
+      "color": "#5b6b8a",
+      "hqs": [
+        { "id": "f_jin_hq1", "name": "洛阳", "terrains": ["PLAIN", "FOREST"] },
+        { "id": "f_jin_hq2", "name": "邺城", "terrains": ["PLAIN", "WATER"] }
+      ]
+    }
+  ],
   "cards": [
     {
-      "id": "custom_shu_qinglong",
-      "name": "青龙卫",
-      "faction": "SHU",
+      "id": "c_jin_si_ma_yi",
+      "name": "司马懿",
+      "kingdom": "f_jin",
       "type": "UNIT",
-      "troopType": "CAVALRY",
-      "cost": 3,
-      "actionCost": 1,
-      "atk": 3,
-      "hp": 3,
-      "keywords": ["突袭"],
-      "audioCue": "cavalry",
-      "description": "部署时摸一张牌；击杀敌军时夺取一点声望。",
+      "troopType": "STRATEGIST",
+      "cost": 5, "actionCost": 2, "atk": 3, "hp": 5, "copies": 1,
+      "keywords": ["帷幄", "鹰视"],
+      "badges": ["名士"],
+      "customKeywords": [{ "name": "鹰视", "description": "进场时，对你选择的1个敌军造成2点伤害。" }],
+      "skill": { "name": "鹰视狼顾", "description": "进场时，对你选择的1个敌军造成2点伤害。主动（每回合1次）：消耗2粮草，50%判定成功则抽2张牌。" },
+      "pending": false,
       "abilities": [
-        { "trigger": "ON_DEPLOY", "effects": [{ "type": "DRAW", "target": "OWNER", "amount": 1 }] },
-        { "trigger": "ON_KILL", "effects": [{ "type": "GAIN_PRESTIGE", "target": "OWNER", "amount": 1 }] }
+        { "trigger": "ON_DEPLOY", "conditions": [], "effects": [{ "type": "DAMAGE_UNIT", "target": "CHOSEN_ENEMY", "amount": 2 }] },
+        { "trigger": "ACTIVE", "conditions": [], "cost": { "type": "PROVISIONS", "amount": 2 }, "chance": 50, "limit": "TURN",
+          "effects": [{ "type": "DRAW", "target": "OWNER", "amount": 2 }] }
       ]
     },
     {
-      "id": "custom_wei_duanliang",
-      "name": "断粮火计",
-      "faction": "WEI",
+      "id": "c_jin_hu_ben",
+      "name": "虎贲骑",
+      "kingdom": "f_jin",
+      "type": "UNIT",
+      "troopType": "CAVALRY",
+      "cost": 3, "actionCost": 1, "atk": 3, "hp": 3, "copies": 3,
+      "keywords": ["突袭"],
+      "badges": [],
+      "customKeywords": [],
+      "skill": { "name": "骁骑", "description": "在场时，己方其他骑兵战力+1。" },
+      "pending": false,
+      "abilities": [
+        { "trigger": "AURA", "conditions": [], "effects": [{ "type": "BUFF_ATTACK", "target": "OTHER_FRIENDLIES", "amount": 1, "filter": { "troop": "CAVALRY" } }] }
+      ]
+    },
+    {
+      "id": "c_shu_qinglong",
+      "name": "青龙卫",
+      "kingdom": "shu",
       "type": "TACTIC",
       "troopType": "NONE",
-      "cost": 2,
-      "actionCost": 0,
-      "atk": 0,
-      "hp": 0,
+      "cost": 2, "actionCost": 0, "atk": 0, "hp": 0, "copies": 2,
       "keywords": [],
-      "audioCue": "fireball",
-      "description": "夺取敌方两点粮草，并对敌方主城造成一点伤害。",
+      "badges": [],
+      "customKeywords": [],
+      "skill": { "name": "青龙", "description": "使所有前线己方骑兵本回合获得【冲阵】。" },
+      "pending": false,
       "abilities": [
-        { "trigger": "ON_PLAY", "effects": [
-          { "type": "STEAL_PROVISIONS", "target": "OPPONENT", "amount": 2 },
-          { "type": "DAMAGE_HQ", "target": "OPPONENT", "amount": 1 }
-        ] }
+        { "trigger": "ON_PLAY", "conditions": [], "effects": [{ "type": "TURN_KEYWORD", "target": "ALL_FRIENDLIES", "amount": 1, "keyword": "冲阵", "filter": { "troop": "CAVALRY", "line": "FRONTLINE" } }] }
       ]
     }
   ]

@@ -30,10 +30,11 @@ export const KEYWORD_GLOSSARY = ({
   '伏击': '【伏击】每回合首次被攻击时先造成伤害，若敌军因此被消灭则自己不受伤害。',
   '突袭': '【突袭】进场的回合可以立即行动。',
   '潜袭': '【潜袭】背面进场，行动花费视为1，不受战法影响；交战时揭示。',
-  '游击': '【游击】可从前线移动回支援阵线。',
+  '游击': '【游击】可从前线移动回支援阵线；敌方回合首次受到攻击时可撤退，使该次攻击无效（这一击会致命时自动发动）。',
+  '军机': '【军机X】新词条，官方规则尚未公布，暂无效果。',
   '奇袭': '【奇袭】部署时可直接部署在没有敌方单位的前线。',
   '补给': '【补给】在场时，己方粮草上限额外+1，可叠加。',
-  '声望': '【声望X】进场/使用时己方声望+X（对手有声望则改为扣减对手）。',
+  '声望': '【声望X】进场/使用时己方声望+X（对手有声望则改为扣减对手）；己方部署单位时可用声望减免花费，每回合1次。',
   '奇谋': '【奇谋X】在场时，己方战法和反制战法花费-X，可叠加。',
   '治军': '【治军】相同兵种的其他友军行动花费-1。',
   '督战': '【督战】相邻友方军队（不含谋士）战力+1。',
@@ -43,7 +44,8 @@ export const KEYWORD_GLOSSARY = ({
   '护卫': '【护卫】同区域友军被攻击时，改由护卫单位承受此次攻击（谋士与铁骑同样适用）。',
   '侦查': '【侦查X】进场时查看己方牌库顶X张牌，费用过高的牌将被置于牌库底。',
   '使节': '【使节】在场时己方主城免受伤害。',
-  '溢出转移': '【溢出转移】击杀敌军后溢出伤害转移到敌方主城。'
+  '溢出转移': '【溢出转移】击杀敌军后溢出伤害转移到敌方主城。',
+  '铁骑': '【铁骑】攻击时无视守护、帷幄。'
 });
 const BUILTIN_KEYWORDS = Object.freeze(Object.keys(KEYWORD_GLOSSARY));
 export const builtinKeywords = () => [...BUILTIN_KEYWORDS];
@@ -60,15 +62,19 @@ export const TRAIT_GLOSSARY = Object.freeze({
   '皇叔': '性格·皇叔',
   '皇亲': '性格·皇亲',
   '暴虐': '性格·暴虐',
-  '枭雄': '性格·枭雄'
+  '枭雄': '性格·枭雄',
+  '刚愎': '性格·刚愎：与刚直的名士不和（崔琰、田丰）',
+  '谗佞': '性格·谗佞：与刚直的名士不和（崔琰、田丰）'
 });
 
 /** 卡面插画（取自魏蜀图鉴） */
 const COMMON_ART = new Set(['shipo', 'shanjia', 'cefan', 'shengdong', 'jueshui', 'chengsheng', 'youdi', 'tuchi', 'tuqi', 'andu']);
 const NO_ART = new Set(['shu_huang_quan', 'shu_yi_shou_wei_gong', 'shu_fu_tong', 'wu_pan_zhang', 'wu_sun_quan', 'wu_zhou_tai', 'wu_cheng_pu', 'lb_chen_gong', 'lb_lv_bu', 'wei_guo_jia_x']);
 export function getCardArtUrl(card) {
+  // 自定义卡：可填 https 图片链接作为卡面
+  if (card?.art && /^https:\/\/[^\s'\"()<>\\]{4,300}$/.test(card.art)) return card.art;
   const id = String(card?.cardId || '').replace(/_[0-9]+$/, '');
-  const m = id.match(/^(wei|shu|wu|lb)_([a-z_]+)$/);
+  const m = id.match(/^(wei|shu|wu|lb|gsz|ys|hj|dz|xl|lbiao|yshu)_([a-z_]+)$/);
   if (!m || NO_ART.has(id)) return '';
   if (COMMON_ART.has(m[2])) return `assets/cards/common_${m[2]}.webp`;
   return `assets/cards/${id}.webp`;
@@ -149,21 +155,24 @@ export function showCardDetails(card) {
   const doc = typeof document !== 'undefined' ? document : globalThis.document;
   const modal = doc?.getElementById('modal-card-inspector');
   if (!modal) return;
+  // 详情弹窗挂到 body 顶层：否则在卡组/工坊（body 下的全屏层）里会被压在下面
+  if (modal.parentElement !== doc.body) doc.body.appendChild(modal);
   CardInspector.hide();
   const setText = (id, value) => { const el = doc.getElementById(id); if (el) el.textContent = value; };
   setText('inspector-card-name', card.name || '无名卡牌');
   setText('inspector-faction-badge', `势力：${KINGDOMS[cardKingdom(card)]?.name || ''}`);
   setText('inspector-troop-badge', `类别：${getTroopTypeLabel(card.troopType, card.type)}`);
   setText('inspector-cost-badge', `粮草：${card.cost ?? 0}`);
-  setText('inspector-action-cost-badge', card.type === 'UNIT' ? `行动：${card.actionCost ?? 1}` : '即时战法');
+  setText('inspector-action-cost-badge', card.type === 'UNIT' ? `行动：${card.actionCost ?? 1} · 战力${card.atk ?? 0} / 生命${card.hp ?? 0}` : (card.type === 'COUNTER' ? '反制（暗置）' : '即时战法'));
   setText('inspector-skill-text', getCardDescription(card));
   setText('inspector-flavor-text', card.flavor || '暂无卡牌背景');
   const glossary = doc.getElementById('inspector-keywords-glossary');
   if (glossary) {
     const keywords = Array.isArray(card.keywords) ? card.keywords : [];
-    glossary.replaceChildren(...keywords.map(kw => {
+    const traits = (Array.isArray(card.badges) ? card.badges : []).map(b => TRAIT_GLOSSARY[b] || `性格·${b}`);
+    glossary.replaceChildren(...[...keywords.map(kw => KEYWORD_GLOSSARY[kw.replace(/[0-9]/g, '')] || `【${kw}】`), ...traits].map(t => {
       const item = doc.createElement('p');
-      item.textContent = KEYWORD_GLOSSARY[kw.replace(/[0-9]/g, '')] || `【${kw}】`;
+      item.textContent = t;
       return item;
     }));
     if (!keywords.length) glossary.textContent = '无词条';
@@ -195,7 +204,8 @@ export function renderHandCard(card, options = {}) {
   const el = doc.createElement('div');
   const faction = cardKingdom(card);
   const cardType = (card.type || 'unit').toLowerCase();
-  el.className = `card card-hand game-card card-${faction} faction-${faction} type-${cardType}`;
+  el.className = `card card-hand game-card card-${faction} faction-${faction} type-${cardType}${card._known ? ' card-known' : ''}`;
+  if (card._known) el.title = '明牌：对手能看到这张牌';
   el.dataset.instanceId = card.instanceId || '';
   el.dataset.cardId = card.cardId || '';
   el.dataset.cardType = card.type || 'UNIT';
@@ -260,7 +270,7 @@ export function renderHandCard(card, options = {}) {
     <div class="card-inner-frame">
       <div class="card-header card-header-bar">
         ${costHtml}
-        <div class="card-name-banner card-title-text" title="${escapeHtml(card.name)}">
+        <div class="card-name-banner card-title-text${String(card.name || "").length >= 4 ? " name-long" : ""}" title="${escapeHtml(card.name)}">
           ${escapeHtml(card.name)}
         </div>
         ${actionCostHtml}

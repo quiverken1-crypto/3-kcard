@@ -2,7 +2,7 @@
  * deckBuilder.js — 卡组列表 / 卡组编辑器 / 分享码导入导出
  *
  * 布局：
- *  - 列表：顶部模式页签（单阵营；双阵营后续加入），势力筛选，卡组卡片（名称、势力、张数、费用曲线、操作）。
+ *  - 主页三个页签：图鉴（按势力浏览全部卡牌）、系统预设（按势力分组）、我的卡组（按势力分组）；卡组可只读查看。
  *  - 编辑：宽屏三栏（筛选 | 卡池 | 当前卡组），窄屏/竖屏改为“卡池 / 卡组”两个页签 + 底部常驻状态条。
  */
 import { KINGDOMS, DB_CARD_MAP } from '../data/cardDB.js';
@@ -49,7 +49,8 @@ export class DeckBuilder {
     return this.root;
   }
 
-  open() {
+  open(section = null) {
+    if (section) this.section = section;
     this._ensureRoot().classList.remove('hidden');
     doc().body.classList.add('deck-builder-open');
     this.renderList();
@@ -75,15 +76,15 @@ export class DeckBuilder {
   }
 
   // ------------------------------------------------------------
-  // 列表
+  // 主页：图鉴 / 系统预设 / 我的卡组
   // ------------------------------------------------------------
   renderList() {
     this.deck = null;
-    const kf = this.kingdomFilter;
-    const decks = listDecks({ mode: this.mode, kingdom: kf === 'all' ? null : kf });
+    this.section ||= 'codex';
     const root = this._ensureRoot();
+    const sec = this.section;
     root.innerHTML = `
-      <div class="db-shell db-list-view">
+      <div class="db-shell db-hub">
         <header class="db-head">
           <button class="db-btn db-back" data-act="close">← 返回</button>
           <h2 class="db-title">卡组</h2>
@@ -92,62 +93,176 @@ export class DeckBuilder {
             <button class="db-btn db-primary" data-act="new">＋ 新建卡组</button>
           </div>
         </header>
-        <div class="db-listbar">
-          <div class="db-seg">
-            <button class="db-tab${this.mode === 'single' ? ' active' : ''}" data-mode="single">单阵营 · 40</button>
-            <button class="db-tab${this.mode === 'dual' ? ' active' : ''}" data-mode="dual">双阵营 · 30+20</button>
-          </div>
-          <div class="db-chips db-kfilter">
-            ${[['all', '全部'], ...allKingdomKeys().map(k => [k, KINGDOMS[k].name])].map(([k, l]) => `<button class="db-chip${kf === k ? ' active' : ''}" data-kf="${k}">${l}</button>`).join('')}
-          </div>
-        </div>
-        ${this.mode === 'dual' ? '<p class="db-hint">测试模式：主阵营 30 张 + 副阵营 20 张，主城 30 血，主城从主阵营选。</p>' : ''}
-        <div class="db-deck-grid">
-          ${decks.map(d => this._deckCardHtml(d)).join('') || '<p class="db-empty">还没有卡组，点右上角“新建卡组”。</p>'}
-        </div>
-        <p class="db-foot-note">自组卡组保存在本机浏览器里；换设备或备份请用“分享码”。官方预设不可直接修改，可“复制后编辑”。</p>
+        <nav class="db-hub-tabs" role="tablist">
+          ${[['codex', '图鉴'], ['presets', '系统预设'], ['mine', '我的卡组']].map(([k, l]) => `<button role="tab" class="db-hub-tab${sec === k ? ' active' : ''}" data-sec="${k}">${l}</button>`).join('')}
+        </nav>
+        <div class="db-hub-body"></div>
       </div>`;
     root.querySelector('[data-act="close"]').onclick = () => this.close();
     root.querySelector('[data-act="new"]').onclick = () => this.renderNew();
     root.querySelector('[data-act="import"]').onclick = () => this.renderImport();
-    root.querySelectorAll('[data-kf]').forEach(b => { b.onclick = () => { this.kingdomFilter = b.dataset.kf; this.renderList(); }; });
-    root.querySelectorAll('[data-mode]').forEach(b => { b.onclick = () => { this.mode = b.dataset.mode; this.renderList(); }; });
-    root.querySelectorAll('.db-deck-card').forEach(el => {
+    root.querySelectorAll('[data-sec]').forEach(b => { b.onclick = () => { this.section = b.dataset.sec; this.renderList(); }; });
+    const body = root.querySelector('.db-hub-body');
+    if (sec === 'codex') this._renderCodex(body);
+    else this._renderDeckLists(body, sec === 'presets');
+  }
+
+  /** 图鉴：按势力浏览全部卡牌 */
+  _renderCodex(body) {
+    const keys = allKingdomKeys();
+    if (!keys.includes(this.codexKingdom)) this.codexKingdom = keys[0];
+    const k = this.codexKingdom;
+    const f = (this.codexFilters ||= { type: 'all', troop: 'all', cost: 'all', src: 'all', q: '' });
+    const sel = (group, opts, cur) => `<select data-cf="${group}" class="${cur && cur !== 'all' ? 'set' : ''}">${opts.map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
+    const lib = libraryFor(k);
+    body.innerHTML = `
+      <div class="db-codex-bar">
+        <div class="db-chips db-kfilter">${keys.map(x => `<button class="db-chip db-kchip${x === k ? ' active' : ''}" data-ck="${x}"><span class="db-seal seal-${x}">${escapeHtml(KINGDOMS[x]?.name || '?')}</span>${escapeHtml(KINGDOMS[x]?.army || x)}</button>`).join('')}</div>
+        <div class="db-fselects db-codex-filters">
+          ${sel('type', [['all', '全部类型'], ...Object.entries(TYPE_LABEL)], f.type)}
+          ${sel('troop', [['all', '全部兵种'], ...Object.entries(TROOP_LABEL)], f.troop)}
+          ${sel('cost', [['all', '全部费用'], ...COST_BUCKETS.slice(1).map(([v, l]) => [v, `${l}费`])], f.cost)}
+          ${sel('src', [['all', '全部来源'], ['base', '实体卡'], ['extra', '旧图鉴/新卡']], f.src)}
+          <input class="db-search2" type="search" placeholder="🔍 卡名 / 技能 / 词条" value="${escapeHtml(f.q)}">
+        </div>
+      </div>
+      <p class="db-codex-count"></p>
+      <section class="db-pool db-codex-grid" aria-label="图鉴"></section>`;
+    const grid = body.querySelector('.db-codex-grid');
+    const draw = () => {
+      const list = lib.filter(d => this._matchesWith(d, f));
+      body.querySelector('.db-codex-count').textContent = `${KINGDOMS[k]?.army || k}：共 ${lib.length} 种卡，${lib.reduce((a, d) => a + (d.copies || 1), 0)} 张实体张数；当前显示 ${list.length} 种。点卡牌看详情。`;
+      grid.replaceChildren();
+      if (!list.length) { grid.innerHTML = '<p class="db-empty">没有符合筛选的卡牌</p>'; return; }
+      for (const def of list) {
+        const card = createCard(def, { faction: 'WEI', kingdom: def.kingdom || k, instanceId: `cx_${def.id}` });
+        const tag = def.extra ? `<span class="db-tile-src">${def.extraLabel || '旧图鉴'}</span>` : /通用战法补足/.test(def.inferred || '') ? '<span class="db-tile-src fill">通用补足</span>' : def.custom ? '<span class="db-tile-src">自定义</span>' : '';
+        const tile = h(`<div class="db-tile db-codex-tile" data-id="${def.id}"><div class="db-tile-card"></div><span class="db-tile-badge some">×${def.copies || 1}</span>${tag}</div>`);
+        tile.querySelector('.db-tile-card').appendChild(renderHandCard(card));
+        tile.addEventListener('click', (e) => { if (e.target.closest('.card-info-button')) return; showCardDetails(card); });
+        grid.appendChild(tile);
+      }
+    };
+    body.querySelectorAll('[data-ck]').forEach(b => { b.onclick = () => { this.codexKingdom = b.dataset.ck; this._renderCodex(body); }; });
+    body.querySelectorAll('[data-cf]').forEach(sl => { sl.onchange = () => { f[sl.dataset.cf] = sl.value; sl.classList.toggle('set', sl.value !== 'all'); draw(); }; });
+    body.querySelector('.db-search2').oninput = (e) => { f.q = e.target.value.trim(); draw(); };
+    draw();
+  }
+
+  _matchesWith(def, f) {
+    if (f.type !== 'all' && def.type !== f.type) return false;
+    if (f.troop !== 'all' && def.troopType !== f.troop) return false;
+    if (f.src === 'base' && def.extra) return false;
+    if (f.src === 'extra' && !def.extra) return false;
+    if (f.cost !== 'all') {
+      const c = def.cost ?? 0;
+      if (f.cost === '0-1' ? c > 1 : f.cost === '6+' ? c < 6 : c !== Number(f.cost)) return false;
+    }
+    if (f.q) {
+      const hay = `${def.name}${def.skill?.name || ''}${def.skill?.description || ''}${(def.keywords || []).join('')}${(def.badges || []).join('')}`;
+      if (!hay.includes(f.q)) return false;
+    }
+    return true;
+  }
+
+  /** 系统预设 / 我的卡组：按势力分组 */
+  _renderDeckLists(body, official) {
+    const decks = listDecks({ mode: this.mode }).filter(d => Boolean(d.official) === official);
+    const groups = allKingdomKeys().map(k => [k, decks.filter(d => d.kingdom === k)]).filter(([, l]) => l.length);
+    body.innerHTML = `
+      <div class="db-listbar">
+        <div class="db-seg">
+          <button class="db-tab${this.mode === 'single' ? ' active' : ''}" data-mode="single">单阵营 · 40</button>
+          <button class="db-tab${this.mode === 'dual' ? ' active' : ''}" data-mode="dual">双阵营 · 30+20</button>
+        </div>
+        ${groups.length > 1 ? `<div class="db-chips db-kfilter">${groups.map(([k]) => `<button class="db-chip" data-jump="${k}">${escapeHtml(KINGDOMS[k]?.name || k)}</button>`).join('')}</div>` : ''}
+      </div>
+      ${this.mode === 'dual' ? '<p class="db-hint">测试模式：主阵营 30 张 + 副阵营 20 张，主城 30 血，主城从主阵营选。按主阵营分组。</p>' : ''}
+      <div class="db-groups">
+        ${groups.map(([k, list]) => `
+          <section class="db-group" id="dbg-${k}">
+            <h3 class="db-group-title"><span class="db-seal seal-${k}">${escapeHtml(KINGDOMS[k]?.name || '?')}</span>${escapeHtml(KINGDOMS[k]?.army || k)}<small>${list.length} 套</small></h3>
+            <div class="db-deck-grid">${list.map(d => this._deckCardHtml(d)).join('')}</div>
+          </section>`).join('') || (official ? '<p class="db-empty">暂无系统预设</p>' : '<div class="db-empty">还没有自己的卡组。<br>可以在“系统预设”里“复制后编辑”，或点右上角“新建卡组”。</div>')}
+      </div>
+      <p class="db-foot-note">${official ? '系统预设不可直接修改，可“复制后编辑”，复制出的卡组会出现在“我的卡组”。' : '我的卡组保存在本机浏览器里；换设备或备份请用“分享码”。'}</p>`;
+    body.querySelectorAll('[data-mode]').forEach(b => { b.onclick = () => { this.mode = b.dataset.mode; this.renderList(); }; });
+    body.querySelectorAll('[data-jump]').forEach(b => { b.onclick = () => body.querySelector(`#dbg-${b.dataset.jump}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    body.querySelectorAll('.db-deck-card').forEach(el => {
       const d = getDeck(el.dataset.id);
-      el.querySelectorAll('[data-deck-act]').forEach(btn => {
-        btn.onclick = (e) => { e.stopPropagation(); this._deckAction(btn.dataset.deckAct, d); };
-      });
+      el.querySelectorAll('[data-deck-act]').forEach(btn => { btn.onclick = (e) => { e.stopPropagation(); this._deckAction(btn.dataset.deckAct, d); }; });
     });
   }
 
   _deckCardHtml(d) {
     const v = validateDeck(d);
     const { byType, curve } = deckStats(d);
-    const k = KINGDOMS[d.kingdom];
     const sub = d.mode === 'dual' && d.subKingdom ? `<span class="db-seal db-seal-sub seal-${d.subKingdom}" title="副阵营">${KINGDOMS[d.subKingdom]?.name || '?'}</span>` : '';
     return `
       <div class="db-deck-card deck-${d.kingdom}${d.official ? ' official' : ''}" data-id="${d.id}">
         <div class="db-deck-top">
-          <span class="db-seal seal-${d.kingdom}">${k?.name || '?'}</span>${sub}
-          <div class="db-deck-name">${d.official ? '🔒 ' : ''}${escapeHtml(d.name)}</div>
+          <span class="db-seal seal-${d.kingdom}">${KINGDOMS[d.kingdom]?.name || '?'}</span>${sub}
+          <div class="db-deck-name">${escapeHtml(d.name)}</div>
           <span class="db-count ${v.ok ? 'ok' : 'bad'}">${v.total}/${deckSize(d)}</span>
         </div>
+        ${d.note ? `<div class="db-deck-note">${escapeHtml(d.note)}</div>` : ''}
         <div class="db-deck-mid">
           <span>单位 ${byType.UNIT} · 战法 ${byType.TACTIC} · 反制 ${byType.COUNTER}</span>
           ${curveSvg(curve)}
         </div>
         ${v.ok ? '' : '<div class="db-deck-warn">未完成，不能用于开局</div>'}
         <div class="db-deck-actions">
-          ${d.official ? '<button class="db-btn" data-deck-act="copy">复制后编辑</button>' : '<button class="db-btn db-primary" data-deck-act="edit">编辑</button><button class="db-btn" data-deck-act="copy">复制</button>'}
+          <button class="db-btn" data-deck-act="view">查看</button>
+          ${d.official ? '<button class="db-btn db-primary" data-deck-act="copy">复制后编辑</button>' : '<button class="db-btn db-primary" data-deck-act="edit">编辑</button><button class="db-btn" data-deck-act="copy">复制</button>'}
           <button class="db-btn" data-deck-act="share">分享码</button>
           ${d.official ? '' : '<button class="db-btn db-danger" data-deck-act="delete">删除</button>'}
         </div>
       </div>`;
   }
 
+  /** 只读查看卡组：按类型分组的卡面 */
+  renderPreview(d) {
+    const root = this.root;
+    const v = validateDeck(d);
+    const entries = Object.entries(d.cards).map(([id, n]) => [getCardDef(id), n]).filter(([x]) => x)
+      .sort(([a], [b]) => (a.cost - b.cost) || a.name.localeCompare(b.name, 'zh'));
+    const byType = t => entries.filter(([x]) => x.type === t);
+    root.innerHTML = `
+      <div class="db-shell">
+        <header class="db-head">
+          <button class="db-btn db-back" data-act="back">← 卡组</button>
+          <span class="db-seal seal-${d.kingdom}">${KINGDOMS[d.kingdom]?.name || '?'}</span>
+          <h2 class="db-title">${escapeHtml(d.name)}</h2>
+          <span class="db-count ${v.ok ? 'ok' : 'bad'}">${v.total}/${deckSize(d)}</span>
+          <div class="db-head-actions">
+            <button class="db-btn" data-act="share">分享码</button>
+            <button class="db-btn db-primary" data-act="edit">${d.official ? '复制后编辑' : '编辑'}</button>
+          </div>
+        </header>
+        ${[['UNIT', '单位'], ['TACTIC', '战法'], ['COUNTER', '反制']].map(([t, l]) => byType(t).length ? `
+          <h3 class="db-group-title">${l}<small>${byType(t).reduce((a, [, n]) => a + n, 0)} 张</small></h3>
+          <section class="db-pool db-codex-grid" data-t="${t}"></section>` : '').join('')}
+      </div>`;
+    for (const [t] of [['UNIT'], ['TACTIC'], ['COUNTER']]) {
+      const grid = root.querySelector(`[data-t="${t}"]`);
+      if (!grid) continue;
+      for (const [def, n] of byType(t)) {
+        const card = createCard(def, { faction: 'WEI', kingdom: def.kingdom || d.kingdom, instanceId: `pv_${def.id}` });
+        const tile = h(`<div class="db-tile db-codex-tile"><div class="db-tile-card"></div><span class="db-tile-badge some">×${n}</span></div>`);
+        tile.querySelector('.db-tile-card').appendChild(renderHandCard(card));
+        tile.addEventListener('click', (e) => { if (e.target.closest('.card-info-button')) return; showCardDetails(card); });
+        grid.appendChild(tile);
+      }
+    }
+    root.querySelector('[data-act="back"]').onclick = () => this.renderList();
+    root.querySelector('[data-act="share"]').onclick = () => this.renderShare(d);
+    root.querySelector('[data-act="edit"]').onclick = () => this._deckAction(d.official ? 'copy' : 'edit', d);
+  }
+
   _deckAction(act, d) {
     if (!d) return;
-    if (act === 'edit') this.renderEditor({ ...d, cards: { ...d.cards } });
+    if (act === 'view') this.renderPreview(d);
+    else if (act === 'edit') this.renderEditor({ ...d, cards: { ...d.cards } });
     else if (act === 'copy') { const c = duplicateDeck(d); this.renderEditor(c); }
     else if (act === 'delete') {
       if (!globalThis.confirm || globalThis.confirm(`删除卡组【${d.name}】？此操作不能撤销（可先生成分享码备份）。`)) { deleteDeck(d.id); this.renderList(); this.onChange(); }
@@ -247,7 +362,7 @@ export class DeckBuilder {
             ${v.errors.length ? `<div class="db-deck-warn">${v.errors.map(escapeHtml).join('<br>')}</div>` : ''}
             <div class="db-deck-actions"><button class="db-btn db-primary" data-act="save">保存到我的卡组</button><button class="db-btn" data-act="edit">打开编辑</button></div>
           </div>`;
-        out.querySelector('[data-act="save"]').onclick = () => { const s = saveDeck(deck); this.mode = s.mode || 'single'; this._toast(`已保存【${s.name}】`); this.onChange(); this.renderList(); };
+        out.querySelector('[data-act="save"]').onclick = () => { const s = saveDeck(deck); this.mode = s.mode || 'single'; this.section = 'mine'; this._toast(`已保存【${s.name}】`); this.onChange(); this.renderList(); };
         out.querySelector('[data-act="edit"]').onclick = () => this.renderEditor(deck, true);
       } catch (err) {
         out.innerHTML = `<p class="db-error">${escapeHtml(err.message || '解析失败')}</p>`;
@@ -290,14 +405,14 @@ export class DeckBuilder {
             <div class="db-fgroup"><span>类型</span>${chip('type', 'all', '全部', f.type)}${Object.entries(TYPE_LABEL).map(([v, l]) => chip('type', v, l, f.type)).join('')}</div>
             <div class="db-fgroup"><span>兵种</span>${chip('troop', 'all', '全部', f.troop)}${Object.entries(TROOP_LABEL).map(([v, l]) => chip('troop', v, l, f.troop)).join('')}</div>
             <div class="db-fgroup"><span>费用</span>${COST_BUCKETS.map(([v, l]) => chip('cost', v, l, f.cost)).join('')}</div>
-            <div class="db-fgroup"><span>来源</span>${chip('src', 'all', '全部', f.src)}${chip('src', 'base', '实体卡', f.src)}${chip('src', 'extra', '旧图鉴', f.src)}</div>
+            <div class="db-fgroup"><span>来源</span>${chip('src', 'all', '全部', f.src)}${chip('src', 'base', '实体卡', f.src)}${chip('src', 'extra', '旧图鉴/新卡', f.src)}</div>
             <input class="db-search" placeholder="搜索卡名 / 技能 / 词条" value="${escapeHtml(f.q)}">
             <div class="db-fselects">
               ${deck.mode === 'dual' ? sel('side', [['all', '阵营'], ['main', `主·${KINGDOMS[k].name}`], ['sub', `副·${KINGDOMS[deck.subKingdom].name}`]], f.side || 'all') : ''}
               ${sel('type', [['all', '类型'], ...Object.entries(TYPE_LABEL)], f.type)}
               ${sel('troop', [['all', '兵种'], ...Object.entries(TROOP_LABEL)], f.troop)}
               ${sel('cost', [['all', '费用'], ...COST_BUCKETS.slice(1).map(([v, l]) => [v, `${l}费`])], f.cost)}
-              ${deck.mode === 'dual' ? '' : sel('src', [['all', '来源'], ['base', '实体卡'], ['extra', '旧图鉴']], f.src)}
+              ${deck.mode === 'dual' ? '' : sel('src', [['all', '来源'], ['base', '实体卡'], ['extra', '旧图鉴/新卡']], f.src)}
               <input class="db-search2" type="search" placeholder="🔍 搜索" value="${escapeHtml(f.q)}">
             </div>
           </aside>
@@ -373,7 +488,7 @@ export class DeckBuilder {
     if (!list.length) { pool.innerHTML = '<p class="db-empty">没有符合筛选的卡牌</p>'; return; }
     for (const def of list) {
       const card = createCard(def, { faction: 'WEI', kingdom: def.kingdom || k, instanceId: `lib_${def.id}` });
-      const tile = h(`<div class="db-tile" data-id="${def.id}"><div class="db-tile-card"></div><span class="db-tile-badge"></span>${def.extra ? '<span class="db-tile-src">旧图鉴</span>' : ''}</div>`);
+      const tile = h(`<div class="db-tile" data-id="${def.id}"><div class="db-tile-card"></div><span class="db-tile-badge"></span>${def.extra ? `<span class="db-tile-src">${def.extraLabel || '旧图鉴'}</span>` : ''}</div>`);
       const el = renderHandCard(card);
       tile.querySelector('.db-tile-card').appendChild(el);
       tile.addEventListener('click', (e) => {
@@ -495,6 +610,7 @@ export class DeckBuilder {
     const v = validateDeck(this.deck);
     const saved = saveDeck(this.deck);
     this.deck = { ...saved, cards: { ...saved.cards } };
+    this.section = 'mine';
     this.dirty = false;
     this._toast(v.ok ? `已保存【${saved.name}】` : `已保存为未完成卡组（${v.total}/${deckSize(saved)}），补齐后才能用于开局`);
     this.onChange();

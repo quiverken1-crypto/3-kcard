@@ -57,7 +57,7 @@ import {
 import { runAbilityTrigger, runLinkedTriggers } from './abilities.js';
 import {
   applyEnterKeywords, onUnitEnter, onUnitMoved, prepareTactic, resolveTactic, afterAttack, resolvePick, autoPickCards, randomPickCards, resolveChoice, autoChoiceTarget, activateSkill, canDeployToFrontline, isSiegeEngine,
-  processDeaths, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getTacticTargets, refreshAuras, baseId, targetSurcharge, qiMouDiscount, getCardPlayCost
+  processDeaths, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getTacticTargets, refreshAuras, baseId, targetSurcharge, qiMouDiscount, getCardPlayCost, unitDeployCost, applyJunJi, triggerCounters
 } from './cardSkills.js';
 
 /** 按指定位置插入（部署/移动时可放在区域内任意卡牌之间或两侧） */
@@ -138,7 +138,7 @@ function dispatchBase(state, action) {
       if (handIdx === -1) throw new Error('Card not in hand');
 
       const card = player.hand[handIdx];
-      let cost = card.cost;
+      let cost = card.type === 'UNIT' ? unitDeployCost(state, action.playerId, card) : card.cost;
       if (card.type === 'UNIT' && player.noDeployNextTurn && player._noDeployActive) throw new Error('辕门射戟：本回合不能部署单位');
 
       // Dynamic Prestige discount on first unit deployment each turn
@@ -205,6 +205,9 @@ function dispatchBase(state, action) {
       }
 
       state.combatLog.push({ type: 'DEPLOY', playerId: action.playerId, card, cost, discountApplied, targetZone: targetZone === 'SUPPORT' ? 'SUPPORT' : `FRONTLINE_${targetZone}` });
+      // 刺杀（反制）：敌方单位部署时触发
+      triggerCounters(state, 'ENEMY_DEPLOY', { unit: card });
+      processDeaths(state);
       onUnitEnter(state, card, { skillTargetId: action.payload?.skillTargetId });
       return { success: true, card, cost, discountApplied };
     }
@@ -362,6 +365,7 @@ function dispatchBase(state, action) {
       if (pk && !hasConfiguredEffect(card, 'ON_PLAY', 'GAIN_PRESTIGE')) {
         adjustPrestige(state, action.playerId, parseInt(pk.replace(KEYWORDS.SHENG_WANG_PREFIX, '') || '1', 10) || 1);
       }
+      applyJunJi(state, card, action.playerId);
       resolveTactic(state, action.playerId, card, prepared, action.payload || {});
       return { success: true, card };
     }
@@ -554,7 +558,7 @@ export function getLegalActions(state, playerId) {
   const noDeploy = player.noDeployNextTurn && player._noDeployActive;
   for (const card of player.hand) {
     if (card.type === 'UNIT' && !noDeploy) {
-      let cost = card.cost;
+      let cost = unitDeployCost(state, playerId, card);
       if (!player.prestigeDiscountUsed && player.prestige > 0) {
         cost = Math.max(0, cost - player.prestige);
       }

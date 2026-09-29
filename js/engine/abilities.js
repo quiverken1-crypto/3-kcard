@@ -21,8 +21,15 @@ export const TRIGGER_CATALOG = [
   { id: 'ON_ALLY_DEATH', label: '其他友军阵亡时', group: '联动' },
   { id: 'ON_ENEMY_DEPLOY', label: '敌军进场时', group: '联动' },
   { id: 'ON_ENEMY_ACTION', label: '敌方行动时（反制）', group: '反制' },
-  { id: 'AURA', label: '在场时持续（光环）', group: '持续' }
+  { id: 'AURA', label: '在场时持续（光环）', group: '持续' },
+  { id: 'ACTIVE', label: '主动技（点单位发动）', group: '主动' }
 ];
+/** 主动技：消耗 → 判定 → 获得 */
+export const ACTIVE_COST_CATALOG = [
+  ['NONE', '无消耗'], ['PROVISIONS', '消耗粮草'], ['DISCARD', '弃1张手牌（自选）'], ['SELF_DAMAGE', '自身受伤'],
+  ['HQ_HP', '己方主城失血'], ['PRESTIGE', '消耗声望'], ['ACTION', '消耗本单位行动']
+];
+export const ACTIVE_LIMIT_CATALOG = [['TURN', '每回合1次'], ['GAME', '每局1次']];
 export const EFFECT_CATALOG = [
   { id: 'DRAW', label: '抽牌', group: '资源', kind: 'player' },
   { id: 'GAIN_PROVISIONS', label: '获得粮草', group: '资源', kind: 'player' },
@@ -47,7 +54,7 @@ export const EFFECT_CATALOG = [
   { id: 'APPLY_INHIBITION', label: '抑制', group: '状态', kind: 'unit' },
   { id: 'REVEAL_UNIT', label: '翻开潜伏', group: '状态', kind: 'unit' },
   { id: 'RESTORE_ACTION', label: '恢复行动', group: '状态', kind: 'unit' },
-  { id: 'GRANT_KEYWORD', label: '获得词条（永久）', group: '词条', kind: 'unit', keyword: true },
+  { id: 'GRANT_KEYWORD', label: '获得词条（永久；光环里为在场期间）', group: '词条', kind: 'unit', keyword: true, aura: true },
   { id: 'TURN_KEYWORD', label: '获得词条（到回合结束）', group: '词条', kind: 'unit', keyword: true },
   { id: 'REMOVE_KEYWORD', label: '移除词条', group: '词条', kind: 'unit', keyword: true },
   { id: 'RETREAT', label: '撤退（前线→支援，支援→手牌）', group: '位置', kind: 'unit' },
@@ -385,4 +392,88 @@ export function auraModifiers(state, unit) {
     }
   }
   return { atk, cost };
+}
+
+/** 主动技：每条“主动技”积木都是一个独立技能（各自的消耗、判定、次数与效果） */
+export function activeAbilitiesOf(unit) {
+  return (unit?.abilities || []).filter(a => a.trigger === 'ACTIVE').map((a, index) => ({
+    index,
+    name: a.name || '',
+    cost: a.cost || { type: 'NONE', amount: 0 },
+    chance: Math.max(0, Math.min(100, a.chance ?? 100)),
+    limit: a.limit === 'GAME' ? 'GAME' : 'TURN',
+    conditions: a.conditions || [],
+    effects: a.effects || []
+  }));
+}
+export const activeAbilityOf = unit => activeAbilitiesOf(unit)[0] || null;
+
+/** 主动技当前能否支付消耗；可以返回空串 */
+export function activeCostBlock(state, unit, act) {
+  const p = state.players[unit.faction];
+  const n = act.cost.amount ?? 1;
+  switch (act.cost.type) {
+    case 'PROVISIONS': return p.provisions < n ? `粮草不足（需${n}）` : '';
+    case 'DISCARD': return p.hand.length ? '' : '没有手牌可弃置';
+    case 'PRESTIGE': return p.prestige < n ? `声望不足（需${n}）` : '';
+    case 'SELF_DAMAGE': return (unit.hp ?? 0) <= n ? '生命不足以支付' : '';
+    case 'HQ_HP': return p.hp <= n ? '主城生命不足以支付' : '';
+    case 'ACTION': return (unit.status?.[STATUS_TYPES.ACTIONS_USED] || 0) >= 1 ? '本单位本回合已行动' : '';
+    default: return '';
+  }
+}
+
+/** 发动主动技：先付消耗，再判定（条件 + 概率），成功则结算效果；返回是否判定成功 */
+export function runActiveAbility(state, unit, act, payload = {}) {
+  const p = state.players[unit.faction];
+  const n = act.cost.amount ?? 1;
+  switch (act.cost.type) {
+    case 'PROVISIONS': p.provisions -= n; break;
+    case 'DISCARD': {
+      const idx = p.hand.findIndex(c => c.instanceId === payload?.cardId);
+      if (idx === -1) throw new Error('请选择要弃置的手牌');
+      p.discard.push(p.hand.splice(idx, 1)[0]);
+      break;
+    }
+    case 'PRESTIGE': p.prestige -= n; break;
+    case 'SELF_DAMAGE': unit.hp -= n; unit.status[STATUS_TYPES.DAMAGED] = true; break;
+    case 'HQ_HP': changeHq(state, unit.faction, -n, unit.faction); break;
+    case 'ACTION': unit.status[STATUS_TYPES.ACTIONS_USED] = (unit.status[STATUS_TYPES.ACTIONS_USED] || 0) + 1; break;
+    default: break;
+  }
+  const condOk = checkConditions(state, act.conditions, unit.faction, unit, {});
+  const roll = act.chance >= 100 ? 100 : state.prng.randomInt(1, 100);
+  const success = condOk && roll <= act.chance;
+  if (success) for (const ef of act.effects) applyEffect(state, ef, unit.faction, unit, {});
+  state.combatLog.push({ type: 'SKILL', playerId: unit.faction, message: `【${unit.name}】发动${act.name ? `【${act.name}】` : '主动技'}${act.chance < 100 ? `（判定 ${roll}/${act.chance}）` : ''}：${success ? '成功' : '判定失败'}` });
+  return success;
+}
+
+/** 光环词条：带 AURA+GRANT_KEYWORD 积木的单位在场时，符合筛选的单位获得词条；离场后收回（每次刷新重算） */
+export function refreshAuraKeywords(state) {
+  const all = [...getAllUnits(state, 'WEI'), ...getAllUnits(state, 'SHU')];
+  const want = new Map();
+  for (const src of all) {
+    if (src.status?.[STATUS_TYPES.INHIBITED]) continue;
+    for (const ab of src.abilities || []) {
+      if (ab.trigger !== 'AURA') continue;
+      for (const ef of ab.effects || []) {
+        if (ef.type !== 'GRANT_KEYWORD' || !ef.keyword) continue;
+        for (const u of all) {
+          const friendly = u.faction === src.faction;
+          const t = ef.target;
+          const hit = (t === 'SELF' && u === src) || (t === 'ALL_FRIENDLIES' && friendly) || (t === 'OTHER_FRIENDLIES' && friendly && u !== src) || (t === 'ALL_ENEMIES' && !friendly);
+          if (hit && matchesFilter(state, u, ef.filter)) { if (!want.has(u)) want.set(u, new Set()); want.get(u).add(ef.keyword); }
+        }
+      }
+    }
+  }
+  for (const u of all) {
+    const had = u._auraKws || [];
+    const now = [...(want.get(u) || [])];
+    for (const k of had) if (!now.includes(k)) u.keywords = u.keywords.filter(x => x !== k);
+    const added = [];
+    for (const k of now) { if (!u.keywords.includes(k)) { u.keywords.push(k); added.push(k); } else if (had.includes(k)) added.push(k); }
+    u._auraKws = added;
+  }
 }

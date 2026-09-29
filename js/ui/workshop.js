@@ -10,8 +10,8 @@ import {
   customPack, upsertCard, deleteCard, upsertFaction, deleteFaction, pickSubset, mergePack, encodePack, decodePack,
   downloadPack, newCustomId, normalizePack, TROOP_OPTIONS, TERRAIN_OPTIONS
 } from '../data/customContent.js';
-import { TRIGGER_CATALOG, EFFECT_CATALOG, TARGET_CATALOG, FILTER_CATALOG, CONDITION_CATALOG, PLAYER_EFFECTS, DECK_EFFECTS, KEYWORD_EFFECTS, AURA_EFFECTS } from '../engine/abilities.js';
-import { renderHandCard, escapeHtml, builtinKeywords } from './cardRenderer.js';
+import { TRIGGER_CATALOG, EFFECT_CATALOG, TARGET_CATALOG, FILTER_CATALOG, CONDITION_CATALOG, PLAYER_EFFECTS, DECK_EFFECTS, KEYWORD_EFFECTS, AURA_EFFECTS, ACTIVE_COST_CATALOG, ACTIVE_LIMIT_CATALOG } from '../engine/abilities.js';
+import { renderHandCard, escapeHtml, builtinKeywords, TRAIT_GLOSSARY } from './cardRenderer.js';
 import { createCard } from '../engine/state.js';
 
 const TROOP_LABEL = { INFANTRY: '步兵', CAVALRY: '骑兵', NAVY: '水军', STRATEGIST: '谋士', ARCHER: '器械' };
@@ -65,9 +65,15 @@ export function describeAbility(ab) {
       default: return `${whoF}${name}${amt}`;
     }
   });
+  if (ab.trigger === 'ACTIVE') {
+    const c = ab.cost || {};
+    const pay = { NONE: '', PROVISIONS: `消耗${c.amount}粮草`, DISCARD: '弃置1张手牌', SELF_DAMAGE: `自身受到${c.amount}点伤害`, HQ_HP: `己方主城失去${c.amount}点生命`, PRESTIGE: `消耗${c.amount}点声望`, ACTION: '消耗本单位行动' }[c.type] || '';
+    const judge = (ab.chance ?? 100) < 100 ? `进行判定（${ab.chance}%成功），成功则` : '';
+    return `${ab.name ? `【${ab.name}】` : ''}主动（${ab.limit === 'GAME' ? '每局1次' : '每回合1次'}）：${pay ? `${pay}，` : ''}${cond}${judge}${parts.join('，')}。`;
+  }
   return `${ab.trigger === 'AURA' ? '在场时：' : `${t}，`}${cond}${parts.join('，')}。`;
 }
-const COMMON_BADGES = ['鲁莽', '狂傲', '名士', '二心', '皇亲', '暴虐'];
+const COMMON_BADGES = Object.keys(TRAIT_GLOSSARY);
 
 const doc = () => globalThis.document;
 const h = html => { const t = doc().createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -189,13 +195,15 @@ export class Workshop {
           </div>
           <label class="ws-wide">词条（逗号分隔，带数值的写成“坚阵1”）<input name="keywords" value="${escapeHtml(c.keywords.join('，'))}"></label>
           <div class="db-chips ws-kw-chips">${kws.map(k => `<button type="button" class="db-chip" data-kw="${k}">${k}</button>`).join('')}</div>
-          <label class="ws-wide">性格（逗号分隔）<input name="badges" value="${escapeHtml(c.badges.join('，'))}"></label>
-          <div class="db-chips">${COMMON_BADGES.map(b => `<button type="button" class="db-chip" data-badge="${b}">${b}</button>`).join('')}</div>
+          <label class="ws-wide">性格（点下方选择，也可以手写新性格，逗号分隔）<input name="badges" value="${escapeHtml(c.badges.join('，'))}"></label>
+          <div class="db-chips ws-badge-chips">${COMMON_BADGES.map(b => `<button type="button" class="db-chip${c.badges.includes(b) ? ' active' : ''}" data-badge="${b}" title="${escapeHtml(TRAIT_GLOSSARY[b] || b)}">${b}</button>`).join('')}</div>
+          <p class="db-hint ws-badge-hint">性格会显示在卡面上；【诱敌深入】对鲁莽/狂傲、【策反】对二心等有额外效果。积木里也可以用“只作用于某性格”来筛选目标。</p>
           <div class="ws-sub"><span>自定义词条（新词条需写释义）</span><button type="button" class="db-btn" data-act="add-ckw">＋ 添加</button></div>
           <div class="ws-ckw"></div>
           <div class="ws-grid">
             <label>技能名<input name="skillName" maxlength="12" value="${escapeHtml(c.skill?.name || '')}"></label>
           </div>
+          <label class="ws-wide">卡面图片链接（可选，https 开头的网络图片；不上传、不保存图片本身）<input name="art" maxlength="300" placeholder="https://…/xxx.png" value="${escapeHtml(c.art || '')}"></label>
           <label class="ws-wide">技能描述（卡面文字）<textarea name="skillDesc" rows="3" maxlength="300">${escapeHtml(c.skill?.description || '')}</textarea></label>
           <div class="ws-impl">
             <span>技能实现方式：</span>
@@ -203,7 +211,7 @@ export class Workshop {
             <label><input type="radio" name="impl" value="pending"${c.pending ? ' checked' : ''}> 文字描述，交给开发者实现（标“待实现”，对局中暂无效果）</label>
           </div>
           <div class="ws-blocks">
-            <div class="ws-sub"><span>积木效果（时机 → 效果 → 目标 → 数值；可加筛选与条件）</span><span><button type="button" class="db-btn" data-act="fill-desc">用积木生成描述</button> <button type="button" class="db-btn" data-act="add-ab">＋ 添加效果</button></span></div>
+            <div class="ws-sub"><span>技能积木<br><small class="db-hint">每个技能 = 什么时候触发（+条件；主动技还有消耗与判定）→ 一个或多个效果。一张卡可以有多个技能，互相独立；多个主动技会各有一个“发动”按钮、各自消耗。</small></span><span class="ws-sub-btns"><button type="button" class="db-btn" data-act="fill-desc">用积木生成描述</button> <button type="button" class="db-btn db-primary" data-act="add-ab">＋ 新技能</button></span></div>
             <div class="ws-abs"></div>
           </div>
           <div class="ws-err"></div>
@@ -212,7 +220,7 @@ export class Workshop {
             ${isNew ? '' : '<button type="button" class="db-btn" data-act="dup">复制为新卡</button><button type="button" class="db-btn db-danger" data-act="del">删除</button>'}
           </div>
         </form>
-        <div class="ws-preview"><div class="ws-preview-card"></div><p class="db-hint">卡面预览（暂不支持自定义卡面图片）</p></div>
+        <div class="ws-preview"><div class="ws-preview-card"></div><p class="db-hint">卡面预览（可填图片链接作为卡面）</p></div>
       </div>`;
     const form = pane.querySelector('form');
     const ckwBox = pane.querySelector('.ws-ckw');
@@ -222,66 +230,108 @@ export class Workshop {
       row.querySelector('button').onclick = () => { row.remove(); sync(); };
       ckwBox.appendChild(row);
     };
-    const addAb = (ab = { trigger: 'ON_DEPLOY', effects: [{ type: 'DRAW', target: 'OWNER', amount: 1 }] }) => {
-      const ef = ab.effects?.[0] || { type: 'DRAW', target: 'OWNER', amount: 1 };
+    const badgeOpts = cur => `<option value="">任意性格</option>${COMMON_BADGES.map(b => `<option value="${b}"${b === cur ? ' selected' : ''}>${b}</option>`).join('')}`;
+    const effRow = (ef = { type: 'DRAW', target: 'OWNER', amount: 1 }) => {
       const f = ef.filter || {};
-      const cd = ab.conditions?.[0] || {};
-      const row = h(`<div class="ws-ab">
+      return h(`<div class="ws-ef">
         <div class="ws-row">
-          <select class="ab-trigger" title="时机">${grouped(TRIGGER_CATALOG, ab.trigger)}</select>
+          <span class="ws-ab-lbl">效果</span>
           <select class="ab-effect" title="效果">${grouped(EFFECT_CATALOG, ef.type)}</select>
           <select class="ab-target" title="目标">${grouped(TARGET_CATALOG, ef.target)}</select>
           <input class="ab-amount" type="number" min="0" max="20" value="${ef.amount ?? 1}" title="数值">
-          <input class="ab-keyword" maxlength="8" placeholder="词条" value="${escapeHtml(ef.keyword || '')}">
-          <button type="button" class="db-rc-btn" aria-label="删除">×</button>
+          <input class="ab-keyword" maxlength="8" placeholder="词条名" value="${escapeHtml(ef.keyword || '')}">
+          <button type="button" class="db-rc-btn ef-del" aria-label="删除效果">×</button>
         </div>
         <div class="ws-row ws-ab-more">
-          <span class="ws-ab-lbl">筛选</span>
+          <span class="ws-ab-lbl">只作用于</span>
           <select class="ab-f-troop">${pairOpts(FILTER_CATALOG.troop, f.troop)}</select>
           <select class="ab-f-line">${pairOpts(FILTER_CATALOG.line, f.line)}</select>
           <select class="ab-f-type">${pairOpts(FILTER_CATALOG.cardType, f.cardType)}</select>
-          <input class="ab-f-badge" maxlength="6" placeholder="性格" value="${escapeHtml(f.badge || '')}">
-          <input class="ab-f-kw" maxlength="8" placeholder="有词条" value="${escapeHtml(f.keyword || '')}">
+          <select class="ab-f-badge">${badgeOpts(f.badge)}</select>
+          <input class="ab-f-kw" maxlength="8" placeholder="带某词条" value="${escapeHtml(f.keyword || '')}">
+        </div>
+      </div>`);
+    };
+    const fixEf = (row, trig) => {
+      const effSel = row.querySelector('.ab-effect');
+      // 光环只支持战力±、行动花费±、获得词条
+      [...effSel.querySelectorAll('option')].forEach(o => { o.hidden = trig === 'AURA' && !AURA_EFFECTS.has(o.value); });
+      if (effSel.selectedOptions[0]?.hidden) effSel.value = 'BUFF_ATTACK';
+      const eff = effSel.value;
+      const player = PLAYER_EFFECTS.has(eff), deck = DECK_EFFECTS.has(eff);
+      const sel = row.querySelector('.ab-target');
+      [...sel.querySelectorAll('option')].forEach(o => {
+        const isPlayer = ['OWNER', 'OPPONENT'].includes(o.value);
+        o.hidden = deck ? o.value !== 'OWNER' : trig === 'AURA' ? !AURA_TARGETS.includes(o.value) : player !== isPlayer;
+      });
+      sel.querySelectorAll('optgroup').forEach(g => { g.hidden = ![...g.children].some(o => !o.hidden); });
+      if (sel.selectedOptions[0]?.hidden) sel.value = deck || player ? 'OWNER' : trig === 'AURA' ? 'ALL_FRIENDLIES' : 'SELF';
+      sel.style.display = deck ? 'none' : '';
+      row.querySelector('.ab-keyword').style.display = KEYWORD_EFFECTS.has(eff) ? '' : 'none';
+      const unitish = !player && !deck;
+      const single = ['SELF', 'ATTACKER', 'DEFENDER', 'TRIGGER_UNIT'].includes(sel.value);
+      row.querySelector('.ws-ab-more').style.display = (unitish && !single) || deck ? '' : 'none';
+      row.querySelector('.ab-f-troop').style.display = '';
+      row.querySelector('.ab-f-line').style.display = unitish ? '' : 'none';
+      row.querySelector('.ab-f-type').style.display = deck ? '' : 'none';
+      row.querySelector('.ab-f-badge').style.display = unitish ? '' : 'none';
+      row.querySelector('.ab-f-kw').style.display = unitish ? '' : 'none';
+    };
+    const renumber = () => absBox.querySelectorAll('.ws-skill').forEach((b, i) => { b.querySelector('.ws-skill-no').textContent = `技能${i + 1}`; });
+    const addAb = (ab = { trigger: 'ON_DEPLOY', conditions: [], effects: [{ type: 'DRAW', target: 'OWNER', amount: 1 }] }) => {
+      const cd = ab.conditions?.[0] || {};
+      const block = h(`<div class="ws-skill">
+        <div class="ws-skill-head">
+          <b class="ws-skill-no">技能</b>
+          <select class="ab-trigger" title="触发时机">${grouped(TRIGGER_CATALOG, ab.trigger)}</select>
+          <input class="ab-name" maxlength="8" placeholder="主动技名称" value="${escapeHtml(ab.name || '')}">
+          <button type="button" class="db-rc-btn sk-del" aria-label="删除技能">×</button>
+        </div>
+        <div class="ws-row ws-ab-more ws-ab-active">
+          <span class="ws-ab-lbl">消耗</span>
+          <select class="ab-cost">${pairOpts(ACTIVE_COST_CATALOG, ab.cost?.type || 'NONE')}</select>
+          <input class="ab-cost-n" type="number" min="0" max="20" value="${ab.cost?.amount ?? 1}" title="消耗数值">
+          <span class="ws-ab-lbl">判定成功率</span>
+          <input class="ab-chance" type="number" min="1" max="100" value="${ab.chance ?? 100}"><span class="ws-ab-lbl">%</span>
+          <select class="ab-limit">${pairOpts(ACTIVE_LIMIT_CATALOG, ab.limit || 'TURN')}</select>
+        </div>
+        <div class="ws-row ws-ab-more">
           <span class="ws-ab-lbl">条件</span>
-          <select class="ab-c-field"><option value="">无</option>${CONDITION_CATALOG.map(c => `<option value="${c.id}"${c.id === cd.field ? ' selected' : ''}>${c.label}</option>`).join('')}</select>
+          <select class="ab-c-field"><option value="">无条件</option>${CONDITION_CATALOG.map(c => `<option value="${c.id}"${c.id === cd.field ? ' selected' : ''}>${c.label}</option>`).join('')}</select>
           <select class="ab-c-op">${pairOpts([['GTE', '≥'], ['LTE', '≤'], ['EQ', '=']], cd.op || 'GTE')}</select>
           <input class="ab-c-val" type="number" min="0" max="100" value="${cd.value ?? 1}">
         </div>
-        <div class="ws-ab-desc"></div>
+        <div class="ws-efs"></div>
+        <div class="ws-skill-foot"><button type="button" class="db-btn ws-add-ef">＋ 效果</button><div class="ws-ab-desc"></div></div>
       </div>`);
+      const efs = block.querySelector('.ws-efs');
       const fix = () => {
-        const trig = row.querySelector('.ab-trigger').value;
-        const effSel = row.querySelector('.ab-effect');
-        // 光环只支持战力±、行动花费±
-        [...effSel.querySelectorAll('option')].forEach(o => { o.hidden = trig === 'AURA' && !AURA_EFFECTS.has(o.value); });
-        if (effSel.selectedOptions[0]?.hidden) effSel.value = 'BUFF_ATTACK';
-        const eff = effSel.value;
-        const player = PLAYER_EFFECTS.has(eff), deck = DECK_EFFECTS.has(eff);
-        const sel = row.querySelector('.ab-target');
-        [...sel.querySelectorAll('option')].forEach(o => {
-          const isPlayer = ['OWNER', 'OPPONENT'].includes(o.value);
-          o.hidden = deck ? o.value !== 'OWNER' : trig === 'AURA' ? !AURA_TARGETS.includes(o.value) : player !== isPlayer;
-        });
-        if (sel.selectedOptions[0]?.hidden) sel.value = deck || player ? 'OWNER' : trig === 'AURA' ? 'ALL_FRIENDLIES' : 'SELF';
-        sel.style.display = deck ? 'none' : '';
-        row.querySelector('.ab-keyword').style.display = KEYWORD_EFFECTS.has(eff) ? '' : 'none';
-        const unitish = !player && !deck;
-        row.querySelector('.ab-f-troop').style.display = unitish || deck ? '' : 'none';
-        row.querySelector('.ab-f-line').style.display = unitish ? '' : 'none';
-        row.querySelector('.ab-f-type').style.display = deck ? '' : 'none';
-        row.querySelector('.ab-f-badge').style.display = unitish ? '' : 'none';
-        row.querySelector('.ab-f-kw').style.display = unitish ? '' : 'none';
-        const noCond = !row.querySelector('.ab-c-field').value;
-        row.querySelector('.ab-c-op').style.display = noCond ? 'none' : '';
-        row.querySelector('.ab-c-val').style.display = noCond ? 'none' : '';
+        const trig = block.querySelector('.ab-trigger').value;
+        const isActive = trig === 'ACTIVE';
+        block.querySelector('.ws-ab-active').style.display = isActive ? '' : 'none';
+        block.querySelector('.ab-name').style.display = isActive ? '' : 'none';
+        block.querySelector('.ab-cost-n').style.display = ['NONE', 'DISCARD', 'ACTION'].includes(block.querySelector('.ab-cost').value) ? 'none' : '';
+        const noCond = !block.querySelector('.ab-c-field').value;
+        block.querySelector('.ab-c-op').style.display = noCond ? 'none' : '';
+        block.querySelector('.ab-c-val').style.display = noCond ? 'none' : '';
+        efs.querySelectorAll('.ws-ef').forEach(r => fixEf(r, trig));
+        efs.querySelectorAll('.ef-del').forEach(b => { b.disabled = efs.children.length <= 1; });
       };
-      row.addEventListener('change', () => { fix(); sync(); });
-      row.querySelector('button').onclick = () => { row.remove(); sync(); };
+      const addEf = ef => {
+        const r = effRow(ef);
+        r.querySelector('.ef-del').onclick = () => { r.remove(); fix(); sync(); };
+        efs.appendChild(r);
+      };
+      for (const ef of (ab.effects?.length ? ab.effects : [{ type: 'DRAW', target: 'OWNER', amount: 1 }])) addEf(ef);
+      block.querySelector('.ws-add-ef').onclick = () => { addEf({ type: 'DAMAGE_UNIT', target: 'CHOSEN_ENEMY', amount: 1 }); fix(); sync(); };
+      block.querySelector('.sk-del').onclick = () => { block.remove(); renumber(); sync(); };
+      block.addEventListener('change', () => { fix(); sync(); });
       fix();
-      absBox.appendChild(row);
+      absBox.appendChild(block);
+      renumber();
     };
     for (const k of c.customKeywords || []) addCkw(k);
-    for (const ab of c.abilities || []) for (const ef of ab.effects) addAb({ trigger: ab.trigger, conditions: ab.conditions, effects: [ef] });
+    for (const ab of c.abilities || []) addAb(ab);
     const splitList = v => String(v || '').split(/[,，、\s]+/).map(x => x.trim()).filter(Boolean);
     const read = () => {
       const f = form.elements;
@@ -296,25 +346,36 @@ export class Workshop {
         keywords: splitList(f.keywords.value), badges: splitList(f.badges.value),
         customKeywords: [...ckwBox.querySelectorAll('.ws-row')].map(r => ({ name: r.querySelector('.ckw-name').value.trim(), description: r.querySelector('.ckw-desc').value.trim() })).filter(k => k.name),
         skill: { name: f.skillName.value.trim(), description: f.skillDesc.value.trim() },
+        art: f.art.value.trim(),
         pending: f.impl.value === 'pending',
-        abilities: f.impl.value === 'pending' ? [] : [...absBox.querySelectorAll('.ws-ab')].map(r => readAb(r))
+        abilities: f.impl.value === 'pending' ? [] : [...absBox.querySelectorAll('.ws-skill')].map(r => readAb(r))
       };
     };
-    const readAb = r => {
+    const readEf = r => {
       const q = sel => r.querySelector(sel);
       const effect = { type: q('.ab-effect').value, target: q('.ab-target').value, amount: Number(q('.ab-amount').value || 0) };
       if (KEYWORD_EFFECTS.has(effect.type)) effect.keyword = q('.ab-keyword').value.trim();
-      const vis = el => el.style.display !== 'none';
+      const shown = el => el.style.display !== 'none' && q('.ws-ab-more').style.display !== 'none';
       const filter = {};
-      if (vis(q('.ab-f-troop')) && q('.ab-f-troop').value) filter.troop = q('.ab-f-troop').value;
-      if (vis(q('.ab-f-line')) && q('.ab-f-line').value) filter.line = q('.ab-f-line').value;
-      if (vis(q('.ab-f-type')) && q('.ab-f-type').value) filter.cardType = q('.ab-f-type').value;
-      if (vis(q('.ab-f-badge')) && q('.ab-f-badge').value.trim()) filter.badge = q('.ab-f-badge').value.trim();
-      if (vis(q('.ab-f-kw')) && q('.ab-f-kw').value.trim()) filter.keyword = q('.ab-f-kw').value.trim();
+      if (shown(q('.ab-f-troop')) && q('.ab-f-troop').value) filter.troop = q('.ab-f-troop').value;
+      if (shown(q('.ab-f-line')) && q('.ab-f-line').value) filter.line = q('.ab-f-line').value;
+      if (shown(q('.ab-f-type')) && q('.ab-f-type').value) filter.cardType = q('.ab-f-type').value;
+      if (shown(q('.ab-f-badge')) && q('.ab-f-badge').value) filter.badge = q('.ab-f-badge').value;
+      if (shown(q('.ab-f-kw')) && q('.ab-f-kw').value.trim()) filter.keyword = q('.ab-f-kw').value.trim();
       if (Object.keys(filter).length) effect.filter = filter;
+      return effect;
+    };
+    const readAb = b => {
+      const q = sel => b.querySelector(sel);
       const field = q('.ab-c-field').value;
       const conditions = field ? [{ field, op: q('.ab-c-op').value, value: Number(q('.ab-c-val').value || 0) }] : [];
-      return { trigger: q('.ab-trigger').value, conditions, effects: [effect] };
+      const trigger = q('.ab-trigger').value;
+      const effects = [...b.querySelectorAll('.ws-ef')].map(readEf);
+      if (trigger === 'ACTIVE') {
+        const name = q('.ab-name').value.trim();
+        return { trigger, ...(name ? { name } : {}), conditions, effects, cost: { type: q('.ab-cost').value, amount: Number(q('.ab-cost-n').value || 0) }, chance: Number(q('.ab-chance').value || 100), limit: q('.ab-limit').value };
+      }
+      return { trigger, conditions, effects };
     };
     const errBox = pane.querySelector('.ws-err');
     const sync = () => {
@@ -322,7 +383,8 @@ export class Workshop {
       const cur = read();
       form.classList.toggle('not-unit', cur.type !== 'UNIT');
       pane.querySelector('.ws-blocks').style.display = cur.pending ? 'none' : '';
-      absBox.querySelectorAll('.ws-ab').forEach((r, i) => { const d = r.querySelector('.ws-ab-desc'); if (d && cur.abilities[i]) d.textContent = describeAbility(cur.abilities[i]); });
+      absBox.querySelectorAll('.ws-skill').forEach((r, i) => { const d = r.querySelector('.ws-ab-desc'); if (d && cur.abilities[i]) d.textContent = describeAbility(cur.abilities[i]); });
+      pane.querySelectorAll('[data-badge]').forEach(b => b.classList.toggle('active', cur.badges.includes(b.dataset.badge)));
       // 自动补全：自定义词条名加入词条列表
       let checked;
       try {
@@ -339,12 +401,12 @@ export class Workshop {
     form.addEventListener('input', sync);
     form.addEventListener('change', sync);
     pane.querySelectorAll('[data-kw]').forEach(b => { b.onclick = () => { const i = form.elements.keywords; const list = splitList(i.value); if (!list.some(x => x.replace(/\d+$/, '') === b.dataset.kw)) list.push(['坚阵', '声望', '奇谋', '侦查'].includes(b.dataset.kw) ? `${b.dataset.kw}1` : b.dataset.kw); i.value = list.join('，'); sync(); }; });
-    pane.querySelectorAll('[data-badge]').forEach(b => { b.onclick = () => { const i = form.elements.badges; const list = splitList(i.value); if (!list.includes(b.dataset.badge)) list.push(b.dataset.badge); i.value = list.join('，'); sync(); }; });
+    pane.querySelectorAll('[data-badge]').forEach(b => { b.onclick = () => { const i = form.elements.badges; let list = splitList(i.value); list = list.includes(b.dataset.badge) ? list.filter(x => x !== b.dataset.badge) : [...list, b.dataset.badge]; i.value = list.join('，'); sync(); }; });
     pane.querySelector('[data-act="add-ckw"]').onclick = () => { addCkw(); sync(); };
     pane.querySelector('[data-act="add-ab"]').onclick = () => { addAb(); sync(); };
     pane.querySelector('[data-act="fill-desc"]').onclick = () => {
-      const abs = [...absBox.querySelectorAll('.ws-ab')].map(r => readAb(r));
-      if (!abs.length) { this._toast('先添加积木效果', true); return; }
+      const abs = [...absBox.querySelectorAll('.ws-skill')].map(r => readAb(r));
+      if (!abs.length) { this._toast('先添加技能积木', true); return; }
       form.elements.skillDesc.value = abs.map(describeAbility).join('');
       sync();
     };

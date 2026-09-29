@@ -32,12 +32,13 @@ import { setSeatKingdoms, seatArmy } from './ui/seats.js';
 import { preloadAssets } from './ui/preloader.js';
 import { DeckBuilder } from './ui/deckBuilder.js';
 import { Workshop } from './ui/workshop.js';
+import './api.js'; // 开放接口：window.SGK
 import { loadCustom, setKeywordRegistrar, customFactions, onCustomChange, registerGuest } from './data/customContent.js';
 import { registerKeyword } from './ui/cardRenderer.js';
 import { listDecks, getDeck, validateDeck, deckStats, deckCardDefs, lastDeckId, rememberDeckFor, dualPresets, generateDualDeck, DUAL, customPayloadFor } from './data/deckStore.js';
 import { createCard, createKingdomDeck } from './engine/state.js';
 
-const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb'];
+const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb', 'gsz', 'ys', 'hj', 'dz', 'xl', 'lbiao', 'yshu'];
 
 /** 自定义势力的印章/主城配色 */
 function injectFactionStyles() {
@@ -317,7 +318,7 @@ export class AppCoordinator {
     const doc = globalThis.document;
     const modal = doc?.getElementById('modal-hq-pick');
     const box = doc?.getElementById('hq-pick-options');
-    const BUILTIN = ['wei', 'shu', 'wu', 'lb'];
+    const BUILTIN = ['wei', 'shu', 'wu', 'lb', 'gsz', 'ys', 'hj', 'dz', 'xl', 'lbiao', 'yshu'];
     // 自定义势力：有主城即可选择，但需要一套合法卡组才能开局（人机对手只用内置势力）
     const ALL = [...BUILTIN, ...customFactions().map(f => f.key).filter(key => KINGDOMS[key] && HQ_CARDS[key]?.length)];
     let kingdom = ALL.includes(this._lastKingdom) ? this._lastKingdom : 'wei';
@@ -353,7 +354,7 @@ export class AppCoordinator {
     };
     this._refreshDeckSelect = fillDecks;
     const editBtn = doc.getElementById('hq-pick-deck-edit');
-    if (editBtn) editBtn.onclick = () => { this.deckBuilder.kingdomFilter = kingdom; this.deckBuilder.mode = mode; this.deckBuilder.open(); };
+    if (editBtn) editBtn.onclick = () => { this.deckBuilder.codexKingdom = kingdom; this.deckBuilder.mode = mode; this.deckBuilder.open('mine'); };
     const done = (hq) => {
       if (!BUILTIN.includes(kingdom) && !deckId) { FX.showTriggerHint(`【${KINGDOMS[kingdom]?.name || '自定义'}】需要先组一套合法卡组`); return; }
       if (deckId) rememberDeckFor(kingdom, mode, deckId);
@@ -1043,7 +1044,7 @@ export class AppCoordinator {
     this.opponentPlayerId = FACTIONS.SHU;
     this.isSandboxRunning = true;
 
-    const kA = KINGDOM_KEYS[Math.floor(Math.random() * 4)];
+    const kA = KINGDOM_KEYS[Math.floor(Math.random() * KINGDOM_KEYS.length)];
     this.rulesEngine = new RulesEngine(this._newMatchOptions({}, { WEI: kA, SHU: randomOther(kA) }));
     this.lastProcessedLogIndex = 0;
 
