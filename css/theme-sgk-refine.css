@@ -1,0 +1,210 @@
+/* Shared readable chrome. Keep faction colours on seals and game cards. */
+:root {
+  --sgk-text: #f3e3bf;
+  --sgk-description: #d6c4a1;
+  --sgk-selected: linear-gradient(180deg,#873529,#51231c);
+  --sgk-control: linear-gradient(180deg,#35271c,#211811);
+}
+
+/* Match legacy ID specificity so hover cannot bring back the old white skin. */
+#home-screen.home-screen.hm {
+  background: linear-gradient(90deg,rgba(9,7,5,.36),rgba(9,7,5,.08) 52%,rgba(9,7,5,.24)),
+    linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.36)),
+    url('../assets/ui/home-bg.webp') center/cover no-repeat !important;
+}
+#home-screen.home-screen.hm::after {
+  background: radial-gradient(ellipse at center,transparent 35%,rgba(7,5,3,.25));
+  box-shadow: inset 0 0 70px rgba(0,0,0,.24);
+}
+#home-screen.home-screen.hm .hm-brand {
+  padding: clamp(18px,3vw,36px);
+  background: linear-gradient(120deg,rgba(12,9,6,.32),rgba(12,9,6,.08));
+  border-color: rgba(216,170,89,.22);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+#home-screen.home-screen.hm .hm-menu {
+  background: linear-gradient(180deg,rgba(25,17,12,.86),rgba(12,9,6,.78));
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+#home-screen.home-screen.hm .hm-item {
+  min-height: 84px;
+  grid-template-columns: 48px minmax(0,1fr) 18px;
+  padding: 12px 14px !important;
+  border-color: rgba(216,170,89,.45) !important;
+  background: var(--sgk-control) !important;
+  box-shadow: inset 0 1px 0 rgba(255,230,180,.05) !important;
+  color: var(--sgk-text) !important;
+  transform: none !important;
+}
+#home-screen.home-screen.hm .hm-item.hm-primary {
+  background: var(--sgk-selected) !important;
+  border-color: #d8aa59 !important;
+}
+#home-screen.home-screen.hm .hm-item:hover,
+#home-screen.home-screen.hm .hm-item:focus-visible {
+  background: linear-gradient(180deg,#754030,#40241c) !important;
+  border-color: #efc779 !important;
+  color: var(--sgk-text) !important;
+}
+#home-screen.home-screen.hm .hm-item small,
+#home-screen.home-screen.hm .hm-item.hm-primary small,
+#home-screen.home-screen.hm .hm-item:hover small,
+#home-screen.home-screen.hm .hm-item:focus-visible small {
+  color: var(--sgk-description) !important;
+  font: 13px/1.55 "Microsoft YaHei",sans-serif;
+  letter-spacing: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+#home-screen.home-screen.hm .hm-it b { line-height: 1.25; letter-spacing: 3px; }
+#home-screen.home-screen.hm .hm-links { gap: 7px; margin-top: 5px; }
+#home-screen.home-screen.hm .hm-link {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 34px auto;
+  align-content: center;
+  justify-items: center;
+  align-items: center;
+  gap: 5px;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 68px;
+  box-sizing: border-box;
+  padding: 8px 3px !important;
+  border: 1px solid rgba(216,170,89,.38) !important;
+  color: var(--sgk-description);
+  font: 12px/1.3 "Microsoft YaHei",sans-serif;
+  letter-spacing: 1px;
+}
+#home-screen.home-screen.hm .hm-link::before {
+  position: static;
+  width: 31px; height: 31px;
+  margin: 0;
+  grid-column: 1; grid-row: 1;
+}
+#home-screen.home-screen.hm .hm-link .hl-label { grid-column: 1; grid-row: 2; }
+#home-screen.home-screen.hm .hm-link:hover,
+#home-screen.home-screen.hm .hm-link:focus-visible {
+  color: var(--sgk-text);
+  border-color: #efc779 !important;
+  background: #4b2b20;
+  transform: none;
+}
+#home-screen.home-screen.hm .hm-foot { color: #ddcba8; text-shadow: 0 2px 4px #000; }
+#home-screen.home-screen.hm .hm-en { color: #f0dfb9; text-shadow: 0 2px 5px #120b06; }
+#home-screen.home-screen.hm .hm-side { padding: 12px; background: rgba(18,12,8,.68); border-left: 2px solid #b98b49; border-radius: 3px; }
+
+/* Card library and workshop are independent full-screen surfaces. */
+.deck-builder {
+  background: linear-gradient(rgba(10,8,6,.83),rgba(10,8,6,.92)),
+    url('../assets/ui/home-bg.webp') center/cover no-repeat;
+  color: var(--sgk-text);
+}
+.deck-builder .db-shell {
+  border: 12px solid transparent;
+  border-image: var(--sgk-modal-frame) 104 / 26px / 0 stretch;
+  padding: 14px 18px;
+  background: linear-gradient(180deg,rgba(37,24,16,.92),rgba(16,12,9,.94));
+  scrollbar-width: thin;
+  scrollbar-color: #8f6b38 #1b120d;
+}
+.deck-builder .db-head {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--sgk-line);
+  gap: 10px;
+}
+.deck-builder .db-title { font-family: var(--sgk-serif); color: #f0d394; }
+.deck-builder :is(.db-hint,.db-label,.db-empty,.db-foot-note,.db-fgroup>span,.ws-group) {
+  color: var(--sgk-description);
+  line-height: 1.6;
+}
+.deck-builder :is(.db-deck-card,.ws-card,.ws-list,.ws-item,.ws-skill) {
+  border: 1px solid var(--sgk-line);
+  border-radius: 5px;
+  background: linear-gradient(180deg,#302219,#1c1510);
+}
+.deck-builder :is(input,select,textarea):not([type=checkbox]):not([type=radio]),
+.modal-box :is(input,select,textarea):not([type=checkbox]):not([type=radio]) {
+  color: var(--sgk-text);
+  background: #15100c;
+  border: 1px solid #8d6b3c;
+  border-radius: 4px;
+  line-height: 1.5;
+}
+.deck-builder :is(input,textarea)::placeholder { color: #bda986; opacity: 1; }
+.deck-builder :is(.db-tab,.db-chip,.db-hub-tab),
+.modal-box :is(.enemy-chip,.net-mode-tab,.tab-btn) {
+  position: relative;
+  background: var(--sgk-control) !important;
+  border: 1px solid rgba(216,170,89,.42) !important;
+  border-radius: 4px;
+  color: var(--sgk-description) !important;
+  padding: 7px 12px;
+  line-height: 1.4;
+}
+.deck-builder :is(.db-tab.active,.db-chip.active,.db-hub-tab.active,.ws-item.active),
+.deck-builder .db-hub .db-seg .db-tab.active,
+.modal-box .enemy-chip.active,
+.modal-box .net-mode-tab.active,
+.modal-box .tab-btn.active,
+.hud-action-btn.active,
+.modal-box .hqp-deck.active,
+.fp-panel.fp-floating .fp-opt.active {
+  background: var(--sgk-selected) !important;
+  color: #fff0cb !important;
+  border-color: #e1b563 !important;
+  box-shadow: inset 0 0 0 1px rgba(225,181,99,.22) !important;
+}
+.deck-builder .db-btn.db-primary { background: var(--sgk-selected) !important; border-color: #e1b563 !important; }
+.deck-builder .db-hub-tabs { gap: 5px; padding-bottom: 7px; }
+.deck-builder .db-seg { border-radius: 4px; }
+.deck-builder :is(.db-btn,.db-chip,.db-tab,.db-hub-tab):hover,
+.deck-builder .ws-item:hover { border-color: #efc779 !important; color: var(--sgk-text) !important; }
+.deck-builder .db-codex-bar { background: #241a13; box-shadow: 0 8px 10px -4px #241a13; }
+.deck-builder .db-codex-count { color: var(--sgk-description); line-height: 1.6; }
+.deck-builder .db-codex-grid { grid-template-columns: repeat(auto-fill,minmax(124px,1fr)); gap: 14px 10px; }
+.deck-builder .db-codex-grid .db-tile-card { zoom: 1.1; }
+.deck-builder :is(.db-hub-body,.db-pool,.ws-items,.ws-editor) { scrollbar-width: thin; scrollbar-color: #8f6b38 #1b120d; }
+.modal-box :is(.modal-subtitle,.tab-desc,.net-list-title,.hq-pick-sub),
+.modal-box .hqp-label { color: var(--sgk-description) !important; }
+
+/* Apply the same non-interactive brackets to tabs and filter controls. */
+:is(.db-tab,.db-chip,.db-hub-tab,.enemy-chip,.net-mode-tab)::after {
+  content: ""; position: absolute; inset: 2px; pointer-events: none; opacity: .65;
+  background:
+    linear-gradient(#d9aa59,#d9aa59) left top / 6px 1px no-repeat,
+    linear-gradient(#d9aa59,#d9aa59) left top / 1px 6px no-repeat,
+    linear-gradient(#d9aa59,#d9aa59) right top / 6px 1px no-repeat,
+    linear-gradient(#d9aa59,#d9aa59) right top / 1px 6px no-repeat,
+    linear-gradient(#d9aa59,#d9aa59) left bottom / 6px 1px no-repeat,
+    linear-gradient(#d9aa59,#d9aa59) left bottom / 1px 6px no-repeat,
+    linear-gradient(#d9aa59,#d9aa59) right bottom / 6px 1px no-repeat,
+    linear-gradient(#d9aa59,#d9aa59) right bottom / 1px 6px no-repeat;
+}
+:is(.hm-item,.hm-link,.db-btn,.db-tab,.db-chip,.db-hub-tab,.modal-btn,.fp-trigger):focus-visible {
+  outline: 2px solid #efc779 !important;
+  outline-offset: 3px;
+}
+@media (max-width:640px) {
+  #home-screen.home-screen.hm .hm-item { min-height: 76px; padding: 9px 10px !important; gap: 8px; }
+  #home-screen.home-screen.hm .hm-it b { font-size: 20px; }
+  #home-screen.home-screen.hm .hm-item small { font-size: 12px !important; }
+  #home-screen.home-screen.hm .hm-link { font-size: 11px; min-height: 66px; }
+  #home-screen.home-screen.hm .hm-links { gap: 4px; }
+  .deck-builder .db-shell { padding: 8px; border-width: 9px; border-image-width: 22px; }
+}
+@media (max-height:620px) and (orientation:landscape) {
+  #home-screen.home-screen.hm .hm-brand { padding: 14px; gap: 14px; }
+  #home-screen.home-screen.hm .hm-item { min-height: 51px; padding: 5px 8px !important; grid-template-columns: 32px minmax(0,1fr) 14px; }
+  #home-screen.home-screen.hm .hm-item small { font-size: 11px !important; line-height: 1.4; }
+  #home-screen.home-screen.hm .hm-it b { font-size: 17px; line-height: 1.2; }
+  #home-screen.home-screen.hm .hm-link { grid-template-rows: 24px auto; min-height: 48px; gap: 3px; padding: 4px 2px !important; font-size: 10px; }
+  #home-screen.home-screen.hm .hm-link::before { width: 24px; height: 24px; background-size: 164px 123px; }
+  #home-screen #home-btn-decks::before { background-position: -131px -2px; }
+  #home-screen #home-btn-rules::before { background-position: -2px -33px; }
+  #home-screen #home-btn-editor::before { background-position: -38px -33px; }
+  #home-screen #home-btn-install::before { background-position: -72px -34px; }
+  #home-screen #home-btn-audio::before { background-position: -100px -33px; }
+}
