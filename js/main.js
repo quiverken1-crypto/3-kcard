@@ -53,6 +53,24 @@ function injectFactionStyles() {
 }
 const randomOther = k => { const o = KINGDOM_KEYS.filter(x => x !== k); return o[Math.floor(Math.random() * o.length)]; };
 
+
+/** 纯视觉装饰层：给弹窗挂四个独立角标。角标只显示素材表中的一个小零件，
+ *  不拉伸整张面板，不参与布局、不接管点击。 */
+function decorateSgkChrome(doc) {
+  for (const box of doc.querySelectorAll('.modal-box')) {
+    if (box.querySelector(':scope > .sgk-frame-corners')) continue;
+    const layer = doc.createElement('span');
+    layer.className = 'sgk-frame-corners';
+    layer.setAttribute('aria-hidden', 'true');
+    layer.innerHTML =
+      '<i class="sgk-corner sgk-corner-tl"></i>' +
+      '<i class="sgk-corner sgk-corner-tr"></i>' +
+      '<i class="sgk-corner sgk-corner-bl"></i>' +
+      '<i class="sgk-corner sgk-corner-br"></i>';
+    box.prepend(layer);
+  }
+}
+
 export const APP_MODE = Object.freeze({
   UNINITIALIZED: 'UNINITIALIZED',
   SOLO_VS_BOT: 'SOLO_VS_BOT',
@@ -113,6 +131,9 @@ export class AppCoordinator {
   async init() {
     const doc = typeof document !== 'undefined' ? document : globalThis.document;
     if (!doc) return;
+
+    // 视觉主题装饰只挂独立角标，不改变任何业务结构或交互。
+    decorateSgkChrome(doc);
 
     // 1. Initialize Card Inspector Tooltip
     CardInspector.init();
