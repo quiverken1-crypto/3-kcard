@@ -30,9 +30,13 @@ function placeOpenPanel() {
 
 function closeOpen() {
   if (!openPanel) return;
-  openPanel.wrap.classList.remove('open');
-  openPanel.btn.setAttribute('aria-expanded', 'false');
-  openPanel.panel.style.visibility = '';
+  const { wrap, btn, panel } = openPanel;
+  wrap.classList.remove('open');
+  btn.setAttribute('aria-expanded', 'false');
+  panel.style.visibility = '';
+  panel.classList.remove('fp-floating');
+  panel.removeAttribute('style');
+  wrap.appendChild(panel);
   openPanel = null;
 }
 
@@ -67,6 +71,8 @@ export function factionDropdown(doc, { options = [], current = null, onSelect = 
     closeOpen();
     if (willOpen) {
       panel.style.visibility = 'hidden';
+      panel.classList.add('fp-floating');
+      doc.body.appendChild(panel);
       wrap.classList.add('open');
       btn.setAttribute('aria-expanded', 'true');
       openPanel = { wrap, btn, panel };
