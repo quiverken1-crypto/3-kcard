@@ -764,6 +764,8 @@ export class AppCoordinator {
     let bar = doc.getElementById('choice-bar');
     doc.querySelectorAll('.choice-target').forEach(el => el.classList.remove('choice-target'));
     doc.body.classList.toggle('choice-active', Boolean(mine));
+    // 必须在提前返回之前更新：否则弃牌选择结束后手牌一直是灰色遮罩
+    doc.body.classList.toggle('choice-hand', Boolean(mine && mine.pool === 'hand'));
     this._activeChoice = mine;
     if (!choice) { bar?.classList.add('hidden'); return; }
     if (!bar) {
