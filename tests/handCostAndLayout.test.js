@@ -50,42 +50,4 @@ test('抑制 removes 奇谋 discount from both legal actions and settlement', ()
   assert.throws(() => dispatch(state, { type: 'PLAY_TACTIC', playerId: 'WEI', payload: { cardInstanceId: tactic.instanceId } }), /Insufficient provisions/);
 });
 
-test('nine hand cards overlap enough to fit the available width', () => {
-  assert.equal(typeof boardRenderer.calculateHandOverlap, 'function');
-  const { calculateHandOverlap } = boardRenderer;
-  const overlap = calculateHandOverlap(9, 500, 116);
-  assert.ok(overlap > 0);
-  assert.ok(9 * 116 - 8 * overlap <= 500);
-  assert.equal(calculateHandOverlap(3, 500, 116), 0);
-});
-
-test('selected card settles only after pointer release', async () => {
-  const { state, tactic } = tacticState();
-  const controller = new InteractionController();
-  controller.gameState = state;
-  controller.localPlayerId = 'WEI';
-  controller._computeLegalDropZones = () => {};
-  controller._highlightLegalDropZones = () => {};
-  controller._updateCardTargetingCurve = () => {};
-  const classes = new Set();
-  const cardEl = {
-    dataset: { instanceId: tactic.instanceId },
-    classList: { add: name => classes.add(name), remove: name => classes.delete(name) },
-    isConnected: true
-  };
-  controller._handleHandPointerDown({
-    button: 0, pointerType: 'mouse', pointerId: 1, clientX: 0, clientY: 0,
-    target: { closest: () => cardEl }, preventDefault() {}
-  });
-  assert.equal(classes.has('selection-settled'), false);
-  const previousDocument = globalThis.document;
-  globalThis.document = { querySelector: () => cardEl, elementFromPoint: () => cardEl };
-  try {
-    controller._handlePointerUp({ button: 0, pointerId: 1, clientX: 0, clientY: 0 });
-    assert.equal(classes.has('selection-settled'), false);
-    await new Promise(resolve => setTimeout(resolve, 5));
-    assert.equal(classes.has('selection-settled'), true);
-  } finally {
-    globalThis.document = previousDocument;
-  }
-});
+// 旧的“手牌叠压”与“松手后才定位”两项已随界面改版移除（手牌改为不堆叠、按宽度缩放/滚动）
