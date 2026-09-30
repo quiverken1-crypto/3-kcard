@@ -437,34 +437,39 @@
     inset 0 0 30px rgba(130,49,29,.035);
 }
 
-.network-box::after,
-.hq-pick-box::after,
-.game-menu-box::after,
-.confirm-box::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(#d8ae63,#d8ae63) 14px 14px / 24px 1px no-repeat,
-    linear-gradient(#d8ae63,#d8ae63) 14px 14px / 1px 24px no-repeat,
-    linear-gradient(#d8ae63,#d8ae63) calc(100% - 38px) 14px / 24px 1px no-repeat,
-    linear-gradient(#d8ae63,#d8ae63) calc(100% - 15px) 14px / 1px 24px no-repeat,
-    linear-gradient(#d8ae63,#d8ae63) 14px calc(100% - 15px) / 24px 1px no-repeat,
-    linear-gradient(#d8ae63,#d8ae63) 14px calc(100% - 38px) / 1px 24px no-repeat,
-    linear-gradient(#d8ae63,#d8ae63) calc(100% - 38px) calc(100% - 15px) / 24px 1px no-repeat,
-    linear-gradient(#d8ae63,#d8ae63) calc(100% - 15px) calc(100% - 38px) / 1px 24px no-repeat;
-  opacity: .72;
-}
-
-.network-box > *,
-.hq-pick-box > *,
-.game-menu-box > *,
-.confirm-box > * {
+.modal-box > :not(.sgk-frame-corners) {
   position: relative;
   z-index: 1;
 }
+
+/* Four independent ornate corner pieces cropped 1:1 from panels.webp.
+   Source sheet in the repo is 900×675; no full-panel stretching occurs. */
+.sgk-frame-corners {
+  position: absolute !important;
+  inset: 0;
+  z-index: 4 !important;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.sgk-corner {
+  position: absolute;
+  display: block;
+  width: 44px;
+  height: 45px;
+  background-image: url("../assets/ui/panels.webp");
+  background-repeat: no-repeat;
+  background-size: 720px 540px;
+  background-position: -458px -399px;
+  opacity: .92;
+  filter: saturate(.98) contrast(1.04) drop-shadow(0 2px 2px rgba(0,0,0,.34));
+  transform-origin: center;
+}
+.sgk-corner-tl { left: 3px; top: 3px; }
+.sgk-corner-tr { right: 3px; top: 3px; transform: scaleX(-1); }
+.sgk-corner-bl { left: 3px; bottom: 3px; transform: scaleY(-1); }
+.sgk-corner-br { right: 3px; bottom: 3px; transform: scale(-1,-1); }
+
 
 .modal-header {
   min-height: 54px;
@@ -480,6 +485,20 @@
   font-family: var(--font-serif-calligraphy) !important;
   letter-spacing: 3px;
   text-shadow: 0 2px 8px rgba(0,0,0,.65);
+}
+.modal-title::after {
+  content: "";
+  display: block;
+  width: 159px;
+  max-width: 52vw;
+  height: 20px;
+  margin-top: 2px;
+  background-image: url("../assets/ui/panels.webp");
+  background-repeat: no-repeat;
+  background-size: 450px 337.5px;
+  background-position: -280px -221px;
+  opacity: .66;
+  pointer-events: none;
 }
 
 .modal-subtitle {
@@ -678,11 +697,16 @@
   content: "";
   position: absolute;
   left: 50%;
-  bottom: 2px;
-  width: 118px;
-  height: 1px;
+  bottom: -7px;
+  width: 159px;
+  height: 20px;
   transform: translateX(-50%);
-  background: linear-gradient(90deg, transparent, #cfa255, transparent);
+  background-image: url("../assets/ui/panels.webp");
+  background-repeat: no-repeat;
+  background-size: 450px 337.5px;
+  background-position: -280px -221px;
+  opacity: .72;
+  pointer-events: none;
 }
 
 .hqp-label {
@@ -1002,4 +1026,135 @@
     padding-top: 8px !important;
   }
   .game-menu-hint { display: none !important; }
+}
+
+
+/* ==========================================================================
+   Small UI parts — independent ornaments cropped from buttons.webp.
+   No stretched button-sheet backgrounds: only tiny decorative components.
+   ========================================================================== */
+
+.modal-btn,
+.menu-item,
+.network-tabs .tab-btn,
+.hqp-deck,
+.net-server-status {
+  position: relative;
+}
+
+/* Red / dark diamond chips: source buttons.webp 768×768, rendered sheet 192×192.
+   Each ornament stays ~20px wide regardless of button width. */
+.modal-btn.btn-primary::before,
+.menu-item.menu-primary::before,
+.network-tabs .tab-btn.active::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 20px;
+  height: 16px;
+  margin-right: 7px;
+  background-image: url("../assets/ui/buttons.webp");
+  background-repeat: no-repeat;
+  background-size: 192px 192px;
+  background-position: -8px -169px;
+  opacity: .92;
+  pointer-events: none;
+}
+
+.modal-btn.btn-secondary::before,
+.menu-item:not(.menu-primary)::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 18px;
+  height: 16px;
+  margin-right: 6px;
+  background-image: url("../assets/ui/buttons.webp");
+  background-repeat: no-repeat;
+  background-size: 192px 192px;
+  background-position: -32px -169px;
+  opacity: .72;
+  pointer-events: none;
+}
+
+/* Active deck marker uses the same red diamond as an independent corner badge. */
+.hqp-deck.active::after {
+  content: "";
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  width: 20px;
+  height: 16px;
+  background-image: url("../assets/ui/buttons.webp");
+  background-repeat: no-repeat;
+  background-size: 192px 192px;
+  background-position: -8px -169px;
+  opacity: .88;
+  pointer-events: none;
+}
+
+/* Small round bronze medallion beside connection status.
+   Source component is isolated in the sprite, scaled down without distortion. */
+.net-server-status::before {
+  content: "";
+  float: left;
+  width: 21px;
+  height: 22px;
+  margin: -1px 7px 0 0;
+  background-image: url("../assets/ui/buttons.webp");
+  background-repeat: no-repeat;
+  background-size: 461px 461px;
+  background-position: -307px -414px;
+  opacity: .82;
+  pointer-events: none;
+}
+
+/* A tiny independent gold divider for section labels / hints. */
+.net-list-title::after,
+.game-menu-hint::before {
+  content: "";
+  display: inline-block;
+  vertical-align: middle;
+  width: 54px;
+  height: 8px;
+  margin: 0 8px;
+  background-image: url("../assets/ui/buttons.webp");
+  background-repeat: no-repeat;
+  background-size: 768px 768px;
+  background-position: -456px -704px;
+  opacity: .54;
+  pointer-events: none;
+}
+
+/* Keep ornaments restrained on compact mobile controls. */
+@media (max-width: 520px) {
+  .sgk-corner {
+    width: 35px;
+    height: 36px;
+    background-size: 576px 432px;
+    background-position: -366px -319px;
+  }
+  .modal-title::after,
+  .hq-pick-title::after {
+    transform-origin: left center;
+  }
+  .modal-btn.btn-primary::before,
+  .modal-btn.btn-secondary::before,
+  .menu-item::before {
+    transform: scale(.86);
+    margin-right: 4px;
+  }
+}
+
+@media (max-height: 620px) and (orientation: landscape) {
+  .sgk-corner {
+    width: 31px;
+    height: 32px;
+    background-size: 504px 378px;
+    background-position: -320px -279px;
+  }
+  .modal-title::after {
+    width: 128px;
+    transform: scale(.8);
+    transform-origin: left top;
+    margin-bottom: -3px;
+  }
 }
