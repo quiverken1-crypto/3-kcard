@@ -1158,3 +1158,242 @@
     margin-bottom: -3px;
   }
 }
+
+
+/* ==========================================================================
+   FINAL interior-UI stabilization
+   - cleaned embedded corner asset (no stray yellow pixels)
+   - adaptive title ornament driven by text width
+   - tiny CSS button ornaments (no stretched raster buttons)
+   - modal/drawer/faction-picker stacking rules
+   - no secondary image request required for modal chrome
+   ========================================================================== */
+:root {
+  --sgk-z-drawer: 80;
+  --sgk-z-tooltip: 900;
+  --sgk-z-modal: 1200;
+  --sgk-z-inspector-modal: 1300;
+  --sgk-z-confirm: 1400;
+  --sgk-corner-clean: url("data:image/webp;base64,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");
+}
+
+/* Stable layer order: combat drawer stays in the scene, all modals sit above it. */
+.tactical-drawer { z-index: var(--sgk-z-drawer) !important; isolation: isolate; }
+.card-inspector-tooltip { z-index: var(--sgk-z-tooltip) !important; }
+.modal-overlay { z-index: var(--sgk-z-modal) !important; }
+#modal-card-inspector { z-index: var(--sgk-z-inspector-modal) !important; }
+#modal-confirm { z-index: var(--sgk-z-confirm) !important; }
+body.deck-builder-open #modal-card-inspector { z-index: 1700 !important; }
+
+/* Remove the earlier blanket stacking-context hack; it caused nested drawer/popover issues. */
+.modal-box > :not(.sgk-frame-corners) {
+  z-index: auto;
+}
+.modal-header { position: relative; z-index: 3; }
+.modal-close-btn { position: relative; z-index: 5; }
+
+/* Base frame is CSS and therefore exists on the very first painted frame. */
+.modal-box,
+.network-box,
+.hq-pick-box,
+.game-menu-box,
+.confirm-box {
+  border: 1px solid rgba(217,174,99,.58) !important;
+  outline: 1px solid rgba(56,35,22,.9);
+  outline-offset: -5px;
+}
+
+/* Clean, individually mirrored corner piece. No sprite background-position crop. */
+.sgk-frame-corners {
+  z-index: 1 !important;
+  overflow: visible !important;
+}
+.sgk-corner {
+  width: 34px !important;
+  height: 35px !important;
+  background-image: var(--sgk-corner-clean) !important;
+  background-size: contain !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  opacity: .96 !important;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)) !important;
+}
+.sgk-corner-tl { left: 1px !important; top: 1px !important; transform: none !important; }
+.sgk-corner-tr { right: 1px !important; top: 1px !important; transform: scaleX(-1) !important; }
+.sgk-corner-bl { left: 1px !important; bottom: 1px !important; transform: scaleY(-1) !important; }
+.sgk-corner-br { right: 1px !important; bottom: 1px !important; transform: scale(-1,-1) !important; }
+
+/* Title ornament: width follows the actual text instead of a fixed sprite width. */
+.modal-title,
+.hq-pick-title {
+  position: relative !important;
+  display: inline-block !important;
+  width: max-content;
+  max-width: calc(100% - 52px);
+  padding-bottom: 12px !important;
+}
+.modal-title::after,
+.hq-pick-title::after {
+  content: "" !important;
+  position: absolute !important;
+  left: 50% !important;
+  bottom: 3px !important;
+  width: clamp(92px, calc(100% + 44px), 228px) !important;
+  height: 1px !important;
+  transform: translateX(-50%) !important;
+  background:
+    linear-gradient(90deg,
+      transparent 0%,
+      rgba(160,112,53,.40) 8%,
+      rgba(221,177,91,.90) 38%,
+      transparent 44%,
+      transparent 56%,
+      rgba(221,177,91,.90) 62%,
+      rgba(160,112,53,.40) 92%,
+      transparent 100%) !important;
+  opacity: 1 !important;
+  pointer-events: none;
+}
+.modal-title::before,
+.hq-pick-title::before {
+  content: "" !important;
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%, 50%) rotate(45deg);
+  border: 1px solid rgba(224,180,91,.9);
+  background: linear-gradient(135deg, #6d251c, #2d1710);
+  box-shadow: inset 0 0 0 2px rgba(231,190,107,.10), 0 1px 3px rgba(0,0,0,.5);
+  pointer-events: none;
+}
+.hq-pick-title { margin-bottom: 7px !important; }
+
+/* Small UI ornaments are intentionally tiny CSS components, not button skins. */
+.modal-btn.btn-primary::before,
+.modal-btn.btn-secondary::before,
+.menu-item::before,
+.network-tabs .tab-btn.active::before,
+.net-server-status::before {
+  content: "" !important;
+  width: 7px !important;
+  height: 7px !important;
+  flex: 0 0 7px !important;
+  margin: 0 8px 0 0 !important;
+  float: none !important;
+  border: 1px solid rgba(221,176,88,.82) !important;
+  background-image: none !important;
+  background: rgba(91,35,24,.60) !important;
+  box-shadow: inset 0 0 0 1px rgba(244,211,136,.10) !important;
+  transform: rotate(45deg) !important;
+  opacity: .85 !important;
+}
+.modal-btn.btn-secondary::before,
+.menu-item:not(.menu-primary)::before {
+  background: rgba(40,29,20,.75) !important;
+  border-color: rgba(188,143,74,.62) !important;
+  opacity: .72 !important;
+}
+.network-tabs .tab-btn.active::before {
+  display: inline-block;
+  vertical-align: 1px;
+  margin-right: 7px !important;
+}
+.net-server-status::before {
+  display: inline-block;
+  vertical-align: 1px;
+}
+
+/* Selected deck gets a small corner pin, not a pasted button-sprite ornament. */
+.hqp-deck.active::after {
+  content: "" !important;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 7px !important;
+  height: 7px !important;
+  background-image: none !important;
+  background: #76291f !important;
+  border: 1px solid rgba(230,184,96,.86);
+  transform: rotate(45deg);
+  box-shadow: 0 0 0 2px rgba(85,42,23,.45);
+  opacity: .9 !important;
+}
+
+/* Remove fixed raster divider remnants from the earlier iteration. */
+.net-list-title::after,
+.game-menu-hint::before {
+  background-image: none !important;
+  width: 34px !important;
+  height: 1px !important;
+  background: linear-gradient(90deg, rgba(217,174,99,.55), transparent) !important;
+}
+
+/* HQ faction picker becomes an in-flow expandable drawer.
+   This prevents it from covering deck rows, hint text and city cards. */
+.hq-pick-box .hqp-field .faction-picker { max-width: 100%; }
+.hq-pick-box .hqp-field .faction-picker.open {
+  display: block;
+  width: min(100%, 540px);
+  z-index: 12;
+}
+.hq-pick-box .hqp-field .faction-picker.open .fp-panel {
+  position: relative !important;
+  inset: auto !important;
+  top: auto !important;
+  left: auto !important;
+  width: min(100%, 520px) !important;
+  max-height: 205px !important;
+  margin-top: 7px;
+  grid-template-columns: repeat(3, minmax(105px, 1fr));
+  z-index: 1 !important;
+  border-radius: 7px !important;
+  background: rgba(21,14,10,.985) !important;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.35), 0 10px 22px rgba(0,0,0,.32) !important;
+}
+.hq-pick-box .faction-picker.open .fp-trigger {
+  border-color: rgba(236,191,100,.75) !important;
+}
+.hq-pick-sub {
+  position: relative;
+  z-index: 0;
+  clear: both;
+}
+
+/* Tactical drawer itself remains usable but can never punch above a modal. */
+.tactical-drawer,
+.tactical-drawer .drawer-toggle-handle {
+  transform-style: flat;
+}
+.tactical-drawer .drawer-toggle-handle { z-index: 2; }
+.modal-overlay:not(.hidden) ~ .tactical-drawer { pointer-events: none; }
+
+/* Compact adaptations keep ornaments proportional. */
+@media (max-width: 560px) {
+  .sgk-corner { width: 28px !important; height: 29px !important; }
+  .modal-title::after,
+  .hq-pick-title::after {
+    width: clamp(78px, calc(100% + 28px), 178px) !important;
+  }
+  .hq-pick-box .hqp-field .faction-picker.open .fp-panel {
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    max-height: 240px !important;
+  }
+}
+@media (max-height: 620px) and (orientation: landscape) {
+  .sgk-corner { width: 26px !important; height: 27px !important; }
+  .modal-title,
+  .hq-pick-title { padding-bottom: 8px !important; }
+  .modal-title::after,
+  .hq-pick-title::after {
+    bottom: 2px !important;
+    width: clamp(72px, calc(100% + 24px), 164px) !important;
+  }
+  .modal-title::before,
+  .hq-pick-title::before { width: 6px; height: 6px; }
+  .hq-pick-box .hqp-field .faction-picker.open .fp-panel {
+    max-height: 145px !important;
+    grid-template-columns: repeat(4, minmax(92px,1fr));
+  }
+}
