@@ -19,6 +19,7 @@ function placeOpenPanel() {
   panel.style.width = `${width}px`;
   panel.style.maxHeight = `${Math.min(360, Math.max(150, vh - 24))}px`;
   panel.style.left = `${Math.max(8, Math.min(r.left, vw - width - 8))}px`;
+  panel.style.zIndex = '1600';
   const measured = Math.min(panel.scrollHeight || 260, Math.min(360, vh - 24));
   const below = vh - r.bottom - gap;
   const top = below >= Math.min(measured, 180)
@@ -78,7 +79,7 @@ export function factionDropdown(doc, { options = [], current = null, onSelect = 
       openPanel = { wrap, btn, panel };
       requestAnimationFrame(() => {
         placeOpenPanel();
-        wrap.querySelector('.fp-opt.active')?.scrollIntoView?.({ block: 'nearest' });
+        panel.querySelector('.fp-opt.active')?.scrollIntoView?.({ block: 'nearest' });
       });
     }
   });
