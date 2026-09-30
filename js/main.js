@@ -266,13 +266,21 @@ export class AppCoordinator {
       box.classList.add('done');
       setTimeout(() => box.remove(), 600);
     };
-    setTimeout(() => skip?.classList.remove('hidden'), 2500);
-    skip?.addEventListener('click', () => {
+    // 首页优先：资源仍完整预加载，但不让数百张卡图长期挡住首次进入。
+    // 慢网约 1.2 秒后自动进入首页，剩余资源继续在后台完成；原“跳过”按钮仍保留。
+    const continueInBackground = () => {
+      if (closed) return;
       close();
       this.audio?.loadMusicInBackground?.();
       chip = doc.createElement('div');
       chip.className = 'bg-load-chip';
       doc.body.appendChild(chip);
+    };
+    setTimeout(() => skip?.classList.remove('hidden'), 700);
+    const autoContinueTimer = setTimeout(continueInBackground, 1200);
+    skip?.addEventListener('click', () => {
+      clearTimeout(autoContinueTimer);
+      continueInBackground();
     });
     preloadAssets({
       audio: this.audio,
@@ -285,6 +293,7 @@ export class AppCoordinator {
         if (chip) chip.textContent = `资源加载 ${p}%`;
       }
     }).then(() => {
+      clearTimeout(autoContinueTimer);
       this.audio?.loadMusicInBackground?.();
       if (chip) { chip.textContent = '资源已就绪'; setTimeout(() => chip.remove(), 1500); }
       setTimeout(close, 250);
