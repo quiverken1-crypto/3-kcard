@@ -11,6 +11,7 @@ import {
   validateDeck, deckTotal, deckStats, encodeDeck, decodeDeck, shareLink, deckSize, kingdomCounts, generateDualDeck, getCardDef, allKingdomKeys
 } from '../data/deckStore.js';
 import { renderHandCard, escapeHtml, showCardDetails } from './cardRenderer.js';
+import { factionDropdown } from './factionPicker.js';
 import { createCard } from '../engine/state.js';
 import { qrSvg } from './qrcode.js';
 
@@ -117,7 +118,7 @@ export class DeckBuilder {
     const lib = libraryFor(k);
     body.innerHTML = `
       <div class="db-codex-bar">
-        <div class="db-chips db-kfilter">${keys.map(x => `<button class="db-chip db-kchip${x === k ? ' active' : ''}" data-ck="${x}"><span class="db-seal seal-${x}">${escapeHtml(KINGDOMS[x]?.name || '?')}</span>${escapeHtml(KINGDOMS[x]?.army || x)}</button>`).join('')}</div>
+        <div class="db-kpick"></div>
         <div class="db-fselects db-codex-filters">
           ${sel('type', [['all', '全部类型'], ...Object.entries(TYPE_LABEL)], f.type)}
           ${sel('troop', [['all', '全部兵种'], ...Object.entries(TROOP_LABEL)], f.troop)}
@@ -143,7 +144,11 @@ export class DeckBuilder {
         grid.appendChild(tile);
       }
     };
-    body.querySelectorAll('[data-ck]').forEach(b => { b.onclick = () => { this.codexKingdom = b.dataset.ck; this._renderCodex(body); }; });
+    body.querySelector('.db-kpick').replaceWith(factionDropdown(document, {
+      label: '势力', current: k,
+      options: keys.map(x => [x, KINGDOMS[x]?.name || '?', KINGDOMS[x]?.army || x]),
+      onSelect: x => { this.codexKingdom = x; this._renderCodex(body); }
+    }));
     body.querySelectorAll('[data-cf]').forEach(sl => { sl.onchange = () => { f[sl.dataset.cf] = sl.value; sl.classList.toggle('set', sl.value !== 'all'); draw(); }; });
     body.querySelector('.db-search2').oninput = (e) => { f.q = e.target.value.trim(); draw(); };
     draw();
@@ -175,7 +180,7 @@ export class DeckBuilder {
           <button class="db-tab${this.mode === 'single' ? ' active' : ''}" data-mode="single">单阵营 · 40</button>
           <button class="db-tab${this.mode === 'dual' ? ' active' : ''}" data-mode="dual">双阵营 · 30+20</button>
         </div>
-        ${groups.length > 1 ? `<div class="db-chips db-kfilter">${groups.map(([k]) => `<button class="db-chip" data-jump="${k}">${escapeHtml(KINGDOMS[k]?.name || k)}</button>`).join('')}</div>` : ''}
+        ${groups.length > 1 ? '<div class="db-kpick"></div>' : ''}
       </div>
       ${this.mode === 'dual' ? '<p class="db-hint">测试模式：主阵营 30 张 + 副阵营 20 张，主城 30 血，主城从主阵营选。按主阵营分组。</p>' : ''}
       <div class="db-groups">
@@ -187,7 +192,11 @@ export class DeckBuilder {
       </div>
       <p class="db-foot-note">${official ? '系统预设不可直接修改，可“复制后编辑”，复制出的卡组会出现在“我的卡组”。' : '我的卡组保存在本机浏览器里；换设备或备份请用“分享码”。'}</p>`;
     body.querySelectorAll('[data-mode]').forEach(b => { b.onclick = () => { this.mode = b.dataset.mode; this.renderList(); }; });
-    body.querySelectorAll('[data-jump]').forEach(b => { b.onclick = () => body.querySelector(`#dbg-${b.dataset.jump}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    body.querySelector('.db-kpick')?.replaceWith(factionDropdown(document, {
+      label: '跳到势力', current: groups[0]?.[0],
+      options: groups.map(([k, l]) => [k, KINGDOMS[k]?.name || '?', `${KINGDOMS[k]?.army || k}（${l.length}）`]),
+      onSelect: k => body.querySelector(`#dbg-${k}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }));
     body.querySelectorAll('.db-deck-card').forEach(el => {
       const d = getDeck(el.dataset.id);
       el.querySelectorAll('[data-deck-act]').forEach(btn => { btn.onclick = (e) => { e.stopPropagation(); this._deckAction(btn.dataset.deckAct, d); }; });

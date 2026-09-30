@@ -82,7 +82,8 @@ export function getCardArtUrl(card) {
 
 function artStyle(card) {
   const url = getCardArtUrl(card);
-  return url ? ` style="background-image:url('${url}')"` : '';
+  // 没有插画的卡：用名字首字做一枚大印章，不留白
+  return url ? ` style="background-image:url('${url}')"` : ` data-glyph="${escapeHtml(String(card?.name || '').slice(0, 1))}"`;
 }
 
 function traitsHtml(card, cls = 'card-traits') {

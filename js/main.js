@@ -38,6 +38,7 @@ import { registerKeyword } from './ui/cardRenderer.js';
 import { listDecks, getDeck, validateDeck, deckStats, deckCardDefs, lastDeckId, rememberDeckFor, dualPresets, generateDualDeck, DUAL, customPayloadFor } from './data/deckStore.js';
 import { createCard, createKingdomDeck } from './engine/state.js';
 import { autoChoiceTarget } from './engine/cardSkills.js';
+import { factionDropdown } from './ui/factionPicker.js';
 
 const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb', 'gsz', 'ys', 'hj', 'dz', 'xl', 'lbiao', 'yshu'];
 
@@ -361,6 +362,10 @@ export class AppCoordinator {
       if (deckId) rememberDeckFor(kingdom, mode, deckId);
       close(); this._lastKingdom = kingdom; this._lastMode = mode; onPick(kingdom, hq, enemy, deckId, mode);
     };
+    const pick = (container, opts, current, onSel, label) => {
+      if (!container) return;
+      container.replaceChildren(factionDropdown(doc, { label, current, onSelect: onSel, options: opts.map(([k, ch, name]) => [k, ch, name]) }));
+    };
     const chips = (container, opts, current, onSel) => {
       if (!container) return;
       container.replaceChildren(...opts.map(([k, label]) => {
@@ -376,10 +381,10 @@ export class AppCoordinator {
       chips(doc.getElementById('hq-pick-mode-options'), [['single', '单阵营'], ['dual', '双阵营·测试']], mode, m => { mode = m; draw(); });
       const selfLabel = doc.getElementById('hq-pick-self-label');
       if (selfLabel) selfLabel.textContent = mode === 'dual' ? '主阵营' : '我方';
-      chips(doc.getElementById('hq-pick-self-options'), ALL.map(k => [k, KINGDOMS[k].name]), kingdom, k => { kingdom = k; if (enemy === k) enemy = 'RANDOM'; draw(); });
+      pick(doc.getElementById('hq-pick-self-options'), ALL.map(k => [k, KINGDOMS[k].name, KINGDOMS[k].army]), kingdom, k => { kingdom = k; if (enemy === k) enemy = 'RANDOM'; draw(); }, '我方势力');
       fillDecks();
       for (const id of ['hq-pick-enemy-label', 'hq-pick-enemy-options']) { const el = doc.getElementById(id); if (el) el.style.display = lan ? 'none' : ''; }
-      chips(doc.getElementById('hq-pick-enemy-options'), [['RANDOM', '随机'], ...BUILTIN.filter(k => k !== kingdom).map(k => [k, KINGDOMS[k].name])], enemy, k => { enemy = k; draw(); });
+      pick(doc.getElementById('hq-pick-enemy-options'), [['RANDOM', '?', '随机对手'], ...BUILTIN.filter(k => k !== kingdom).map(k => [k, KINGDOMS[k].name, KINGDOMS[k].army])], enemy, k => { enemy = k; draw(); }, '对手势力');
       box.replaceChildren(...HQ_CARDS[kingdom].map(hq => {
         const card = doc.createElement('button');
         card.className = `hq-card hq-card-${kingdom}`;
