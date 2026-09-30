@@ -1,0 +1,376 @@
+/* 三国 KARDS — light-touch Three Kingdoms homepage skin
+   Isolated override layer: remove this stylesheet link to restore the previous UI. */
+
+.home-screen.hm {
+  --sgk-gold: #d8ae63;
+  --sgk-gold-hi: #f3d99a;
+  --sgk-red: #8f211c;
+  --sgk-red-hi: #c84935;
+  --sgk-ink: #100b08;
+  --sgk-wood: rgba(25, 15, 10, .88);
+  --sgk-paper: #f1e2bd;
+  --sgk-muted: #c5b28d;
+  isolation: isolate;
+  background:
+    linear-gradient(90deg, rgba(8,5,3,.82) 0%, rgba(8,5,3,.54) 43%, rgba(8,5,3,.36) 62%, rgba(8,5,3,.60) 100%),
+    linear-gradient(180deg, rgba(8,5,3,.10), rgba(8,5,3,.60)),
+    url("../assets/ui/home-bg.webp") center center / cover no-repeat !important;
+  color: var(--sgk-paper);
+}
+
+.home-screen.hm::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse at 72% 48%, transparent 0 22%, rgba(12,7,4,.10) 54%, rgba(8,5,3,.45) 100%),
+    linear-gradient(180deg, rgba(255,202,111,.05), transparent 28%, rgba(0,0,0,.28) 100%);
+  box-shadow: inset 0 0 110px rgba(0,0,0,.55);
+}
+
+.hm-sun,
+.hm-grid-lines {
+  opacity: 0 !important;
+}
+
+.hm-stripes {
+  height: 4px !important;
+  opacity: .82;
+  box-shadow: 0 -1px 10px rgba(216,174,99,.16);
+}
+
+.hm-brand {
+  align-self: center;
+  position: relative;
+  padding: clamp(24px, 4vw, 54px);
+  border: 1px solid rgba(216,174,99,.32);
+  border-radius: 6px;
+  background:
+    linear-gradient(135deg, rgba(20,12,8,.82), rgba(20,12,8,.42) 58%, rgba(20,12,8,.22));
+  box-shadow:
+    0 24px 70px rgba(0,0,0,.32),
+    inset 0 1px 0 rgba(255,238,190,.08);
+  backdrop-filter: blur(5px) saturate(.92);
+  -webkit-backdrop-filter: blur(5px) saturate(.92);
+}
+
+.hm-brand::before,
+.hm-brand::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  width: 28px;
+  height: 28px;
+  border-color: rgba(232,190,108,.74);
+}
+.hm-brand::before {
+  left: 10px; top: 10px;
+  border-left: 2px solid;
+  border-top: 2px solid;
+}
+.hm-brand::after {
+  right: 10px; bottom: 10px;
+  border-right: 2px solid;
+  border-bottom: 2px solid;
+}
+
+.hm-title {
+  color: #f6e7c2 !important;
+  font-size: clamp(90px, 24vh, 225px) !important;
+  text-shadow:
+    0 3px 0 rgba(72,31,17,.9),
+    0 10px 28px rgba(0,0,0,.72),
+    0 0 1px #fff2c7;
+  filter: drop-shadow(0 0 10px rgba(217,164,74,.10));
+}
+.hm-title span:last-child { margin-left: .30em !important; }
+
+.hm-side {
+  padding-top: 4vh !important;
+  gap: 14px !important;
+}
+
+.hm-seal {
+  border-color: #d9a858 !important;
+  color: #f9e8bf !important;
+  background: linear-gradient(145deg, rgba(133,30,24,.96), rgba(79,15,13,.96));
+  box-shadow:
+    0 8px 18px rgba(0,0,0,.40),
+    inset 0 0 0 2px rgba(246,211,145,.10);
+  transform: rotate(-2deg);
+}
+
+.hm-en,
+.hm-tag {
+  color: var(--sgk-muted) !important;
+  text-shadow: 0 2px 6px rgba(0,0,0,.65);
+}
+.hm-en b { color: #f4dfaf !important; }
+
+.hm-menu {
+  position: relative;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid rgba(216,174,99,.34);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(23,14,10,.91), rgba(13,8,6,.83));
+  box-shadow:
+    0 24px 70px rgba(0,0,0,.42),
+    inset 0 1px 0 rgba(255,238,190,.08),
+    inset 0 0 34px rgba(139,47,31,.06);
+  backdrop-filter: blur(8px) saturate(.88);
+  -webkit-backdrop-filter: blur(8px) saturate(.88);
+}
+
+.hm-menu::before {
+  content: "军 阵";
+  position: absolute;
+  right: 18px;
+  top: -12px;
+  padding: 2px 9px 3px;
+  background: #24140d;
+  border: 1px solid rgba(216,174,99,.46);
+  color: #d8ae63;
+  font: 700 10px/1.3 var(--hm-serif);
+  letter-spacing: 5px;
+  box-shadow: 0 4px 10px rgba(0,0,0,.36);
+}
+
+.hm-item {
+  position: relative;
+  grid-template-columns: 54px 1fr 22px !important;
+  gap: 12px !important;
+  min-height: 76px;
+  padding: 10px 14px !important;
+  overflow: hidden;
+  border: 1px solid rgba(198,151,79,.42) !important;
+  border-radius: 5px !important;
+  background:
+    linear-gradient(100deg, rgba(49,31,20,.94), rgba(24,15,11,.91) 62%, rgba(16,10,8,.92)) !important;
+  color: #ead8ad !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,229,167,.06),
+    inset 0 0 0 1px rgba(0,0,0,.28),
+    0 5px 14px rgba(0,0,0,.22) !important;
+  transition: transform .16s ease, border-color .16s ease, filter .16s ease, box-shadow .16s ease !important;
+}
+
+.hm-item::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent, rgba(255,216,144,.035) 48%, transparent),
+    radial-gradient(circle at 8% 50%, rgba(181,52,34,.14), transparent 28%);
+  opacity: .9;
+}
+
+.hm-item > * { position: relative; z-index: 1; }
+
+.hm-item:hover,
+.hm-item:focus-visible,
+#home-btn-pvp.hm-item:hover,
+#home-btn-eve.hm-item:hover {
+  transform: translateX(-4px);
+  outline: none;
+  border-color: rgba(242,194,105,.82) !important;
+  background:
+    linear-gradient(100deg, rgba(91,29,20,.98), rgba(48,20,14,.95) 60%, rgba(28,14,10,.96)) !important;
+  color: #fff0c6 !important;
+  box-shadow:
+    0 7px 20px rgba(0,0,0,.34),
+    inset 0 0 24px rgba(190,54,34,.10),
+    inset 0 1px 0 rgba(255,228,154,.12) !important;
+}
+
+.hm-item.hm-primary {
+  background:
+    linear-gradient(100deg, rgba(119,34,25,.98), rgba(68,23,17,.96) 60%, rgba(37,16,11,.96)) !important;
+  border-color: rgba(232,180,92,.72) !important;
+  color: #fff0c5 !important;
+  box-shadow:
+    0 8px 24px rgba(0,0,0,.33),
+    inset 0 0 30px rgba(199,60,39,.10),
+    inset 0 1px 0 rgba(255,230,159,.14) !important;
+}
+.hm-item.hm-primary:hover {
+  background:
+    linear-gradient(100deg, rgba(145,40,28,.98), rgba(79,27,18,.97) 60%, rgba(43,18,12,.96)) !important;
+}
+
+.hm-item em {
+  display: block;
+  width: 50px;
+  height: 50px;
+  font-size: 0 !important;
+  border-radius: 50%;
+  background-image: url("../assets/ui/icons.webp");
+  background-repeat: no-repeat;
+  background-size: 400% 400%;
+  filter: drop-shadow(0 4px 5px rgba(0,0,0,.52));
+}
+#home-btn-pve em { background-position: 33.333% 0; }
+#home-btn-pvp em { background-position: 66.667% 0; }
+#home-btn-eve em { background-position: 100% 0; }
+
+.hm-it b {
+  color: #f2dfb6;
+  font-size: 23px !important;
+  letter-spacing: 5px !important;
+  text-shadow: 0 2px 6px rgba(0,0,0,.60);
+}
+.hm-it small {
+  color: #bbaa86 !important;
+  letter-spacing: .6px !important;
+}
+.hm-item:hover .hm-it small,
+.hm-item:focus-visible .hm-it small,
+.hm-item.hm-primary small {
+  color: #d8c7a4 !important;
+}
+
+.hm-arrow {
+  color: #d9ad60;
+  width: 14px !important;
+  opacity: .72 !important;
+}
+
+.hm-links {
+  gap: 7px !important;
+  margin-top: 8px !important;
+  flex-wrap: wrap;
+}
+
+.hm-link {
+  position: relative;
+  display: inline-flex;
+  flex: 1 1 64px;
+  min-height: 48px;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 27px 5px 6px !important;
+  border: 1px solid rgba(190,145,75,.24) !important;
+  border-radius: 4px !important;
+  background: rgba(26,16,11,.66) !important;
+  color: #bca77e !important;
+  font-size: 11px !important;
+  letter-spacing: 2px !important;
+  transition: background .16s ease, color .16s ease, border-color .16s ease, transform .16s ease;
+}
+.hm-link::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  width: 28px;
+  height: 28px;
+  background-image: url("../assets/ui/icons.webp");
+  background-repeat: no-repeat;
+  background-size: 400% 400%;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,.45));
+  opacity: .88;
+}
+#home-btn-decks::before { background-position: 0 33.333%; }
+#home-btn-rules::before { background-position: 33.333% 33.333%; }
+#home-btn-editor::before { background-position: 66.667% 33.333%; }
+#home-btn-install::before { background-position: 100% 33.333%; }
+#home-btn-audio::before { background-position: 0 66.667%; }
+
+.hm-link:hover,
+.hm-link:focus-visible {
+  color: #f0ddb3 !important;
+  border-color: rgba(224,178,91,.55) !important;
+  background: rgba(70,29,20,.72) !important;
+  transform: translateY(-2px);
+  outline: none;
+}
+
+.hm-foot {
+  color: rgba(222,204,163,.72) !important;
+  text-shadow: 0 2px 5px rgba(0,0,0,.7);
+}
+.hm-repo { color: #e0ba72 !important; }
+
+/* Boot screen: preserve the existing loader logic, only align its visual language. */
+.boot-loader {
+  background:
+    radial-gradient(circle at 50% 42%, rgba(126,56,30,.22), transparent 34%),
+    linear-gradient(180deg, #160d09, #090604) !important;
+}
+.boot-panel {
+  padding: 30px 28px 24px;
+  border: 1px solid rgba(216,174,99,.32);
+  border-radius: 8px;
+  background: rgba(24,14,10,.88);
+  box-shadow: 0 24px 70px rgba(0,0,0,.48), inset 0 1px 0 rgba(255,235,183,.07);
+}
+.boot-title { color: #f1dcaa !important; }
+.boot-bar { border-color: rgba(216,174,99,.34) !important; }
+.boot-bar-fill { background: linear-gradient(90deg, #77251d, #c04a32, #d9aa5e) !important; }
+
+/* Portrait phones: keep the scene visible but prioritize menu legibility and thumb reach. */
+@media (max-aspect-ratio: 4/5), (max-width: 640px) and (orientation: portrait) {
+  .home-screen.hm {
+    grid-template-rows: minmax(180px, .72fr) auto auto !important;
+    padding: max(18px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom)) !important;
+    background-position: 61% center !important;
+  }
+  .home-screen.hm::after {
+    background:
+      linear-gradient(180deg, rgba(7,5,4,.24) 0%, rgba(7,5,4,.34) 28%, rgba(7,5,4,.86) 68%, rgba(7,5,4,.96) 100%),
+      radial-gradient(circle at 70% 18%, transparent, rgba(8,5,3,.32) 70%);
+  }
+  .hm-brand {
+    justify-self: start;
+    align-self: start;
+    padding: 18px 20px;
+    background: linear-gradient(120deg, rgba(17,10,7,.75), rgba(17,10,7,.18));
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+  .hm-title { font-size: min(27vw, 19vh) !important; }
+  .hm-side { gap: 8px !important; padding-top: 1vh !important; }
+  .hm-tag { display: none; }
+  .hm-menu {
+    padding: 12px;
+    gap: 7px;
+    background: linear-gradient(180deg, rgba(18,11,8,.90), rgba(10,7,5,.94));
+  }
+  .hm-menu::before { display: none; }
+  .hm-item {
+    min-height: 62px;
+    grid-template-columns: 42px 1fr 16px !important;
+    padding: 7px 10px !important;
+  }
+  .hm-item em { width: 40px; height: 40px; }
+  .hm-it b { font-size: 19px !important; letter-spacing: 3px !important; }
+  .hm-it small { font-size: 10.5px !important; }
+  .hm-link { min-height: 43px; padding-top: 23px !important; }
+  .hm-link::before { width: 24px; height: 24px; top: 3px; }
+  .hm-foot { margin-top: 8px !important; font-size: 9px !important; letter-spacing: 1.5px !important; }
+}
+
+/* Short landscape phones: keep controls compact without changing DOM or game logic. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .home-screen.hm {
+    background-position: 56% 48% !important;
+  }
+  .hm-brand { padding: 15px 22px; }
+  .hm-title { font-size: 29vh !important; }
+  .hm-menu { padding: 10px; gap: 5px; }
+  .hm-item { min-height: 48px; grid-template-columns: 36px 1fr 15px !important; padding: 5px 8px !important; }
+  .hm-item em { width: 34px; height: 34px; }
+  .hm-it b { font-size: 17px !important; }
+  .hm-it small { font-size: 10px !important; }
+  .hm-links { margin-top: 3px !important; gap: 4px !important; }
+  .hm-link { min-height: 33px; padding: 18px 3px 3px !important; font-size: 9px !important; }
+  .hm-link::before { width: 19px; height: 19px; top: 2px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hm-item,
+  .hm-link { transition: none !important; }
+}
