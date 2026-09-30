@@ -68,3 +68,21 @@ test('白毦军 can select a full friendly zone and perform its swap', () => {
   assert.ok(zone.units.includes(bai));
   assert.ok(state.battlefield.support.SHU.slots.includes(swapped));
 });
+
+test('聚众 is lost after taking combat or skill damage, and no longer grows', async () => {
+  const { damageUnit } = await import('../js/engine/cardSkills.js');
+  const { resolveCombat } = await import('../js/engine/combat.js');
+  const state = createInitialState();
+  state.phase = 'ACTION';
+  state.activePlayer = 'WEI';
+  state.players.WEI.provisions = 10;
+  const a = createCard({ cardId: 'hj_huang_jin_jun', faction: 'SHU', atk: 1, hp: 5, keywords: ['聚众'] });
+  const b = createCard({ cardId: 'hj_zhang_niu_jiao', faction: 'SHU', atk: 2, hp: 5, keywords: ['聚众'] });
+  state.battlefield.support.SHU.slots.push(a, b);
+  damageUnit(state, a, 1, 'test');
+  assert.ok(!a.keywords.includes('聚众'));
+  const attacker = createCard({ cardId: 'wei_test_sm', faction: 'WEI', atk: 1, hp: 9, troopType: 'STRATEGIST' });
+  state.battlefield.support.WEI.slots.push(attacker);
+  resolveCombat(state, { playerId: 'WEI', payload: { attackerId: attacker.instanceId, targetId: b.instanceId } });
+  assert.ok(!b.keywords.includes('聚众'));
+});

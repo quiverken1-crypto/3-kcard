@@ -10,7 +10,7 @@
 
 import { FACTIONS, PHASES, STATUS_TYPES, TROOP_TYPES, GAME_CONFIG, hasKeyword } from './constants.js';
 import {
-  drawCard, adjustPrestige, getAllUnits, findUnit, removeUnitFromBoard, registerTurnHooks
+  drawCard, adjustPrestige, getAllUnits, findUnit, removeUnitFromBoard, registerTurnHooks, markDamaged
 } from './state.js';
 import { registerAbilityHooks, applyUnitEffect, auraModifiers, activeAbilitiesOf, activeCostBlock, runActiveAbility, refreshAuraKeywords } from './abilities.js';
 
@@ -602,7 +602,7 @@ export function damageUnit(state, unit, amount, source = '') {
   amount = extFold('unitDamage', amount, state, unit, source);
   if (amount <= 0 || !isOnBoard(state, unit)) return !isOnBoard(state, unit);
   unit.hp -= amount;
-  unit.status[STATUS_TYPES.DAMAGED] = true;
+  markDamaged(unit, amount);
   if (unit.hp > 0 && isId(unit, 'wu_zhou_tai')) unit.atk += amount;
   state.combatLog.push({ type: 'SKILL_DAMAGE', unitId: unit.instanceId, unitName: unit.name, damage: amount, source, playerId: opp(unit.faction) });
   if (unit.hp <= 0) {
