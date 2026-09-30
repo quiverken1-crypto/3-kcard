@@ -37,6 +37,7 @@ import { loadCustom, setKeywordRegistrar, customFactions, onCustomChange, regist
 import { registerKeyword } from './ui/cardRenderer.js';
 import { listDecks, getDeck, validateDeck, deckStats, deckCardDefs, lastDeckId, rememberDeckFor, dualPresets, generateDualDeck, DUAL, customPayloadFor } from './data/deckStore.js';
 import { createCard, createKingdomDeck } from './engine/state.js';
+import { autoChoiceTarget } from './engine/cardSkills.js';
 
 const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb', 'gsz', 'ys', 'hj', 'dz', 'xl', 'lbiao', 'yshu'];
 
@@ -1448,6 +1449,23 @@ export class AppCoordinator {
     this._checkTurnState();
   }
 
+  /** AI 一方在对方回合里要做的选择（被挟持弃牌、贾诩乱武选目标等）：稍等片刻后由 AI 自动选 */
+  _autoResolveBotChoices(state) {
+    if (!this.rulesEngine || this._botChoiceTimer) return;
+    const seats = this.mode === APP_MODE.BOT_VS_BOT ? [FACTIONS.WEI, FACTIONS.SHU] : (this.mode === APP_MODE.SOLO_VS_BOT && this.bot ? [this.opponentPlayerId] : []);
+    const seat = seats.find(pid => pid !== state.activePlayer && state.players?.[pid]?.pendingChoices?.length);
+    if (!seat) return;
+    this._botChoiceTimer = setTimeout(() => {
+      this._botChoiceTimer = null;
+      const st = this.rulesEngine?.state;
+      const c = st?.players?.[seat]?.pendingChoices?.[0];
+      if (!c || st.phase === PHASES.GAME_OVER) return;
+      try { this.rulesEngine.dispatch({ type: ACTION_TYPES.CHOOSE_TARGET, playerId: seat, payload: { choiceId: c.id, targetId: autoChoiceTarget(st, seat) } }); } catch (err) { console.warn('AI 选择失败', err); }
+      this._updateCombatLog?.();
+      this.render();
+    }, 600);
+  }
+
   async _runSandboxLoop(botWei, botShu, stepSpeedMs) {
     while (this.isSandboxRunning && this.rulesEngine?.state?.phase !== PHASES.GAME_OVER) {
       const activePlayer = this.rulesEngine.state.activePlayer;
@@ -1485,6 +1503,7 @@ export class AppCoordinator {
   render() {
     const state = this.getCurrentState();
     if (!state) return;
+    this._autoResolveBotChoices(state);
     setSeatKingdoms({ WEI: state.players?.WEI?.kingdom, SHU: state.players?.SHU?.kingdom });
 
     const doc = typeof document !== 'undefined' ? document : globalThis.document;

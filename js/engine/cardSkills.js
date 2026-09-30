@@ -375,6 +375,28 @@ export const CHOICE_SPECS = {
     auto: list => [...list].sort((a, b) => b.atk - a.atk)[0],
     apply(state, pid, t) { buff(t, 1, 1); log(state, pid, `公孙续·遗志：【${t.name}】获得+1+1`); }
   },
+  oppHand: {
+    source: '手牌', prompt: '指定对方1张手牌', pool: 'option',
+    auto: list => list.find(o => String(o.name).startsWith('【')) || list[0],
+    apply(state, pid, opt, choice = {}) {
+      const foe = opp(pid);
+      const fp = state.players[foe];
+      let card = fp.hand.find(c => c.instanceId === opt.instanceId);
+      if (choice.mode === 'reveal') {
+        if (!card || card._known) card = fp.hand.find(c => !c._known); // 已公开则顺延
+        if (!card) return;
+        card._known = true;
+        log(state, pid, `${choice.source || '军机'}：对方【${card.name}】成为明牌`);
+        return;
+      }
+      if (!card) card = fp.hand[0];
+      if (!card) return;
+      fp.hand.splice(fp.hand.indexOf(card), 1);
+      fp.discard.push(card);
+      log(state, pid, `${choice.source || '弃牌'}：弃掉对方手牌【${card.name}】`);
+      extRun('discard', state, foe, card);
+    }
+  },
   block: {
     source: '技能', prompt: '选择目标',
     auto: (list, state, pid) => {
@@ -879,14 +901,20 @@ export function applyJunJi(state, card, playerId) {
   return revealHand(state, playerId, n, `${card.name}·军机`);
 }
 export function revealHand(state, playerId, n, source = '军机') {
-  const hidden = state.players[opp(playerId)].hand.filter(c => !c._known);
-  let k = 0;
-  for (; k < n && hidden.length; k++) {
-    const c = hidden.splice(hidden.length === 1 ? 0 : state.prng.randomInt(0, hidden.length - 1), 1)[0];
-    c._known = true;
-  }
-  if (k) log(state, playerId, `${source}：对手${k}张手牌成为明牌`);
+  // 由我方指定对方手牌中的 n 张（按位置点选暗牌），逐张选择
+  const hidden = state.players[opp(playerId)].hand.filter(c => !c._known).length;
+  const k = Math.min(n, hidden);
+  for (let i = 0; i < k; i++) queueOppHandPick(state, playerId, 'reveal', source, `${source}：指定对方1张手牌成为明牌（${i + 1}/${k}）`);
   return k;
+}
+
+/** 在对方手牌里点选1张（暗牌只显示位置，明牌显示名字）：mode = 'reveal' 变明牌 / 'discard' 弃掉 */
+export function queueOppHandPick(state, playerId, mode, source, prompt) {
+  const hand = state.players[opp(playerId)].hand;
+  const opts = hand.map((c, i) => ({ c, i })).filter(({ c }) => mode !== 'reveal' || !c._known)
+    .map(({ c, i }) => ({ instanceId: c.instanceId, name: c._known ? `【${c.name}】` : `第${i + 1}张（暗牌）` }));
+  if (!opts.length) return;
+  queueChoice(state, playerId, 'oppHand', null, opts, { mode, source, prompt });
 }
 
 function scout(state, unit, n) {
@@ -1723,7 +1751,7 @@ export function afterAttack(state, attacker, defender, result, targetIsHq) {
         attacker.status[STATUS_TYPES.CHARGE_USED] = false;
         log(state, attacker.faction, '赵云·突围：击败敌军，重新获得【冲阵】');
       }
-      if (result.defenderDied && isId(attacker, 'shu_guan_yu')) discardRandom(state, enemy, 1, '关羽·威震');
+      if (result.defenderDied && isId(attacker, 'shu_guan_yu')) queueOppHandPick(state, attacker.faction, 'discard', '关羽·威震', '关羽·威震：指定弃掉对方1张手牌');
       if (result.defenderDied && isId(attacker, 'wei_xu_huang')) {
         const overflow = Math.max(0, -(defender.hp ?? 0));
         if (overflow > 0) {
