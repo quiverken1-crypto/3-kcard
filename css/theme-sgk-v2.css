@@ -282,3 +282,221 @@
 @media(prefers-reduced-motion:reduce){
   .hm-item,.hm-link,.modal-btn,.menu-item,.boot-emblem,.boot-pips i,.tactical-drawer{transition:none!important}
 }
+
+
+/* ==========================================================================
+   REVIEW PASS — corrected after visual audit
+   ========================================================================== */
+:root {
+  --sgk-modal-frame: url("../assets/ui/kit_v2/modal_frame.webp");
+}
+
+/* 1) One complete adaptive frame, built from a dedicated 9-slice crop.
+   Corners stay intact; only straight edge segments stretch. */
+.modal-box {
+  border: 1px solid rgba(216,170,89,.30) !important;
+}
+.modal-box::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 4;
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 10px solid transparent;
+  border-image-source: var(--sgk-modal-frame);
+  border-image-slice: 20 40 20 40;
+  border-image-width: 10px 14px;
+  border-image-repeat: stretch;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,.26));
+}
+/* Supersede the earlier manually positioned corner layer. */
+.sgk-frame-corners { display: none !important; }
+
+/* Keep important header controls visibly above the decorative frame. */
+.modal-header,
+.modal-title,
+.modal-close-btn,
+.modal-actions {
+  position: relative;
+  z-index: 6;
+}
+
+/* 2) Floating faction drawer: after portaling to body it must carry all of
+   its own layout styles and stacking level — no ancestor selector dependency. */
+.fp-panel.fp-floating {
+  position: fixed !important;
+  z-index: 1600 !important;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(108px,1fr));
+  gap: 6px;
+  box-sizing: border-box;
+  padding: 10px;
+  margin: 0 !important;
+  border-radius: 7px;
+  border: 1px solid rgba(216,170,89,.52);
+  background: rgba(22,14,10,.995);
+  box-shadow:
+    0 18px 52px rgba(0,0,0,.72),
+    inset 0 0 0 1px rgba(247,215,148,.035);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto !important;
+  animation: sgkDrawerIn .13s ease-out;
+}
+.fp-panel.fp-floating .fp-opt {
+  display: flex !important;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 6px !important;
+  border: 1px solid rgba(216,170,89,.20) !important;
+  background: rgba(255,239,199,.035) !important;
+  color: #e5d4ad !important;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+.fp-panel.fp-floating .fp-opt > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.fp-panel.fp-floating .fp-seal { flex: none; }
+.fp-panel.fp-floating .fp-opt:hover {
+  border-color: rgba(238,194,103,.62) !important;
+  background: rgba(116,54,28,.18) !important;
+}
+.fp-panel.fp-floating .fp-opt.active {
+  border-color: #e2b45c !important;
+  background: rgba(111,66,19,.68) !important;
+  color: #fff0c8 !important;
+}
+@keyframes sgkDrawerIn {
+  from { opacity: 0; transform: translateY(-4px) scale(.99); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* 3) Buttons: remove the pasted-on mini sprite icon completely.
+   Decoration now belongs to the button frame itself. */
+.modal-btn::before,
+.menu-item::before,
+.db-btn::before,
+.hud-action-btn::before,
+.network-tabs .tab-btn::before {
+  content: none !important;
+  display: none !important;
+}
+
+/* Four tiny bracket corners: no text displacement, no sprite loading/cropping. */
+.modal-btn::after,
+.menu-item::after,
+.db-btn::after,
+.hud-action-btn::after,
+.network-tabs .tab-btn::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .54;
+  background:
+    linear-gradient(#d9aa59,#d9aa59) left top / 8px 1px no-repeat,
+    linear-gradient(#d9aa59,#d9aa59) left top / 1px 7px no-repeat,
+    linear-gradient(#d9aa59,#d9aa59) right top / 8px 1px no-repeat,
+    linear-gradient(#d9aa59,#d9aa59) right top / 1px 7px no-repeat,
+    linear-gradient(#d9aa59,#d9aa59) left bottom / 8px 1px no-repeat,
+    linear-gradient(#d9aa59,#d9aa59) left bottom / 1px 7px no-repeat,
+    linear-gradient(#d9aa59,#d9aa59) right bottom / 8px 1px no-repeat,
+    linear-gradient(#d9aa59,#d9aa59) right bottom / 1px 7px no-repeat;
+}
+.modal-btn.btn-primary::after,
+.menu-item.menu-primary::after,
+.network-tabs .tab-btn.active::after {
+  opacity: .90;
+}
+.modal-btn > *,
+.menu-item > *,
+.db-btn > *,
+.hud-action-btn > *,
+.network-tabs .tab-btn > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Small buttons get a restrained inner frame rather than oversized corners. */
+.db-btn::after,
+.hud-action-btn::after {
+  inset: 1px;
+  background:
+    linear-gradient(#c99a50,#c99a50) left top / 6px 1px no-repeat,
+    linear-gradient(#c99a50,#c99a50) left top / 1px 5px no-repeat,
+    linear-gradient(#c99a50,#c99a50) right top / 6px 1px no-repeat,
+    linear-gradient(#c99a50,#c99a50) right top / 1px 5px no-repeat,
+    linear-gradient(#c99a50,#c99a50) left bottom / 6px 1px no-repeat,
+    linear-gradient(#c99a50,#c99a50) left bottom / 1px 5px no-repeat,
+    linear-gradient(#c99a50,#c99a50) right bottom / 6px 1px no-repeat,
+    linear-gradient(#c99a50,#c99a50) right bottom / 1px 5px no-repeat;
+}
+
+/* 4) Combat-log drawer is a true overlay. It covers the battlefield but does
+   not reserve layout space or ask the board to resize. */
+.tactical-drawer {
+  z-index: 360 !important;
+  position: fixed !important;
+  contain: layout paint;
+}
+.tactical-drawer.collapsed {
+  transform: translateX(calc(100% + 24px)) !important;
+  opacity: 0 !important;
+  visibility: hidden;
+}
+.tactical-drawer:not(.collapsed) {
+  transform: translateX(0) !important;
+  opacity: 1 !important;
+  visibility: visible;
+}
+
+/* Give cards/panels the same bracket language without turning them into images. */
+.hq-card::after,
+.net-room-item::after,
+.hqp-deck::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  pointer-events: none;
+  opacity: .32;
+  background:
+    linear-gradient(#d4a654,#d4a654) left top / 9px 1px no-repeat,
+    linear-gradient(#d4a654,#d4a654) left top / 1px 8px no-repeat,
+    linear-gradient(#d4a654,#d4a654) right top / 9px 1px no-repeat,
+    linear-gradient(#d4a654,#d4a654) right top / 1px 8px no-repeat,
+    linear-gradient(#d4a654,#d4a654) left bottom / 9px 1px no-repeat,
+    linear-gradient(#d4a654,#d4a654) left bottom / 1px 8px no-repeat,
+    linear-gradient(#d4a654,#d4a654) right bottom / 9px 1px no-repeat,
+    linear-gradient(#d4a654,#d4a654) right bottom / 1px 8px no-repeat;
+}
+.net-room-item,
+.hqp-deck { position: relative; }
+
+@media (max-width:560px) {
+  .modal-box::after {
+    border-width: 8px;
+    border-image-width: 8px 11px;
+  }
+  .fp-panel.fp-floating {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+  }
+}
+@media (max-height:620px) and (orientation:landscape) {
+  .modal-box::after {
+    border-width: 8px;
+    border-image-width: 8px 11px;
+  }
+  .fp-panel.fp-floating {
+    grid-template-columns: repeat(4,minmax(92px,1fr));
+  }
+}
