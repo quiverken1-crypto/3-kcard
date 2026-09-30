@@ -500,3 +500,15 @@
     grid-template-columns: repeat(4,minmax(92px,1fr));
   }
 }
+
+
+/* Border-image belongs to the modal border box itself, so it never scrolls
+   with modal contents. */
+.modal-box {
+  border: 1px solid transparent !important;
+  border-image-source: var(--sgk-modal-frame) !important;
+  border-image-slice: 20 40 20 40 !important;
+  border-image-width: 10px 14px !important;
+  border-image-repeat: stretch !important;
+}
+.modal-box::after { content: none !important; display: none !important; }
