@@ -463,3 +463,50 @@ body.deck-builder-open #modal-card-inspector { z-index: 1700 !important; }
 .fp-seal.seal-RANDOM { background: #5b5347; }
 .hqp-field .faction-picker .fp-panel { width: min(420px, calc(100vw - 100px)); }
 @media (max-width: 560px) { .faction-picker .fp-panel { grid-template-columns: repeat(2, 1fr); } }
+
+/* ---- 技能提示/战报浮条：画面正中 ---- */
+.toast-stack, body.m-land .toast-stack, body.m-port .toast-stack {
+  left: 50% !important; right: auto !important; top: 40% !important; bottom: auto !important;
+  transform: translate(-50%, -50%) !important;
+  width: min(460px, calc(100vw - 32px)) !important; align-items: center !important; z-index: 950 !important;
+}
+.toast-stack .toast-item { text-align: center; font-size: 13px !important; padding: 6px 14px !important; border-radius: 10px !important; background: rgba(20,14,8,.9); }
+body.at-home .toast-stack { top: 30% !important; }
+
+/* ---- 详情浮窗压在“取消”、选择条之上 ---- */
+.card-inspector-tooltip { z-index: 985 !important; }
+
+/* ---- 顶部与底部都留出手机系统区域（刘海/状态栏/底部横条） ---- */
+body.m-port #game-app.game-container, body.m-land #game-app.game-container {
+  box-sizing: border-box;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 6px) !important;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4px) !important;
+  padding-left: env(safe-area-inset-left, 0px) !important; padding-right: env(safe-area-inset-right, 0px) !important;
+}
+
+/* ---- 竖屏：我方状态栏重新排版 ---- */
+body.m-port #game-app.game-container { grid-template-rows: 36px minmax(0, 1fr) 50px 104px; }
+body.m-port #player-dock .player-hq-meta { grid-column: 1 / 3 !important; margin: 4px 2px 4px 4px !important; padding: 4px 6px !important; min-width: 0; overflow: hidden; }
+body.m-port #player-dock .player-hq-meta .hq-status-group { width: 100% !important; min-width: 0; }
+body.m-port #player-dock .player-hq-meta .hq-label { display: none !important; }
+body.m-port #player-dock .player-hq-meta .hq-label-row { justify-content: center !important; margin: 0 0 3px !important; }
+body.m-port #player-dock .player-hq-meta .hq-hp-numeric { font-size: 13px !important; letter-spacing: -.5px; white-space: nowrap; }
+body.m-port #player-dock .player-hq-meta .hq-hp-bar { height: 5px !important; }
+body.m-port #player-dock .player-resources { grid-column: 3 / 9 !important; padding: 4px 8px !important; gap: 10px !important; }
+body.m-port #player-dock .granary-cluster, body.m-port #player-dock .prestige-cluster { display: flex !important; flex-direction: column !important; justify-content: center !important; gap: 3px !important; }
+body.m-port #player-dock .granary-cluster { flex: 1 1 auto !important; }
+body.m-port #player-dock .prestige-cluster { flex: 0 0 auto !important; }
+body.m-port #player-dock .granary-header, body.m-port #player-dock .prestige-header { display: flex !important; justify-content: flex-start !important; align-items: center !important; gap: 4px !important; }
+body.m-port #player-dock .granary-title, body.m-port #player-dock .prestige-title { font-size: 0 !important; flex: none; }
+body.m-port #player-dock .granary-title::before, body.m-port #player-dock .prestige-title::before { font-size: 13px; }
+body.m-port #player-dock .granary-numbers, body.m-port #player-dock .prestige-numbers { font-size: 13px !important; }
+body.m-port #player-dock .granary-pips-row { gap: 2px !important; }
+body.m-port #player-dock .granary-pips-row .grain-pip { width: 8px !important; height: 8px !important; }
+body.m-port #player-dock #turn-timer.dock-timer { grid-column: 9 / 10 !important; margin: 4px 1px !important; }
+body.m-port #player-dock #turn-timer .turn-timer-chip { font-size: 11px !important; }
+body.m-port #player-dock .player-deck-actions { grid-column: 10 / 13 !important; }
+body.m-port #player-dock #btn-end-turn { font-size: 12px !important; white-space: nowrap !important; overflow: hidden; padding: 0 2px !important; }
+body.m-port #player-dock #btn-end-turn .seal-text { white-space: nowrap; }
+body.m-port #player-dock .granary-cluster, body.m-port #player-dock .prestige-cluster { width: auto !important; }
+body.m-port #player-dock .granary-cluster { flex: 1 1 0 !important; }
+body.m-port #player-dock .prestige-cluster { padding-left: 8px; border-left: 1px solid rgba(217,179,106,.25); }

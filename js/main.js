@@ -419,6 +419,7 @@ export class AppCoordinator {
     doc.getElementById('side-drawer')?.classList.add('collapsed');
     doc.getElementById('home-screen')?.classList.remove('hidden');
     doc.body.classList.add('at-home');
+    this._clearMatchOverlays(doc);
     this.audio?.setScene('lobby');
   }
 
@@ -517,6 +518,7 @@ export class AppCoordinator {
     const drawer = doc.getElementById('side-drawer');
     const toggleLog = () => {
       drawer?.classList.toggle('collapsed');
+      if (!drawer?.classList.contains('collapsed')) this.combatLog?.scrollToBottom();
       doc.getElementById('btn-open-log')?.classList.toggle('active', !drawer?.classList.contains('collapsed'));
       requestAnimationFrame(() => this._fitBoard());
     };
@@ -921,7 +923,17 @@ export class AppCoordinator {
     overlay.classList.remove('hidden');
   }
 
+  /** 离开对局：清掉技能提示、选择条、浮字等局内浮层 */
+  _clearMatchOverlays(doc = globalThis.document) {
+    if (!doc) return;
+    doc.querySelectorAll('.toast-stack, .toast-alert, .floating-combat-text').forEach(el => el.remove());
+    doc.getElementById('choice-bar')?.classList.add('hidden');
+    doc.body.classList.remove('choice-active', 'choice-hand', 'is-selecting', 'tactic-targeting', 'is-dragging');
+    if (this._botChoiceTimer) { clearTimeout(this._botChoiceTimer); this._botChoiceTimer = null; }
+  }
+
   _teardownCurrentMode() {
+    this._clearMatchOverlays();
     this.isSandboxRunning = false;
     this._surrendered = false;
     if (this._lobbyTimer) { clearInterval(this._lobbyTimer); this._lobbyTimer = null; }
@@ -1519,8 +1531,15 @@ export class AppCoordinator {
     if (bfContainer) {
       // 记录重绘前每张单位卡的位置：有单位阵亡/离场时，其余单位先原地不动，
       // 等阵亡动画播完再滑动补位（FLIP）
+      // 性能：只有站位变化时才测量（测量会强制重排，每步都测很卡）
+      const bf = state.battlefield;
+      const sig = bf ? ['WEI', 'SHU'].map(p => (bf.support[p]?.slots || []).map(u => u.instanceId).join(',')).join('|') + '#' +
+        ['LEFT', 'CENTER', 'RIGHT'].map(k => (bf.frontline[k]?.units || []).map(u => u.instanceId).join(',')).join('|') : '';
       const before = new Map();
-      bfContainer.querySelectorAll('.board-unit[data-instance-id]').forEach(el => before.set(el.dataset.instanceId, el.getBoundingClientRect()));
+      if (sig !== this._lastBoardSig) {
+        bfContainer.querySelectorAll('.board-unit[data-instance-id]').forEach(el => before.set(el.dataset.instanceId, el.getBoundingClientRect()));
+      }
+      this._lastBoardSig = sig;
       renderBoard(bfContainer, state, this.localPlayerId, {
         player: state.players?.[this.localPlayerId]
       });
