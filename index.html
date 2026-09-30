@@ -10,6 +10,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="三国KARDS">
   <link rel="apple-touch-icon" href="assets/icons/icon-180.png">
+  <link rel="preload" as="image" href="assets/ui/home-bg.webp" type="image/webp" fetchpriority="high">
+  <link rel="preload" as="image" href="assets/ui/kit_v2/loading_kit.webp" type="image/webp" fetchpriority="high">
   <title>三国KARDS — 纯前端局域网对战</title>
   
   <!-- Modular Stylesheets -->
@@ -24,6 +26,7 @@
   <link rel="stylesheet" href="css/mobile.css">
   <link rel="stylesheet" href="css/deck.css">
   <link rel="stylesheet" href="css/polish.css">
+  <link rel="stylesheet" href="css/theme-sgk-v2.css">
 </head>
 <body class="theme-martial">
 
@@ -50,10 +53,17 @@
       <div class="boot-panel">
         <div class="home-seal boot-seal">三国</div>
         <div class="boot-title">三国 KARDS</div>
+        <div id="boot-mini" class="boot-mini" aria-label="加载互动：点击军印聚势">
+          <button id="boot-emblem" class="boot-emblem" type="button" aria-label="点击军印聚势"></button>
+          <div id="boot-mini-label" class="boot-mini-label">点击军印 · 聚势候战</div>
+          <div id="boot-pips" class="boot-pips" aria-hidden="true">
+            <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+          </div>
+        </div>
         <div class="boot-bar"><div id="boot-bar-fill" class="boot-bar-fill"></div></div>
         <div class="boot-info"><span id="boot-label">正在准备资源…</span><span id="boot-pct">0%</span></div>
-        <div class="boot-tip">首次约 1 MB，之后缓存在本机、秒开。浏览器限制：点一下屏幕后才会响起音乐。</div>
-        <button id="boot-skip" class="boot-skip hidden">先进入，后台继续加载</button>
+        <div class="boot-tip">先缓存界面与常用资源；约 3–5 秒后可直接进入，其余资源会在后台继续准备。</div>
+        <button id="boot-skip" class="boot-skip hidden">直接进入</button>
       </div>
     </div>
 
