@@ -53,6 +53,59 @@ function injectFactionStyles() {
 }
 const randomOther = k => { const o = KINGDOM_KEYS.filter(x => x !== k); return o[Math.floor(Math.random() * o.length)]; };
 
+
+const UI_SKIN_ASSETS = [
+  'assets/ui/kit_v2/frame_kit.webp',
+  'assets/ui/kit_v2/button_kit.webp',
+  'assets/ui/kit_v2/icon_kit.webp',
+  'assets/ui/kit_v2/divider_kit.webp',
+  'assets/ui/kit_v2/loading_kit.webp'
+];
+
+function preloadUiSkinAssets() {
+  if (typeof Image === 'undefined') return Promise.resolve();
+  return Promise.all(UI_SKIN_ASSETS.map(src => new Promise(resolve => {
+    const img = new Image();
+    const done = () => resolve(src);
+    img.onload = done;
+    img.onerror = done;
+    img.decoding = 'async';
+    img.src = src;
+    if (img.complete) done();
+  })));
+}
+
+/** Visual-only chrome. The frame is CSS-first, these corner pieces are enhancement. */
+function decorateSgkChrome(doc) {
+  const decorate = (root = doc) => {
+    for (const box of root.querySelectorAll?.('.modal-box') || []) {
+      if (box.querySelector(':scope > .sgk-frame-corners')) continue;
+      const layer = doc.createElement('span');
+      layer.className = 'sgk-frame-corners';
+      layer.setAttribute('aria-hidden', 'true');
+      layer.innerHTML =
+        '<i class="sgk-corner sgk-corner-tl"></i>' +
+        '<i class="sgk-corner sgk-corner-tr"></i>' +
+        '<i class="sgk-corner sgk-corner-bl"></i>' +
+        '<i class="sgk-corner sgk-corner-br"></i>';
+      box.prepend(layer);
+    }
+  };
+  decorate();
+  if (doc.documentElement.dataset.sgkChromeObserver) return;
+  doc.documentElement.dataset.sgkChromeObserver = '1';
+  const observer = new MutationObserver(records => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (!(node instanceof Element)) continue;
+        if (node.matches?.('.modal-box')) decorate(node.parentElement || doc);
+        else if (node.querySelector?.('.modal-box')) decorate(node);
+      }
+    }
+  });
+  observer.observe(doc.body, { childList: true, subtree: true });
+}
+
 export const APP_MODE = Object.freeze({
   UNINITIALIZED: 'UNINITIALIZED',
   SOLO_VS_BOT: 'SOLO_VS_BOT',
@@ -113,6 +166,9 @@ export class AppCoordinator {
   async init() {
     const doc = typeof document !== 'undefined' ? document : globalThis.document;
     if (!doc) return;
+
+    // UI V2 decorative chrome is visual-only and does not alter gameplay.
+    decorateSgkChrome(doc);
 
     // 1. Initialize Card Inspector Tooltip
     CardInspector.init();
@@ -250,44 +306,98 @@ export class AppCoordinator {
     doc.addEventListener('fullscreenchange', refit);
   }
 
-  /** 启动时预加载全部卡图/音效/音乐，显示进度；可跳过，剩余在后台继续 */
+  /** 启动缓冲：先确保 UI 皮肤缓存；3–5 秒后允许直接进入，重资源继续后台加载。 */
   _runPreloader(doc) {
     const box = doc.getElementById('boot-loader');
     if (!box) return;
     const fill = doc.getElementById('boot-bar-fill');
     const label = doc.getElementById('boot-label');
     const pct = doc.getElementById('boot-pct');
-    const skip = doc.getElementById('boot-skip');
+    const enter = doc.getElementById('boot-skip');
+    const emblem = doc.getElementById('boot-emblem');
+    const miniLabel = doc.getElementById('boot-mini-label');
+    const pips = [...doc.querySelectorAll('#boot-pips i')];
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
     let chip = null;
     let closed = false;
+    let coreDone = false;
+    let uiDone = false;
+    let energy = 0;
+    let frame = 0;
+
+    // loading_kit 的 12 帧：6×2，缩放到 50% 后直接切 background-position。
+    const frames = [
+      [-6,-51],[-92,-51],[-175,-51],[-258,-51],[-341,-51],[-425,-51],
+      [-5,-144],[-93,-144],[-175,-144],[-258,-144],[-342,-144],[-426,-144]
+    ];
+    const frameTimer = setInterval(() => {
+      if (!emblem || closed) return;
+      const [x,y] = frames[frame++ % frames.length];
+      emblem.style.backgroundPosition = `${x}px ${y}px`;
+    }, 115);
+
+    const hit = () => {
+      if (closed) return;
+      energy = Math.min(8, energy + 1);
+      pips.forEach((pip, i) => pip.classList.toggle('on', i < energy));
+      if (miniLabel) miniLabel.textContent = energy >= 8 ? '军心已聚 · 静候开阵' : `点击军印 · 聚势 ${energy}/8`;
+      emblem?.classList.add('hit');
+      setTimeout(() => emblem?.classList.remove('hit'), 90);
+    };
+    emblem?.addEventListener('click', hit);
+
     const close = () => {
       if (closed) return;
       closed = true;
+      clearInterval(frameTimer);
       box.classList.add('done');
       setTimeout(() => box.remove(), 600);
     };
-    setTimeout(() => skip?.classList.remove('hidden'), 2500);
-    skip?.addEventListener('click', () => {
+
+    // 首先缓存 UI；如果网络慢，最晚 5 秒也会开放进入，不把用户锁死。
+    const uiReady = preloadUiSkinAssets().then(() => { uiDone = true; });
+    Promise.all([
+      sleep(3200),
+      Promise.race([uiReady, sleep(5000)])
+    ]).then(() => {
+      if (closed) return;
+      enter?.classList.remove('hidden');
+      if (label) label.textContent = uiDone ? '界面已就绪，可直接进入' : '可直接进入，其余资源后台加载';
+      if (miniLabel && energy < 8) miniLabel.textContent = '军阵已开 · 可直接进入';
+    });
+
+    enter?.addEventListener('click', () => {
       close();
       this.audio?.loadMusicInBackground?.();
-      chip = doc.createElement('div');
-      chip.className = 'bg-load-chip';
-      doc.body.appendChild(chip);
+      if (!coreDone) {
+        chip = doc.createElement('div');
+        chip.className = 'bg-load-chip';
+        chip.textContent = '资源后台加载 0%';
+        doc.body.appendChild(chip);
+      }
     });
+
     preloadAssets({
       audio: this.audio,
       onProgress: ({ ratio, label: l }) => {
         const p = Math.round(ratio * 100);
         if (fill) fill.style.width = `${p}%`;
         if (pct) pct.textContent = `${p}%`;
-        if (label) label.textContent = ratio >= 1 ? '加载完成' : `正在加载${l}…`;
+        if (label && !enter?.classList.contains('hidden') === false) label.textContent = ratio >= 1 ? '资源加载完成' : `正在加载${l}…`;
         box.setAttribute('aria-valuenow', String(p));
-        if (chip) chip.textContent = `资源加载 ${p}%`;
+        if (chip) chip.textContent = `资源后台加载 ${p}%`;
       }
     }).then(() => {
+      coreDone = true;
       this.audio?.loadMusicInBackground?.();
-      if (chip) { chip.textContent = '资源已就绪'; setTimeout(() => chip.remove(), 1500); }
-      setTimeout(close, 250);
+      if (fill) fill.style.width = '100%';
+      if (pct) pct.textContent = '100%';
+      if (!closed && label) label.textContent = enter?.classList.contains('hidden') ? '资源就绪，正在整备界面…' : '全部资源已就绪';
+      if (chip) {
+        chip.textContent = '资源已就绪';
+        setTimeout(() => chip.remove(), 1500);
+      }
     });
   }
 
