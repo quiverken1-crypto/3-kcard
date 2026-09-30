@@ -70,6 +70,7 @@ function preloadUiSkinAssets() {
     img.onload = done;
     img.onerror = done;
     img.decoding = 'async';
+    try { img.fetchPriority = 'high'; } catch { /* optional browser hint */ }
     img.src = src;
     if (img.complete) done();
   })));
