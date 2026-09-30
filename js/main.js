@@ -57,18 +57,33 @@ const randomOther = k => { const o = KINGDOM_KEYS.filter(x => x !== k); return o
 /** 纯视觉装饰层：给弹窗挂四个独立角标。角标只显示素材表中的一个小零件，
  *  不拉伸整张面板，不参与布局、不接管点击。 */
 function decorateSgkChrome(doc) {
-  for (const box of doc.querySelectorAll('.modal-box')) {
-    if (box.querySelector(':scope > .sgk-frame-corners')) continue;
-    const layer = doc.createElement('span');
-    layer.className = 'sgk-frame-corners';
-    layer.setAttribute('aria-hidden', 'true');
-    layer.innerHTML =
-      '<i class="sgk-corner sgk-corner-tl"></i>' +
-      '<i class="sgk-corner sgk-corner-tr"></i>' +
-      '<i class="sgk-corner sgk-corner-bl"></i>' +
-      '<i class="sgk-corner sgk-corner-br"></i>';
-    box.prepend(layer);
-  }
+  const decorate = (root = doc) => {
+    for (const box of root.querySelectorAll?.('.modal-box') || []) {
+      if (box.querySelector(':scope > .sgk-frame-corners')) continue;
+      const layer = doc.createElement('span');
+      layer.className = 'sgk-frame-corners';
+      layer.setAttribute('aria-hidden', 'true');
+      layer.innerHTML =
+        '<i class="sgk-corner sgk-corner-tl"></i>' +
+        '<i class="sgk-corner sgk-corner-tr"></i>' +
+        '<i class="sgk-corner sgk-corner-bl"></i>' +
+        '<i class="sgk-corner sgk-corner-br"></i>';
+      box.prepend(layer);
+    }
+  };
+  decorate();
+  if (doc.documentElement.dataset.sgkChromeObserver) return;
+  doc.documentElement.dataset.sgkChromeObserver = '1';
+  const observer = new MutationObserver(records => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (!(node instanceof Element)) continue;
+        if (node.matches?.('.modal-box')) decorate(node.parentElement || doc);
+        else if (node.querySelector?.('.modal-box')) decorate(node);
+      }
+    }
+  });
+  observer.observe(doc.body, { childList: true, subtree: true });
 }
 
 export const APP_MODE = Object.freeze({
