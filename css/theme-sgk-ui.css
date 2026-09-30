@@ -385,8 +385,8 @@
   background:
     radial-gradient(circle at 50% 30%, rgba(95,43,24,.12), transparent 32%),
     rgba(7,5,4,.78) !important;
-  backdrop-filter: blur(5px) saturate(.8) !important;
-  -webkit-backdrop-filter: blur(5px) saturate(.8) !important;
+  backdrop-filter: blur(1.5px) saturate(.9) !important;
+  -webkit-backdrop-filter: blur(1.5px) saturate(.9) !important;
 }
 
 .modal-box,
@@ -399,64 +399,63 @@
   border: 1px solid var(--sgk-panel-line) !important;
   border-radius: 7px !important;
   background:
-    linear-gradient(180deg, rgba(42,25,16,.96), rgba(20,13,9,.97) 52%, rgba(12,9,7,.98)) !important;
+    linear-gradient(180deg, rgba(34,22,15,.985), rgba(18,12,9,.992) 56%, rgba(10,8,6,.995)) !important;
   color: #eadbb8 !important;
   box-shadow:
     0 28px 80px rgba(0,0,0,.68),
     inset 0 1px 0 rgba(255,231,170,.08),
     inset 0 0 0 1px rgba(0,0,0,.40),
-    inset 0 0 42px rgba(130,49,29,.045) !important;
+    inset 0 0 22px rgba(130,49,29,.025) !important;
 }
 
 .network-box,
-.hq-pick-box,
 .game-menu-box,
 .confirm-box {
   overflow: hidden;
 }
-
-/* Generated frame sheet is used as an ACTUAL frame, not a watermark.
-   panels.webp medium frame component: source approx x818 y25 w399 h441
-   in a 1448x1086 sheet. Background scaling/position crops that component
-   to the modal, then a mask keeps the ornate rim while the center stays clear. */
-.network-box::before,
-.hq-pick-box::before,
-.game-menu-box::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  z-index: 0;
-  pointer-events: none;
-  --sgk-frame-edge: clamp(48px, 9vw, 82px);
-  opacity: .74;
-  background-image: url("../assets/ui/panels.webp");
-  background-repeat: no-repeat;
-  background-size: 362.91% 246.26%;
-  background-position: 77.98% 3.88%;
-  filter: saturate(.94) brightness(.96) contrast(1.04);
-  -webkit-mask:
-    linear-gradient(#000 0 0) top / 100% var(--sgk-frame-edge) no-repeat,
-    linear-gradient(#000 0 0) bottom / 100% var(--sgk-frame-edge) no-repeat,
-    linear-gradient(#000 0 0) left / var(--sgk-frame-edge) 100% no-repeat,
-    linear-gradient(#000 0 0) right / var(--sgk-frame-edge) 100% no-repeat;
-  mask:
-    linear-gradient(#000 0 0) top / 100% var(--sgk-frame-edge) no-repeat,
-    linear-gradient(#000 0 0) bottom / 100% var(--sgk-frame-edge) no-repeat,
-    linear-gradient(#000 0 0) left / var(--sgk-frame-edge) 100% no-repeat,
-    linear-gradient(#000 0 0) right / var(--sgk-frame-edge) 100% no-repeat;
+.hq-pick-box {
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
-/* Confirmation boxes are too shallow for the portrait frame; keep them
-   intentionally clean instead of stretching the artwork. */
+/* Responsive inner-frame system.
+   Do NOT stretch the generated raster panel sheet across different modal aspect ratios.
+   The shell is CSS so it remains sharp; ornaments are geometric and scale cleanly. */
+.network-box::before,
+.hq-pick-box::before,
+.game-menu-box::before,
 .confirm-box::before {
   content: "";
   position: absolute;
-  inset: 6px;
+  inset: 8px;
   z-index: 0;
   pointer-events: none;
-  border: 1px solid rgba(220,172,83,.24);
+  border: 1px solid rgba(218,173,91,.26);
   border-radius: 3px;
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,.35);
+  box-shadow:
+    inset 0 0 0 1px rgba(0,0,0,.42),
+    inset 0 0 30px rgba(130,49,29,.035);
+}
+
+.network-box::after,
+.hq-pick-box::after,
+.game-menu-box::after,
+.confirm-box::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(#d8ae63,#d8ae63) 14px 14px / 24px 1px no-repeat,
+    linear-gradient(#d8ae63,#d8ae63) 14px 14px / 1px 24px no-repeat,
+    linear-gradient(#d8ae63,#d8ae63) calc(100% - 38px) 14px / 24px 1px no-repeat,
+    linear-gradient(#d8ae63,#d8ae63) calc(100% - 15px) 14px / 1px 24px no-repeat,
+    linear-gradient(#d8ae63,#d8ae63) 14px calc(100% - 15px) / 24px 1px no-repeat,
+    linear-gradient(#d8ae63,#d8ae63) 14px calc(100% - 38px) / 1px 24px no-repeat,
+    linear-gradient(#d8ae63,#d8ae63) calc(100% - 38px) calc(100% - 15px) / 24px 1px no-repeat,
+    linear-gradient(#d8ae63,#d8ae63) calc(100% - 15px) calc(100% - 38px) / 1px 24px no-repeat;
+  opacity: .72;
 }
 
 .network-box > *,
@@ -825,4 +824,182 @@
   .hqp-deck {
     transition: none !important;
   }
+}
+
+
+/* --- Adaptive refinements after screenshot review ---------------------- */
+.hq-pick-box {
+  width: min(720px, calc(100vw - 28px)) !important;
+  padding: 22px 28px 18px !important;
+}
+.hq-pick-box::before { inset: 10px; }
+.hq-pick-box::after { opacity: .58; }
+
+.hqp-grid {
+  margin: 14px 0 10px !important;
+  gap: 10px 14px !important;
+}
+.hqp-decks {
+  gap: 8px !important;
+}
+.hq-pick-options {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  gap: 18px !important;
+  max-width: 430px;
+  margin: 10px auto 16px !important;
+}
+.hq-card {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 232px !important;
+}
+.hq-card-name { font-size: 30px !important; }
+
+.network-box {
+  width: min(640px, calc(100vw - 28px)) !important;
+}
+.network-box::before { inset: 9px; }
+.network-box::after { opacity: .56; }
+
+.game-menu-box {
+  width: min(370px, calc(100vw - 28px)) !important;
+  padding: 24px 24px 18px !important;
+}
+.game-menu-box::before { inset: 8px; }
+.game-menu-box::after { opacity: .54; }
+
+.network-tabs {
+  margin: 0 10px;
+}
+.tab-pane,
+.net-room-panel {
+  padding-left: 22px !important;
+  padding-right: 22px !important;
+}
+
+@media (max-width: 680px) {
+  .hq-pick-box {
+    width: min(96vw, 620px) !important;
+    padding: 18px 16px 14px !important;
+  }
+  .hqp-grid {
+    grid-template-columns: 74px 1fr !important;
+  }
+  .hq-pick-options {
+    max-width: 390px;
+    gap: 12px !important;
+  }
+  .hq-card {
+    height: 212px !important;
+  }
+  .hq-card-name { font-size: 26px !important; }
+}
+
+@media (max-width: 520px) {
+  .modal-overlay {
+    align-items: flex-start !important;
+    overflow-y: auto;
+    padding-top: max(10px, env(safe-area-inset-top)) !important;
+    padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+  }
+  .network-box,
+  .hq-pick-box,
+  .game-menu-box,
+  .confirm-box {
+    width: calc(100vw - 16px) !important;
+    max-width: none !important;
+  }
+  .hqp-grid {
+    grid-template-columns: 1fr !important;
+    gap: 4px !important;
+  }
+  .hqp-label {
+    text-align: left !important;
+    margin-top: 5px !important;
+  }
+  .hq-pick-options {
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    width: 100%;
+    max-width: none;
+    gap: 8px !important;
+  }
+  .hq-card {
+    height: 188px !important;
+    padding: 12px 8px 10px !important;
+  }
+  .hq-card-name { font-size: 23px !important; }
+  .hq-card-shield {
+    width: 48px !important;
+    height: 54px !important;
+    font-size: 22px !important;
+  }
+  .tab-pane,
+  .net-room-panel {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+  .network-tabs {
+    margin: 0 4px;
+  }
+  .game-menu-box {
+    margin: auto 0;
+  }
+}
+
+@media (max-height: 620px) and (orientation: landscape) {
+  .modal-overlay {
+    align-items: flex-start !important;
+    overflow-y: auto;
+  }
+  .hq-pick-box {
+    width: min(860px, calc(100vw - 20px)) !important;
+    padding: 12px 20px 10px !important;
+  }
+  .hq-pick-title { font-size: 19px !important; }
+  .hqp-grid {
+    grid-template-columns: 58px 1fr !important;
+    margin: 5px 0 4px !important;
+    gap: 5px 10px !important;
+  }
+  .hqp-deck { width: 128px !important; }
+  .hq-pick-options {
+    grid-template-columns: repeat(2, 150px);
+    gap: 10px !important;
+    margin: 5px auto 8px !important;
+  }
+  .hq-card {
+    height: 170px !important;
+    padding-top: 10px !important;
+  }
+  .hq-card-name { font-size: 21px !important; }
+  .hq-card-shield {
+    margin-top: 8px !important;
+    width: 44px !important;
+    height: 48px !important;
+    font-size: 20px !important;
+  }
+  .hq-card-grain { font-size: 10px !important; }
+  .hq-pick-sub { display: none !important; }
+
+  .network-box {
+    max-height: calc(100dvh - 14px) !important;
+  }
+  .game-menu-box {
+    margin: 8px auto !important;
+    width: 360px !important;
+    padding: 15px 20px 12px !important;
+  }
+  .game-menu-seal {
+    margin-bottom: 10px !important;
+    font-size: 18px !important;
+  }
+  .menu-item {
+    padding: 8px 0 !important;
+  }
+  .game-menu-audio {
+    margin-top: 10px !important;
+    padding-top: 8px !important;
+  }
+  .game-menu-hint { display: none !important; }
 }
