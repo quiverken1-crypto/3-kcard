@@ -303,13 +303,13 @@ export function activateSkill(state, pid, payload = {}) {
 }
 
 // ==========================================
-// 结算中途的目标选择（孙权·御将、法正·谋主）：玩家选，15 秒未选则随机
+// 结算中途的目标选择（孙权·鼎峙、法正·谋主）：玩家选，15 秒未选则随机
 // ==========================================
 export const CHOICE_SPECS = {
   sunQuan: {
-    source: '孙权·御将', prompt: '选择1个敌军，造成1点伤害',
+    source: '孙权·鼎峙', prompt: '选择1个敌军，造成1点伤害',
     auto: list => [...list].sort((a, b) => a.hp - b.hp)[0],
-    apply(state, pid, t) { damageUnit(state, t, 1, '孙权·御将'); }
+    apply(state, pid, t) { damageUnit(state, t, 1, '孙权·鼎峙'); }
   },
   luLue: {
     source: '掳掠', prompt: '击败敌军：选择获得粮草或抽1张牌', pool: 'option',
@@ -1872,7 +1872,7 @@ function afterRefill(state, pid) {
   for (const u of getAllUnits(state, pid)) {
     // 于禁·毅重：回合开始时完全恢复
     if (isId(u, 'wei_yu_jin') && u.hp < u.maxHp) { u.hp = u.maxHp; log(state, pid, '于禁·毅重：完全恢复'); }
-    // 孙权·御将：若上回合未被攻击，对任意敌军造成1伤害
+    // 孙权·鼎峙：若上回合未被攻击，对任意敌军造成1伤害
     if (isId(u, 'wu_sun_quan') && u._attackedOnTurn !== state.turnNumber - 1) {
       _stateForTarget = state;
       queueChoice(state, pid, 'sunQuan', u, getAllUnits(state, opp(pid)).filter(canSkillTarget));

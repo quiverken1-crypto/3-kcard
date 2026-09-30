@@ -1,5 +1,11 @@
 /** 自动生成：资源预加载清单（新增卡图后重新生成或手动追加） */
 export const CARD_IMAGES = [
+"assets/cards/lb_lv_bu.webp",
+"assets/cards/lb_chen_gong.webp",
+"assets/cards/wu_pan_zhang.webp",
+"assets/cards/wu_sun_quan.webp",
+"assets/cards/wu_zhou_tai.webp",
+"assets/cards/wu_cheng_pu.webp",
 "assets/cards/yshu_yuan_shu.webp",
 "assets/cards/yshu_ji_ling.webp",
 "assets/cards/yshu_zhang_xun.webp",
