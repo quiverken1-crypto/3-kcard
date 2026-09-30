@@ -211,7 +211,7 @@ export const PLUGIN_HOOKS = { onEnter: [], afterAttack: [], onDeath: [], onTurnE
 export const EXT = {
   attack: [], actionCost: [], deployCost: [], unitDamage: [], hqDamage: [], counter: [], hqAttackMult: [],
   cannotAttack: [], longRange: [], ignoresGuardian: [], ignoresWeiWo: [], ignoresJianZhen: [],
-  turnStart: [], tactic: [], draw: [], moved: [], hqDamaged: [], hqGain: [], unitDamaged: [], aura: [], youJi: [], luLue: [], taunt: []
+  turnStart: [], tactic: [], draw: [], moved: [], discard: [], attacked: [], loseCap: [], combatDamage: [], hqDamaged: [], hqGain: [], unitDamaged: [], aura: [], youJi: [], luLue: [], taunt: []
 };
 export function extFold(name, init, ...args) {
   let v = init;
@@ -242,6 +242,7 @@ export const ACTIVE_SKILLS = {
       p.discard.push(card);
       p.provisions += 2;
       log(state, unit.faction, `程昱·捕粮：弃置【${card.name}】，额外获得2粮草`);
+      extRun('discard', state, unit.faction, card);
     }
   }
 };
@@ -330,6 +331,7 @@ export const CHOICE_SPECS = {
       p.discard.push(card);
       p.provisions += 2;
       log(state, pid, `程昱·捕粮：弃置【${card.name}】，额外获得2粮草`);
+      extRun('discard', state, pid, card);
     }
   },
   shengDong: {
@@ -495,13 +497,14 @@ export function randomPickCards(state, pick) {
   return out;
 }
 
-function discardRandom(state, playerId, count = 1, reason = '') {
+export function discardRandom(state, playerId, count = 1, reason = '') {
   const player = state.players[playerId];
   for (let i = 0; i < count && player.hand.length; i++) {
     const idx = player.hand.length === 1 ? 0 : state.prng.randomInt(0, player.hand.length - 1);
     const card = player.hand.splice(idx, 1)[0];
     player.discard.push(card);
     log(state, opp(playerId), `${reason}：${FACTION_NAME[playerId]}军弃置了手牌【${card.name}】`);
+    extRun('discard', state, playerId, card);
   }
 }
 
@@ -737,6 +740,10 @@ export const hasLongRange = (state, unit) => extAny('longRange', state, unit);
 export const hqAttackMultiplier = (state, unit) => extFold('hqAttackMult', 1, state, unit);
 /** 反击修正（刘琮·束手、郭汜·劫卿） */
 export const counterOverride = (state, attacker, defender, can) => extFold('counter', can, state, attacker, defender);
+/** 对战伤害落到单位前的转移（刘琦·合兵）：返回该单位实际承受的伤害 */
+export function combatDamageRedirect(state, unit, amount) { return amount > 0 ? extFold('combatDamage', amount, state, unit) : amount; }
+/** 单位成为攻击目标（诸葛亮·对策） */
+export function notifyAttacked(state, defender, attacker) { extRun('attacked', state, defender, attacker); }
 /** 游击触发（撤退或闪避） */
 export function notifyYouJi(state, unit) { extRun('youJi', state, unit); }
 export const isArtillery = unit => isId(unit, 'wei_pi_li_che') || isId(unit, 'shu_fa_shi_che');
@@ -861,6 +868,25 @@ export function applyEnterKeywords(state, card, playerId) {
   }
   const pk = card.keywords.find(k => k.startsWith('声望'));
   if (pk) adjustPrestige(state, playerId, parseInt(pk.replace('声望', '') || '1', 10) || 1);
+  applyJunJi(state, card, playerId);
+}
+
+/** 【军机X】进场/使用时：把对方X张手牌变为明牌（对方手牌对我方是暗的，指定即随机挑未公开的） */
+export function applyJunJi(state, card, playerId) {
+  const jk = (card.keywords || []).find(k => typeof k === 'string' && k.startsWith('军机'));
+  if (!jk) return 0;
+  const n = parseInt(jk.replace('军机', '') || '1', 10) || 1;
+  return revealHand(state, playerId, n, `${card.name}·军机`);
+}
+export function revealHand(state, playerId, n, source = '军机') {
+  const hidden = state.players[opp(playerId)].hand.filter(c => !c._known);
+  let k = 0;
+  for (; k < n && hidden.length; k++) {
+    const c = hidden.splice(hidden.length === 1 ? 0 : state.prng.randomInt(0, hidden.length - 1), 1)[0];
+    c._known = true;
+  }
+  if (k) log(state, playerId, `${source}：对手${k}张手牌成为明牌`);
+  return k;
 }
 
 function scout(state, unit, n) {
@@ -1170,7 +1196,7 @@ export function applyInhibitionLocal(unit) {
 
 /** 通用战法（各势力卡组共用同一效果）：wei_xxx / shu_xxx / wu_xxx / lb_xxx */
 function commonTactic(key, spec) {
-  return Object.fromEntries(['wei', 'shu', 'wu', 'lb', 'gsz', 'ys', 'hj', 'dz', 'xl', 'lbiao'].map(k => [`${k}_${key}`, spec]));
+  return Object.fromEntries(['wei', 'shu', 'wu', 'lb', 'gsz', 'ys', 'hj', 'dz', 'xl', 'lbiao', 'yshu'].map(k => [`${k}_${key}`, spec]));
 }
 
 export const TACTICS = {

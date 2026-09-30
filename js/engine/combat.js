@@ -17,7 +17,7 @@ import {
 import { findUnit, getAllUnits, removeUnitFromBoard, drawCard } from './state.js';
 import {
   getAttackValue, getActionCost, actsLikeCavalry as skillActsLikeCavalry, ignoresGuardian,
-  isArtillery, isSiege, isIronWall, findBodyguard, effectiveTroop, hasShiShi, fireMultiplier, isGuardedUnit, isGuardedHq, unitTerrain, baseId, ignoresJianZhen, ignoresWeiWo, cannotAttack, hasLongRange, hqAttackMultiplier, counterOverride, notifyYouJi, immuneToShiShi, allianceBlocks, targetSurcharge, triggerCounters, hasVanguard as hasVanguardSkill, damageHq, zhaXiang, retreatUnit
+  isArtillery, isSiege, isIronWall, findBodyguard, effectiveTroop, hasShiShi, fireMultiplier, isGuardedUnit, isGuardedHq, unitTerrain, baseId, ignoresJianZhen, ignoresWeiWo, cannotAttack, hasLongRange, hqAttackMultiplier, counterOverride, notifyYouJi, notifyAttacked, combatDamageRedirect, immuneToShiShi, allianceBlocks, targetSurcharge, triggerCounters, hasVanguard as hasVanguardSkill, damageHq, zhaXiang, retreatUnit
 } from './cardSkills.js';
 
 const getAttackStyle = unit => unit.keywords.includes(KEYWORDS.HUO_GONG) || unit.keywords.includes(KEYWORDS.SHI_SHI) || ['ARCHER', 'STRATEGIST'].includes(unit.troopType)
@@ -352,6 +352,7 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
   const attackCost = getActionCost(state, attacker, loc) + targetSurcharge(defender);
   // 烧屯伪遁（反制）：己方单位被攻击时触发
   triggerCounters(state, 'OWN_ATTACKED', { defender, attacker });
+  notifyAttacked(state, defender, attacker);
   const ironWall = isIronWall(defender); // 曹仁·铁壁：免疫先登、冲阵、斩将
   defender._attackedOnTurn = state.turnNumber;
   const wasFaceDown = defender.status[STATUS_TYPES.IS_FACE_DOWN];
@@ -436,7 +437,7 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
       rawAmbushCounter = Math.max(0, rawAmbushCounter - getJianZhenValue(attacker));
     }
     counterDealt = rawAmbushCounter;
-    attacker.hp -= counterDealt;
+    attacker.hp -= combatDamageRedirect(state, attacker, counterDealt);
     if (counterDealt > 0) {
       attacker.status[STATUS_TYPES.DAMAGED] = true;
     }
@@ -505,7 +506,7 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
   }
   if (attacker.keywords.includes(KEYWORDS.HUO_GONG)) rawAttackerDmg *= fireMultiplier(state, defender, targetLoc);
   damageDealt = rawAttackerDmg;
-  defender.hp -= damageDealt;
+  defender.hp -= combatDamageRedirect(state, defender, damageDealt);
   defender.status[STATUS_TYPES.DAMAGED] = true;
   if (defender.hp <= 0) {
     defenderDied = true;
@@ -527,7 +528,7 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
       rawCounterDmg = Math.max(0, rawCounterDmg - getJianZhenValue(attacker));
     }
     counterDealt = rawCounterDmg;
-    attacker.hp -= counterDealt;
+    attacker.hp -= combatDamageRedirect(state, attacker, counterDealt);
     if (counterDealt > 0) attacker.status[STATUS_TYPES.DAMAGED] = true;
     if (attacker.hp <= 0) attackerDied = true;
   }

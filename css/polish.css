@@ -417,3 +417,24 @@ body.deck-builder-open #modal-card-inspector { z-index: 1700 !important; }
 .seal-lbiao { background: #6f9e3a; }
 .hm-stripes .s-lbiao { background: #6f9e3a; }
 .hqp-field .enemy-chip.k-lbiao.active { background: #6f9e3a; border-color: #cfe6a8; }
+.card-hand.faction-yshu { border-color: #8a6a3c !important; }
+.card-hand.faction-yshu .card-header-bar { background: linear-gradient(180deg, #8a6a3c, #3e2c14) !important; }
+.board-unit.faction-yshu { border-color: #e0c89a !important; }
+.board-unit.faction-yshu .unit-header-bar { background: linear-gradient(180deg, #8a6a3cf7, #3e2c14d9) !important; }
+.faction-emblem.faction-yshu { background: radial-gradient(circle at 35% 30%, #e0c89a, #3e2c14) !important; border-color: #e0c89a !important; }
+.card-hidden.faction-yshu .card-back-pattern { background: radial-gradient(circle at 50% 50%, rgba(217,179,106,.25), transparent 60%), repeating-linear-gradient(45deg, rgba(217,179,106,.08) 0 2px, transparent 2px 9px), linear-gradient(180deg, #8a6a3c, #3e2c14) !important; }
+.card-inspector-tooltip .inspector-card.faction-yshu { border-color: #e0c89a; }
+.seal-yshu { background: #8a6a3c; }
+.hm-stripes .s-yshu { background: #8a6a3c; }
+.hqp-field .enemy-chip.k-yshu.active { background: #8a6a3c; border-color: #e0c89a; }
+
+/* 明牌 */
+.opp-known-cards { display: flex; align-items: center; gap: 4px; max-width: 34vw; overflow-x: auto; scrollbar-width: none; }
+.opp-known-cards .okc-label { font-size: 11px; color: #e8c877; letter-spacing: 1px; flex: none; }
+.opp-known-cards .okc-chip { flex: none; font-size: 11px; line-height: 1; padding: 4px 7px; border-radius: 10px; border: 1px solid rgba(232,200,119,.55); background: rgba(40,28,14,.85); color: #f3e3bd; cursor: pointer; white-space: nowrap; }
+.card-hand.card-known::after { content: '明'; position: absolute; left: 4px; bottom: 4px; font-size: 10px; line-height: 1; padding: 2px 3px; border-radius: 3px; background: rgba(180,60,40,.9); color: #fff; pointer-events: none; z-index: 5; }
+/* 图鉴/卡池：卡牌内部元素（费用、标签等）自成层叠上下文，滚动时不再压过顶部导航与筛选栏 */
+.db-pool .db-tile, .db-deck-grid > * { isolation: isolate; position: relative; z-index: 0; }
+.db-codex-bar { z-index: 20; }
+.db-hub-tabs { position: relative; z-index: 21; }
+.db-codex-bar { top: -6px; padding-top: 6px; background: #1c140c; box-shadow: 0 8px 10px -4px #1c140c; }

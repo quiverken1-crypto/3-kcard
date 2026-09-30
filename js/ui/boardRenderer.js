@@ -15,7 +15,8 @@ import {
   renderHandCard,
   renderHiddenCard,
   renderUnitOnBoard,
-  escapeHtml
+  escapeHtml,
+  showCardDetails
 } from './cardRenderer.js';
 import { KEYWORDS, hasKeyword } from '../engine/constants.js';
 import { getAttackValue, getActionCost, qiMouDiscount, unitDeployCost } from '../engine/cardSkills.js';
@@ -414,6 +415,8 @@ export function renderResourceHUD(state, viewerFaction = 'WEI') {
     // Counts
     const oppHandCount = document.getElementById('opp-hand-count');
     if (oppHandCount) oppHandCount.textContent = `${opp.hand?.length ?? 0} / 9`;
+    // 明牌（军机、撤回、检索等公开过的敌方手牌）：点名字看详情
+    renderKnownCards(opp.hand || []);
 
     const oppDeckCount = document.getElementById('opp-deck-count');
     if (oppDeckCount) oppDeckCount.textContent = String(Array.isArray(opp.deck) ? opp.deck.length : (opp.deck?.count ?? 0));
@@ -640,4 +643,27 @@ export class FloatingCombatFX {
       }
     });
   }
+}
+
+/** 敌方手牌里的明牌：在顶栏手牌数旁边列出，点击看卡牌详情 */
+function renderKnownCards(hand) {
+  const badge = document.getElementById('opp-hand-count')?.closest('.resource-badge');
+  if (!badge) return;
+  let box = document.getElementById('opp-known-cards');
+  const known = hand.filter(c => c && c._known && c.name);
+  if (!known.length) { box?.remove(); return; }
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'opp-known-cards';
+    box.className = 'opp-known-cards';
+    badge.insertAdjacentElement('afterend', box);
+  }
+  const sig = known.map(c => c.instanceId).join(',');
+  if (box.dataset.sig === sig) return;
+  box.dataset.sig = sig;
+  box.innerHTML = `<span class="okc-label" title="对手手里已公开的牌">明牌</span>` +
+    known.map(c => `<button type="button" class="okc-chip" data-id="${escapeHtml(c.instanceId)}">${escapeHtml(c.name)}</button>`).join('');
+  box.querySelectorAll('.okc-chip').forEach(b => {
+    b.onclick = () => { const c = hand.find(x => x.instanceId === b.dataset.id); if (c) showCardDetails(c); };
+  });
 }

@@ -1,6 +1,6 @@
 /**
- * factions2.js — 袁绍 / 黄巾 / 董卓 / 西凉（马腾）/ 刘表 五家的武将技能、战法、反制
- * （另含魏“奇船避箭”、蜀“三顾茅庐”）
+ * factions2.js — 袁绍 / 黄巾 / 董卓 / 西凉（马腾）/ 刘表 / 袁术 六家的武将技能、战法、反制
+ * （另含魏“奇船避箭”、蜀“三顾茅庐”“诸葛亮（草庐）”）
  *
  * 全部通过 cardSkills.js 的开放注册表与扩展点（EXT / PLUGIN_HOOKS / DEPLOY_SKILLS / TACTICS / COUNTERS / CHOICE_SPECS）挂载，
  * 不改核心流程。本模块只定义函数，由 cardSkills.js 在自身初始化完成后调用 installFactions2()。
@@ -8,9 +8,9 @@
  */
 
 import { FACTIONS, STATUS_TYPES, TROOP_TYPES, GAME_CONFIG, hasKeyword } from './constants.js';
-import { drawCard, getAllUnits, findUnit, removeUnitFromBoard, createCard, PRESTIGE_OVERFLOW_HOOKS } from './state.js';
+import { drawCard, getAllUnits, findUnit, removeUnitFromBoard, createCard, adjustPrestige, PRESTIGE_OVERFLOW_HOOKS } from './state.js';
 import {
-  EXT, PLUGIN_HOOKS, DEPLOY_SKILLS, DEPLOY_TARGETS, TACTICS, COUNTERS, CHOICE_SPECS,
+  EXT, PLUGIN_HOOKS, DEPLOY_SKILLS, DEPLOY_TARGETS, TACTICS, COUNTERS, CHOICE_SPECS, ACTIVE_SKILLS, triggerCounters, discardRandom, extRun,
   queueChoice, chosenOr, buff, damageUnit, damageHq, healHq, suppressUnit, retreatUnit, log, searchDeck, putInHand,
   applyInhibitionLocal, adjacentUnits, canSkillTarget, canTargetEnemy, canBeSuppressed, baseId, opp, isId,
   applyEnterKeywords, onUnitEnter, resetCardState, getAttackValue, unitTerrain, effectiveTroop
@@ -101,6 +101,47 @@ function raiseCap(state, pid, n) {
   p.provisionsCap = Math.max(1, p.mainGranaryCap + p.extraGranaryCap);
   p.provisions = Math.min(p.provisions, p.provisionsCap);
 }
+
+/** 失去粮草上限（袁术·伪帝、舒邵·赈济、淮南军会响应） */
+function loseCap(state, pid, n = 1, source = '') {
+  if (n <= 0) return;
+  raiseCap(state, pid, -n);
+  log(state, pid, `${source ? source + '：' : ''}粮草上限-${n}`);
+  for (const _ of ownWith(state, pid, 'yshu_yuan_shu')) { state.players[pid].provisions += 3 * n; log(state, pid, `袁术·伪帝：获得${3 * n}粮草`); }
+  for (const _ of ownWith(state, pid, 'yshu_shu_shao')) { adjustPrestige(state, pid, n); log(state, pid, `舒邵·赈济：声望+${n}`); }
+  for (const u of ownWith(state, pid, 'yshu_huai_nan')) { buff(u, n, n); log(state, pid, `淮南军：+${n}+${n}`); }
+}
+
+/** 从手牌弃1张（会触发弃军、截众、汝南亲卫） */
+function discardFromHand(state, pid, card, reason = '弃牌') {
+  const p = state.players[pid];
+  const i = p.hand.indexOf(card);
+  if (i === -1) return false;
+  p.hand.splice(i, 1);
+  p.discard.push(card);
+  log(state, pid, `${reason}：弃置【${card.name}】`);
+  extRun('discard', state, pid, card);
+  return true;
+}
+const QI_JUN_IDS = ['yshu_li_feng', 'yshu_yue_jiu', 'yshu_liang_gang'];
+/** 自动挑一张要弃的手牌：优先【弃军】牌，其次趁火打劫，再其次最低费 */
+function pickDiscard(hand) {
+  return hand.find(c => QI_JUN_IDS.includes(baseId(c.cardId))) || hand.find(c => baseId(c.cardId) === 'yshu_chen_huo')
+    || [...hand].sort((a, b) => (a.cost || 0) - (b.cost || 0))[0];
+}
+function onDiscard(state, pid, card) {
+  if ((state._discardDepth || 0) > 4) return;
+  state._discardDepth = (state._discardDepth || 0) + 1;
+  try {
+    if (card && QI_JUN_IDS.includes(baseId(card.cardId))) { drawCard(state, pid); drawCard(state, pid); log(state, pid, `${card.name}·弃军：抽2张牌`); }
+    for (const _ of ownWith(state, pid, 'yshu_liu_xun')) discardRandom(state, opp(pid), 1, '刘勋·截众');
+    for (const _ of ownWith(state, pid, 'yshu_ru_nan')) {
+      for (const e of [...getAllUnits(state, opp(pid))]) damageUnit(state, e, 1, '汝南亲卫');
+      log(state, pid, '汝南亲卫：对所有敌军造成1伤害');
+    }
+  } finally { state._discardDepth -= 1; }
+}
+const occupied = (state, pid) => ZONES.filter(zk => state.battlefield.frontline[zk].occupant === pid && state.battlefield.frontline[zk].units.length).length;
 
 function controlUnit(state, owner, target, source) {
   const support = state.battlefield.support[owner].slots;
@@ -243,6 +284,22 @@ const DEPLOY = {
     if (others(state, unit.faction, unit).some(u => active(u) && hasKeyword(u, '掳掠'))) { drawCard(state, unit.faction); log(state, unit.faction, '樊稠·索兵：抽1张牌'); }
   },
   xl_ma_teng: xiangGong, xl_han_sui: xiangGong, xl_bei_gong: xiangGong, xl_li_wen_hou: xiangGong, xl_bian_zhang: xiangGong,
+  ys_ju_yi(state, unit) {
+    const list = getAllUnits(state, opp(unit.faction)).filter(u => u !== unit);
+    const t = [...list].sort((a, b) => ((a.cost || 0) - (b.cost || 0)) || (a.atk - b.atk))[0]; // 由敌方选择
+    if (!t) return;
+    const cav = t.troopType === TROOP_TYPES.CAVALRY;
+    removeUnitFromBoard(state, t.instanceId);
+    log(state, unit.faction, `鞠义·夺帅：敌方交出【${t.name}】`);
+    if (cav) { drawCard(state, unit.faction); log(state, unit.faction, '鞠义·夺帅：是马军，摸1张牌'); }
+  },
+  yshu_lei_bo(state, unit) { liuKou(state, unit); },
+  yshu_chen_lan(state, unit) { liuKou(state, unit); },
+  yshu_han_yin(state, unit) {
+    const list = others(state, unit.faction, unit).filter(u => kingdomOf(u) !== 'yshu');
+    for (const u of list) buff(u, 1, 1);
+    log(state, unit.faction, `韩胤·联姻：${list.length}个非袁术阵营友军+1+1`);
+  },
   lbiao_wang_can(state, unit) {
     const n = state.players[unit.faction].prestige || 0;
     for (let i = 0; i < n; i++) drawCard(state, unit.faction);
@@ -272,6 +329,10 @@ const DEPLOY = {
     log(state, unit.faction, `刘琦·合兵：与【${t.name}】互为犄角，一方受伤由另一方承受`);
   }
 };
+
+function liuKou(state, unit) {
+  if (placeUnit(state, unit.faction, makeCard(state, unit.faction, 'yshu_liu_kou'), 'SUPPORT')) log(state, unit.faction, `${unit.name}·山寇：流寇加入支援阵线`);
+}
 
 function jiaJi(state, unit, who) {
   const t = chosenOr(TARGETS.hj_liu_pi.list(state, unit.faction, unit), unit, l => [...l].sort((a, b) => b.atk - a.atk)[0]);
@@ -424,7 +485,7 @@ const TACTIC_SPECS = {
   },
   lbiao_xiu_yan: { play(state, owner) { raiseCap(state, owner, 1); healHq(state, owner, 3, true); log(state, owner, '修堰溉田：粮草上限+1，主城+3'); } },
   lbiao_nian_gu: {
-    play(state, owner) { raiseCap(state, owner, 1); raiseCap(state, opp(owner), -1); log(state, owner, '年谷独登：己方粮草上限+1，敌方粮草上限-1'); }
+    play(state, owner) { raiseCap(state, owner, 1); log(state, owner, '年谷独登：己方粮草上限+1'); loseCap(state, opp(owner), 1, '年谷独登'); }
   },
   lbiao_liang_gu: {
     play(state, owner) {
@@ -458,6 +519,86 @@ const TACTIC_SPECS = {
     autoPick: (state, owner, list) => [...list].sort(byValueDesc)[0],
     play(state, owner, card, t) { removeUnitFromBoard(state, t.instanceId); log(state, owner, `鸿门宴：消灭【${t.name}】`); }
   },
+  dz_du_lan: {
+    play(state, owner) {
+      const list = getAllUnits(state, opp(owner)).filter(u => u.status?.[STATUS_TYPES.INHIBITED] || u.status?.[STATUS_TYPES.SUPPRESSED]);
+      for (const u of list) removeUnitFromBoard(state, u.instanceId);
+      log(state, owner, `独揽大权：消灭${list.length}个被抑制或压制的敌军`);
+    }
+  },
+  xl_yun_tun: {
+    play(state, owner) {
+      const list = getAllUnits(state, owner).filter(u => u._atkTurn === state.turnNumber || (u.status?.attacksThisTurn || 0) > 0);
+      for (const u of list) returnToHand(state, u, '云屯鸟散');
+      state.players[owner].provisions += 2 * list.length;
+      log(state, owner, `云屯鸟散：${list.length}个单位返回手牌，获得${2 * list.length}粮草`);
+    }
+  },
+  // ---- 袁术 ----
+  yshu_si_shi: {
+    play(state, owner) {
+      const n = getAllUnits(state, opp(owner)).length;
+      for (let i = 0; i < n; i++) drawCard(state, owner);
+      log(state, owner, `四世五公：敌方场上${n}个单位，抽${n}张牌`);
+    }
+  },
+  yshu_la_long: {
+    targets: (state, owner) => {
+      const cap = state.players[owner].provisionsCap;
+      return [...allEnemies(state, owner), ...getAllUnits(state, owner)].filter(u => getAttackValue(state, u) <= cap);
+    },
+    autoPick: (state, owner, list) => [...list.filter(u => u.faction !== owner)].sort(byValueDesc)[0] || list[0],
+    play(state, owner, card, t) {
+      removeUnitFromBoard(state, t.instanceId);
+      log(state, owner, `拉拢：消灭【${t.name}】`);
+      loseCap(state, owner, 1, '拉拢');
+    }
+  },
+  yshu_xie_chi: {
+    targets: (state, owner) => [...allEnemies(state, owner), ...getAllUnits(state, owner)],
+    autoPick: (state, owner, list) => [...list.filter(u => u.faction !== owner)].sort(byValueDesc)[0] || list[0],
+    play(state, owner, card, t) { returnToHand(state, t, '挟持'); discardRandom(state, opp(owner), 1, '挟持'); }
+  },
+  yshu_bing_fen: {
+    play(state, owner) {
+      const n = occupied(state, owner);
+      if (n) for (const u of getAllUnits(state, owner)) buff(u, n, n);
+      log(state, owner, `兵分七路：占领${n}个前线，己方单位+${n}+${n}`);
+    }
+  },
+  yshu_chen_huo: {
+    optionalTarget: true,
+    targets: allEnemies,
+    autoPick: (state, owner, list) => [...list].sort((a, b) => ((b.hp <= 2) - (a.hp <= 2)) || byValueDesc(a, b))[0],
+    play(state, owner, card, t) {
+      if (t) damageUnit(state, t, 2, '趁火打劫'); else damageHq(state, opp(owner), 2, '趁火打劫');
+      discardRandom(state, opp(owner), 1, '趁火打劫');
+    }
+  },
+  yshu_heng_zheng: {
+    play(state, owner) {
+      state.players[owner].provisions += 3;
+      drawCard(state, owner);
+      log(state, owner, '横征暴敛：获得3粮草，抽1张牌');
+      loseCap(state, owner, 1, '横征暴敛');
+    }
+  },
+  yshu_jian_hao: {
+    play(state, owner) {
+      drawCard(state, owner); drawCard(state, owner);
+      const d = state.players[opp(owner)].provisionsCap - state.players[owner].provisionsCap;
+      if (d > 0) state.players[owner].provisions += 2 * d;
+      log(state, owner, `僭号称帝：抽2张牌${d > 0 ? `，粮草上限少${d}，获得${2 * d}粮草` : ''}`);
+    }
+  },
+  yshu_qiong_tu: {
+    play(state, owner) {
+      for (const u of [...getAllUnits(state, opp(owner))]) damageUnit(state, u, 2, '穷途末路');
+      damageHq(state, opp(owner), 2, '穷途末路');
+      log(state, owner, '穷途末路：对所有敌方目标造成2伤害');
+      if (state.players[opp(owner)].hp > 0) loseCap(state, owner, 1, '穷途末路');
+    }
+  },
   shu_san_gu: {
     precheck: (state, owner) => state.players[owner].deck.length > 0,
     precheckMsg: '牌堆已空',
@@ -490,6 +631,43 @@ const COUNTER_SPECS = {
       log(state, owner, `反制【奇船避箭】：【${u.name}】获得坚阵3直到回合结束`);
     }
   },
+  yshu_you_sha: {
+    event: 'ENEMY_MOVE',
+    check: (state, owner, ctx) => Boolean(ctx.unit && ctx.unit.faction !== owner && ctx.toZoneType === 'FRONTLINE' && onBoard(state, ctx.unit) && canTargetEnemy(ctx.unit)),
+    fire(state, owner, ctx) {
+      log(state, owner, `反制【诱杀】：对【${ctx.unit.name}】造成3点伤害`);
+      if (damageUnit(state, ctx.unit, 3, '诱杀')) { drawCard(state, owner); log(state, owner, '诱杀：得手，抽1张牌'); }
+    }
+  },
+  yshu_ci_sha: {
+    event: 'ENEMY_DEPLOY',
+    check: (state, owner, ctx) => Boolean(ctx.unit && ctx.unit.faction !== owner && onBoard(state, ctx.unit)),
+    fire(state, owner, ctx) { removeUnitFromBoard(state, ctx.unit.instanceId); log(state, owner, `反制【刺杀】：【${ctx.unit.name}】刚部署即被刺杀`); }
+  },
+  yshu_zhong_zhong: {
+    event: 'OWN_DEFEATED',
+    check: (state, owner, ctx) => Boolean(ctx.unit && ctx.owner === owner && state.players[owner].hand.length > 0),
+    fire(state, owner, ctx) {
+      const p = state.players[owner];
+      const cost = pickDiscard(p.hand);
+      discardFromHand(state, owner, cost, '冢中枯骨');
+      for (const pl of [p, state.players[opp(owner)]]) {
+        const i = pl.discard.indexOf(ctx.unit);
+        if (i === -1) continue;
+        pl.discard.splice(i, 1);
+        resetCardState(ctx.unit);
+        ctx.unit.faction = owner;
+        putInHand(state, owner, ctx.unit);
+        log(state, owner, `反制【冢中枯骨】：【${ctx.unit.name}】返回手牌`);
+        break;
+      }
+    }
+  },
+  yshu_lu_zhong: {
+    event: 'OWN_HQ_DAMAGED',
+    check: (state, owner, ctx) => ctx.playerId === owner && ctx.amount > 0,
+    fire(state, owner, ctx) { log(state, owner, `反制【路中悍鬼】：对敌方主城造成${ctx.amount}点伤害`); damageHq(state, opp(owner), ctx.amount, '路中悍鬼'); }
+  },
   lbiao_bao_jing: {
     event: 'OWN_HQ_DAMAGED',
     check: (state, owner, ctx) => ctx.playerId === owner && ctx.amount > 1,
@@ -506,6 +684,8 @@ function statAuras(state) {
     const weiGong = units.filter(u => isId(u, 'hj_bo_cai') || isId(u, 'hj_guan_hai')).length;
     const caiMao = countOf(state, pid, 'lbiao_cai_mao') > 0 && !enemies.some(u => u.troopType === TROOP_TYPES.NAVY);
     const xlCount = units.filter(isXL).length;
+    const heWei = Math.max(0, occupied(state, pid) - occupied(state, opp(pid))) * countOf(state, pid, 'yshu_zhang_xun');
+    const nonYshu = units.filter(u => kingdomOf(u) !== 'yshu').length;
     const fx = fxOf(state, pid);
     for (const u of units) {
       // ---- 数值 ----
@@ -515,6 +695,8 @@ function statAuras(state) {
         if (isId(u, 'xl_guan_xi')) a += xlCount - 1;
         if (isHJJ(u)) a += weiGong;
         if (caiMao && u.troopType === TROOP_TYPES.NAVY) a += 1;
+        if (heWei && findUnit(state, u.instanceId)?.zoneType === 'FRONTLINE') a += heWei;
+        if (isId(u, 'yshu_qiao_rui')) a += nonYshu;
       }
       if (u.status?.[STATUS_TYPES.INHIBITED]) u._f2Aura = 0; // 抑制已把数值重置
       const have = u._f2Aura || 0;
@@ -529,6 +711,7 @@ function statAuras(state) {
       if (active(u)) {
         if (isId(u, 'lbiao_jiang_xia') && unitTerrain(state, u)?.type === 'WATER') want.push('坚阵1', '矢石');
         if (fx.f2TieQi && u.troopType === TROOP_TYPES.CAVALRY) want.push('突袭');
+        if (isId(u, 'shu_zhu_ge_liang_cl') && u._acted) want.push('警戒');
       }
       const had = u._f2Kw || [];
       for (const k of had) if (!want.includes(k)) { const i = u.keywords.indexOf(k); if (i !== -1) u.keywords.splice(i, 1); }
@@ -558,9 +741,11 @@ function onDeath(state, unit, owner, { banish }) {
       if (id === 'xl_liang_xing') { drawCard(state, owner); log(state, owner, '梁兴·溃掠：抽1张牌'); }
     }
   }
+  if (!banish) triggerCounters(state, 'OWN_DEFEATED', { unit, owner });
   if (!banish) {
     for (const _ of ownWith(state, owner, 'xl_han_sui')) damageHq(state, foe, 1, '韩遂·权变');
     for (const _ of ownWith(state, owner, 'xl_cheng_gong_ying')) { drawCard(state, owner); log(state, owner, '成公英·收拢：抽1张牌'); }
+    for (const _ of ownWith(state, owner, 'yshu_yang_hong')) { drawCard(state, owner); log(state, owner, '杨弘·收拢：抽1张牌'); }
   }
   // 锋不可当：本回合每消灭1个敌军，己方单位+1+1直到回合结束
   const ap = state.activePlayer;
@@ -589,6 +774,7 @@ function afterAttack(state, attacker, defender, result, targetIsHq) {
   const dAlive = defender && onBoard(state, defender);
   const t = state.turnNumber;
   attacker._atkTurn = t;
+  attacker._acted = true;
   if (aAlive && isId(attacker, 'lbiao_kuai_yue') && result.damageDealt > 0) { healHq(state, attacker.faction, result.damageDealt, true); log(state, attacker.faction, `蒯越·定乱：主城+${result.damageDealt}`); }
   if (aAlive && isId(attacker, 'hj_zhang_yan') && attacker._feiYan !== t) feiYan(state, attacker);
   if (targetIsHq || !defender) return;
@@ -610,6 +796,9 @@ function afterAttack(state, attacker, defender, result, targetIsHq) {
   // 文聘（刘表）·镇守
   if (aAlive && dAlive && isId(attacker, 'lbiao_wen_pin') && result.damageDealt > 0) suppressUnit(state, defender, '文聘·镇守');
   if (aAlive && dAlive && isId(defender, 'lbiao_wen_pin') && result.counterDealt > 0) suppressUnit(state, attacker, '文聘·镇守');
+  // 张闿·刺杀：消灭受到本单位对战伤害的单位
+  if (aAlive && dAlive && isId(attacker, 'yshu_zhang_kai') && result.damageDealt > 0) { removeUnitFromBoard(state, defender.instanceId); log(state, attacker.faction, `张闿·刺杀：【${defender.name}】被刺杀`); }
+  if (aAlive && dAlive && isId(defender, 'yshu_zhang_kai') && result.counterDealt > 0) { removeUnitFromBoard(state, attacker.instanceId); log(state, defender.faction, `张闿·刺杀：【${attacker.name}】被刺杀`); }
   // 牛辅·惊乱：敌方回合受到伤害
   if (dAlive && isId(defender, 'dz_niu_fu') && result.damageDealt > 0) jingLuan(state, defender);
 }
@@ -650,6 +839,22 @@ function onTurnEnd(state, pid) {
   for (const _ of ownWith(state, pid, 'hj_zhang_bao')) {
     for (const u of getAllUnits(state, pid)) u.hp = Math.min(u.maxHp, u.hp + 2);
     log(state, pid, '张宝·大医：己方单位各恢复2点');
+  }
+  // 袁术·奢靡：抽1张，弃1张
+  for (const _ of ownWith(state, pid, 'yshu_yuan_shu')) {
+    drawCard(state, pid);
+    const c = pickDiscard(p.hand);
+    if (c) discardFromHand(state, pid, c, '袁术·奢靡');
+  }
+  // 趁火打劫：己方回合结束时留在手里的弃掉
+  for (const c of p.hand.filter(c => baseId(c.cardId) === 'yshu_chen_huo')) discardFromHand(state, pid, c, '趁火打劫');
+  // 纪灵·压境：敌方回合结束时若在前线，敌方跳过下个抽牌阶段
+  for (const jl of ownWith(state, opp(pid), 'yshu_ji_ling')) {
+    if (findUnit(state, jl.instanceId)?.zoneType === 'FRONTLINE') { p.skipNextDraw = true; log(state, opp(pid), '纪灵·压境：对手跳过下个抽牌阶段'); break; }
+  }
+  // 杨奉·护驾：本回合未掳掠，获得守护直到下个己方回合开始
+  for (const u of ownWith(state, pid, 'hj_yang_feng')) {
+    if (u._luLueTurn !== state.turnNumber && !u.keywords.includes('守护')) { u.keywords.push('守护'); u._huJia = true; log(state, pid, '杨奉·护驾：获得守护'); }
   }
   // 氐人锐骑：己方回合结束时返回手牌
   for (const u of ownWith(state, pid, 'xl_di_ren')) returnToHand(state, u, '氐人锐骑');
@@ -722,6 +927,7 @@ export function installFactions2() {
     if (isId(unit, 'ys_chen_lin')) atk += state.players[unit.faction].prestige || 0; // 墨兵：战力=声望（卡面战力0）
     if (unit.troopType === TROOP_TYPES.CAVALRY && units.some(u => isId(u, 'xl_ma_teng'))) atk += 1; // 马腾·征西
     if (isId(unit, 'hj_hei_shan') && unitTerrain(state, unit, loc)?.type === 'MOUNTAIN') atk += 3;
+    if (isId(unit, 'yshu_shou_chun') && state.players[unit.faction].provisionsCap <= 3) atk *= 2; // 寿春锐卒
     // 先登死士：敌方回合中，己方伏击单位战力翻倍
     if (unit.faction !== state.activePlayer && active(unit) && hasKeyword(unit, '伏击') && units.some(u => isId(u, 'ys_xian_deng'))) atk *= 2;
     return atk;
@@ -775,20 +981,47 @@ export function installFactions2() {
   EXT.cannotAttack.push((state, unit) => isId(unit, 'xl_song_jian'));
   EXT.longRange.push((state, unit) => isId(unit, 'ys_qiang_nu'));
   EXT.hqAttackMult.push((m, state, unit) => (isId(unit, 'ys_jue_zi') ? m * 2 : m));
-  EXT.ignoresJianZhen.push(unit => isId(unit, 'ys_gao_lan') || isId(unit, 'lbiao_huang_zhong'));
+  EXT.ignoresJianZhen.push(unit => isId(unit, 'ys_gao_lan') || isId(unit, 'lbiao_huang_zhong') || isId(unit, 'yshu_sun_ce'));
+  // 刘琦·合兵：对战伤害同样互相转移
+  EXT.combatDamage.push((amount, state, unit) => {
+    if (!unit._heBing || state._heBingBusy) return amount;
+    const partner = findUnit(state, unit._heBing)?.unit;
+    const linked = partner && partner.faction === unit.faction && (isId(unit, 'lbiao_liu_qi') || isId(partner, 'lbiao_liu_qi'));
+    if (!linked) return amount;
+    state._heBingBusy = true;
+    try { damageUnit(state, partner, amount, '合兵转移'); } finally { state._heBingBusy = false; }
+    log(state, unit.faction, `刘琦·合兵：【${unit.name}】受到的${amount}点伤害转由【${partner.name}】承受`);
+    return 0;
+  });
+  // 诸葛亮·对策：己方军队成为攻击目标时+1+1
+  EXT.attacked.push((state, defender) => {
+    if (!defender || defender.troopType === TROOP_TYPES.STRATEGIST) return;
+    for (const _ of ownWith(state, defender.faction, 'shu_zhu_ge_liang_cl')) { buff(defender, 1, 1); log(state, defender.faction, `诸葛亮·对策：【${defender.name}】+1+1`); }
+  });
+  EXT.discard.push(onDiscard);
+  ACTIVE_SKILLS.yshu_yan_xiang = {
+    name: '直谏', desc: '弃1张手牌，抽1张牌（每回合1次）', needsHandCard: true, handPrompt: '点一张手牌弃置',
+    apply(state, unit, payload) {
+      const card = state.players[unit.faction].hand.find(c => c.instanceId === payload?.cardId);
+      if (!card) throw new Error('请选择要弃置的手牌');
+      discardFromHand(state, unit.faction, card, '阎象·直谏');
+      drawCard(state, unit.faction);
+    }
+  };
   const tieQi = (state, unit) => unit.troopType === TROOP_TYPES.CAVALRY && Boolean(state.turnEffects?.[unit.faction]?.f2TieQi);
   EXT.ignoresGuardian.push(tieQi);
   EXT.ignoresWeiWo.push(tieQi);
   EXT.taunt.push((state, unit) => isId(unit, 'ys_yan_liang') && canSkillTarget(unit));
   EXT.turnStart.push((state, pid) => {
-    for (const _ of ownWith(state, pid, 'ys_yuan_shao')) { drawCard(state, pid); log(state, pid, '袁绍·盟主：额外摸1张牌'); }
     for (const u of ownWith(state, pid, 'ys_chun_yu_qiong')) {
-      if ((u._atkTurn ?? -99) < state.turnNumber - 2 && (u._enteredTurn ?? -99) < state.turnNumber - 2) {
+      if (u._attackedOnTurn !== state.turnNumber - 1) {
         buff(u, -1, -1);
-        log(state, pid, '淳于琼·骄惰：上回合未出战，-1-1');
+        log(state, pid, '淳于琼·骄惰：上回合未受攻击，-1-1');
         if (u.hp <= 0) removeUnitFromBoard(state, u.instanceId);
       }
     }
+    // 杨奉·护驾到期
+    for (const u of getAllUnits(state, pid).filter(x => x._huJia)) { u._huJia = false; const i = u.keywords.indexOf('守护'); if (i !== -1) u.keywords.splice(i, 1); }
   });
   EXT.tactic.push((state, owner) => {
     // 郭图·误策：双方使用战法时，使己方任一目标受到2点伤害
@@ -810,6 +1043,14 @@ export function installFactions2() {
       else damageHq(state, opp(owner), 2, '贾诩·乱武');
     }
   });
+  // 袁绍·盟主：己方每次摸牌时，额外摸1张（额外摸的牌不再触发盟主，但会触发沮授等摸牌效果）
+  EXT.draw.push((state, pid) => {
+    if (state._mengZhu) return;
+    const n = countOf(state, pid, 'ys_yuan_shao');
+    if (!n) return;
+    state._mengZhu = true;
+    try { for (let i = 0; i < n; i++) drawCard(state, pid); } finally { state._mengZhu = false; }
+  });
   EXT.draw.push((state, pid, card) => {
     const p = state.players[pid];
     if (!card || !p.hand.includes(card) || !p.deck.length || state._yuanMouBusy) return;
@@ -818,6 +1059,7 @@ export function installFactions2() {
     pickOrQueue(state, pid, 'f2YuanMou', null, [{ instanceId: 'keep', name: `留下【${card.name}】` }, { instanceId: 'swap', name: `换成【${top.name}】` }], { drawnId: card.instanceId, topId: top.instanceId });
   });
   EXT.moved.push((state, unit, from, to) => {
+    unit._acted = true;
     if (from === 'SUPPORT' && to === 'FRONTLINE' && (isId(unit, 'ys_yan_liang') || isId(unit, 'ys_wen_chou'))) { buff(unit, 1, 1); log(state, unit.faction, `${unit.name}·先锋：+1+1`); }
     if (isId(unit, 'hj_zhang_yan') && unit._feiYan !== state.turnNumber && unit.faction === state.activePlayer) feiYan(state, unit);
     hengJiang(state, unit, to);
@@ -829,6 +1071,8 @@ export function installFactions2() {
   EXT.luLue.push((state, pid, choice, opt, amount) => {
     const src = findUnit(state, choice?.sourceId)?.unit;
     if (!src) return;
+    src._luLueTurn = state.turnNumber;
+    if (isId(src, 'yshu_liu_kou') && placeUnit(state, pid, makeCard(state, pid, 'yshu_liu_kou'), 'SUPPORT')) log(state, pid, '流寇：掳掠后复制1个流寇');
     if (isId(src, 'dz_li_jue') && amount > 0) damageHq(state, opp(pid), amount, '李傕·焚城');
     if (isId(src, 'dz_yang_ding')) {
       const list = getAllUnits(state, opp(pid)).filter(canSkillTarget);

@@ -14,7 +14,7 @@
     {
       "id": "c_sima_yi",                 // 小写字母开头，字母/数字/下划线，3–41 位；不能与官方卡重复
       "name": "司马懿",                  // ≤12 字
-      "kingdom": "f_jin",                // wei / shu / wu / lb / gsz / ys / hj / dz / xl / lbiao 或自定义势力 key
+      "kingdom": "f_jin",                // wei / shu / wu / lb / gsz / ys / hj / dz / xl / lbiao / yshu 或自定义势力 key
       "type": "UNIT",                    // UNIT 单位 / TACTIC 战法 / COUNTER 反制
       "troopType": "STRATEGIST",         // INFANTRY 步兵 / CAVALRY 骑兵 / NAVY 水军 / STRATEGIST 谋士 / ARCHER 器械
       "cost": 5, "actionCost": 2, "atk": 3, "hp": 5,

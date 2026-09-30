@@ -50,7 +50,7 @@ SGK.skills.PLUGIN_HOOKS.afterAttack.push((state, atk, def, result) => console.lo
 | `engine/preview.js` | 伤害预演（克隆局面后模拟一次动作） |
 | `engine/prng.js` | 可复现随机数 |
 | **`js/data/`** | **数据** |
-| `data/cardDB.js` | **卡牌数据库**（实体卡）：魏、蜀、吴、吕布、公孙瓒、袁绍(ys)、黄巾(hj)、董卓(dz)、西凉(xl)、刘表(lbiao) + 通用战法；紧凑行格式见文件头注释 |
+| `data/cardDB.js` | **卡牌数据库**（实体卡）：魏、蜀、吴、吕布、公孙瓒、袁绍(ys)、黄巾(hj)、董卓(dz)、西凉(xl)、刘表(lbiao)、袁术(yshu) + 通用战法；紧凑行格式见文件头注释 |
 | `data/terrains.js` | 地形定义与各势力主城 `HQ_CARDS` |
 | `data/presetDecks.js` | 手工配置的预设卡组（标准预设由卡牌库自动生成） |
 | `data/deckStore.js` | 卡组：本机存储、校验、双阵营、分享码（`SGK1-…`） |

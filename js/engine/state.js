@@ -363,6 +363,7 @@ export function drawCard(state, playerId) {
   }
 
   const drawn = player.deck.shift();
+  if (drawn) delete drawn._known; // 从牌堆摸上来的是暗牌
 
   // Hand Cap 9: Overflow Burn
   if (player.hand.length >= GAME_CONFIG.HAND_LIMIT) {
@@ -428,6 +429,9 @@ export function startTurn(state, playerId) {
   // Rule: 1st player on turn 1 skips draw
   if (state.turnNumber === 1 && playerId === state.firstPlayer) {
     state.combatLog.push({ type: 'DRAW_SKIPPED', playerId, reason: 'P1 Turn 1 skip' });
+  } else if (player.skipNextDraw) {
+    player.skipNextDraw = false;
+    state.combatLog.push({ type: 'SKILL', playerId, message: '纪灵·压境：本回合跳过抽牌' });
   } else {
     drawCard(state, playerId);
   }

@@ -74,7 +74,7 @@ export function getCardArtUrl(card) {
   // 自定义卡：可填 https 图片链接作为卡面
   if (card?.art && /^https:\/\/[^\s'\"()<>\\]{4,300}$/.test(card.art)) return card.art;
   const id = String(card?.cardId || '').replace(/_[0-9]+$/, '');
-  const m = id.match(/^(wei|shu|wu|lb|gsz|ys|hj|dz|xl|lbiao)_([a-z_]+)$/);
+  const m = id.match(/^(wei|shu|wu|lb|gsz|ys|hj|dz|xl|lbiao|yshu)_([a-z_]+)$/);
   if (!m || NO_ART.has(id)) return '';
   if (COMMON_ART.has(m[2])) return `assets/cards/common_${m[2]}.webp`;
   return `assets/cards/${id}.webp`;
@@ -204,7 +204,8 @@ export function renderHandCard(card, options = {}) {
   const el = doc.createElement('div');
   const faction = cardKingdom(card);
   const cardType = (card.type || 'unit').toLowerCase();
-  el.className = `card card-hand game-card card-${faction} faction-${faction} type-${cardType}`;
+  el.className = `card card-hand game-card card-${faction} faction-${faction} type-${cardType}${card._known ? ' card-known' : ''}`;
+  if (card._known) el.title = '明牌：对手能看到这张牌';
   el.dataset.instanceId = card.instanceId || '';
   el.dataset.cardId = card.cardId || '';
   el.dataset.cardType = card.type || 'UNIT';
