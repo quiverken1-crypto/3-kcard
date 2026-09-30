@@ -400,13 +400,24 @@ export class CombatLogController {
 <span class="log-badge">${entry.badge}</span><span class="log-text">${entry.text}</span>`;
 
     this.feedEl.appendChild(itemEl);
+    // 界面上只保留最近的若干条，DOM 不再无限增长
+    const cap = 120;
+    while (this.feedEl.childElementCount > cap) this.feedEl.firstElementChild.remove();
     this.scrollToBottom();
   }
 
   scrollToBottom() {
-    if (this.feedEl && typeof this.feedEl.scrollTop !== 'undefined') {
-      this.feedEl.scrollTop = this.feedEl.scrollHeight;
-    }
+    // 合并到下一帧只滚一次：连续记多条战报时不再每条都强制重排
+    // 注意：读 scrollTop 会强制重排，这里只判断属性是否存在；战报抽屉收起时不滚动
+    if (!this.feedEl || !('scrollTop' in this.feedEl) || this._scrollQueued) return;
+    this._scrollQueued = true;
+    const run = () => {
+      this._scrollQueued = false;
+      const el = this.feedEl;
+      if (!el || el.closest?.('.collapsed')) return;
+      el.scrollTop = el.scrollHeight;
+    };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run); else run();
   }
 
   setFilter(filter) {

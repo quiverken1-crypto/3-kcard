@@ -480,6 +480,13 @@ export function endTurn(state) {
  * @param {string} gainingPlayerId
  * @param {number} [amount=1]
  */
+/** 受到伤害：标记受伤，并失去【聚众】（回合开始不再成长） */
+export function markDamaged(unit, amount = 1) {
+  if (!unit || !(amount > 0)) return;
+  unit.status.damaged = true;
+  if (Array.isArray(unit.keywords) && unit.keywords.includes('聚众')) unit.keywords = unit.keywords.filter(k => k !== '聚众');
+}
+
 /** 声望溢出（已到上限仍获得声望）时的钩子：fn(state, playerId, overflow) */
 export const PRESTIGE_OVERFLOW_HOOKS = [];
 export function adjustPrestige(state, gainingPlayerId, amount = 1) {

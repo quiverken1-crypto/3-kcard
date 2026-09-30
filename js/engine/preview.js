@@ -7,8 +7,10 @@ import { findUnit, getAllUnits } from './state.js';
 import { STATUS_TYPES } from './constants.js';
 
 function cloneForPreview(state) {
-  const { prng, ...rest } = state;
+  // 战报会越打越长，预演用不到：不复制（否则后期每次指向目标都要拷贝整份战报，拖动明显卡）
+  const { prng, combatLog, ...rest } = state;
   const c = structuredClone(rest);
+  c.combatLog = [];
   c.prng = prng && typeof prng.clone === 'function' ? prng.clone() : prng;
   return c;
 }

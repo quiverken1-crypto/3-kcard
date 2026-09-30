@@ -1,5 +1,5 @@
 import { PHASES, STATUS_TYPES } from './constants.js';
-import { drawCard, adjustPrestige, getAllUnits, findUnit, removeUnitFromBoard } from './state.js';
+import { drawCard, adjustPrestige, getAllUnits, findUnit, removeUnitFromBoard, markDamaged } from './state.js';
 import { applySuppression, applyInhibition } from './combat.js';
 
 /**
@@ -261,7 +261,7 @@ export function applyUnitEffect(state, effect, owner, unit) {
     switch (effect.type) {
       case 'DAMAGE_UNIT':
         unit.hp -= amount;
-        unit.status[STATUS_TYPES.DAMAGED] = true;
+        markDamaged(unit, amount);
         if (unit.hp <= 0) removeUnitFromBoard(state, unit.instanceId);
         changed = true;
         break;
@@ -436,7 +436,7 @@ export function runActiveAbility(state, unit, act, payload = {}) {
       break;
     }
     case 'PRESTIGE': p.prestige -= n; break;
-    case 'SELF_DAMAGE': unit.hp -= n; unit.status[STATUS_TYPES.DAMAGED] = true; break;
+    case 'SELF_DAMAGE': unit.hp -= n; markDamaged(unit, n); break;
     case 'HQ_HP': changeHq(state, unit.faction, -n, unit.faction); break;
     case 'ACTION': unit.status[STATUS_TYPES.ACTIONS_USED] = (unit.status[STATUS_TYPES.ACTIONS_USED] || 0) + 1; break;
     default: break;

@@ -24,7 +24,7 @@ test('card pack validation accepts declarative abilities and rejects code or unk
 test('custom cards enter the matching faction deck without changing its size', () => {
   const options = buildDeckOptions(normalizeCardPack({ schemaVersion: 1, cards: [card()] }));
   assert.equal(options.weiDeck.length, 40);
-  assert.equal(options.shuDeck.length, 40);
+  assert.equal(options.shuDeck, undefined); // 没有自定义卡的一方直接用所选势力的标准卡组
   assert.equal(options.weiDeck.filter(c => c.cardId === 'custom_wei_001').length, 1);
 });
 

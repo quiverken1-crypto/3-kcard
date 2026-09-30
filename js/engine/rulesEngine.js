@@ -583,7 +583,8 @@ export function getLegalActions(state, playerId) {
       if (loc && loc.zoneType === 'SUPPORT' && u.status[STATUS_TYPES.ACTIONS_USED] === 0) {
         for (const zk of ['LEFT', 'CENTER', 'RIGHT']) {
           const z = state.battlefield.frontline[zk];
-          if ((z.occupant === null || z.occupant === playerId) && z.units.length < z.capacity) {
+          const swap = z.occupant === playerId && z.units.length >= z.capacity && baseId(u.cardId) === 'shu_bai_er_jun' && !u.status?.[STATUS_TYPES.INHIBITED]; // 白毦军·断后可换位进满员区
+          if ((z.occupant === null || z.occupant === playerId) && (z.units.length < z.capacity || swap)) {
             actions.push({ type: ACTION_TYPES.MOVE, playerId, payload: { cardInstanceId: u.instanceId, targetZone: `FRONTLINE_${zk}` } });
           }
         }

@@ -45,8 +45,10 @@ export function fastCloneState(s) {
   // 深拷贝：之前的浅拷贝会让 AI 的“模拟推演”改到真实对局
   // （turnEffects 回合增益、pendingDeaths、单位 keywords 等共享引用），导致凭空加攻、非法行动卡死。
   try {
-    const { prng, ...rest } = s;
+    // 战报只增不减（每条还带卡牌对象），推演用不到：不拷贝，只留长度，避免越打越卡
+    const { prng, combatLog, ...rest } = s;
     const c = structuredClone(rest);
+    c.combatLog = [];
     if (prng) c.prng = typeof prng.clone === 'function' ? prng.clone() : prng;
     return c;
   } catch { /* 含不可克隆字段时退回旧的逐层拷贝 */ }
@@ -101,7 +103,7 @@ export function fastCloneState(s) {
   };
 
   c.activeCounters = s.activeCounters ? s.activeCounters.map(x => ({ ...x })) : [];
-  c.combatLog = s.combatLog ? [...s.combatLog] : [];
+  c.combatLog = [];
   if (s.prng && typeof s.prng.clone === 'function') {
     c.prng = s.prng.clone();
   }

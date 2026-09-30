@@ -338,6 +338,20 @@ export function fitHandStrip(container = document.getElementById('hand-container
   if (!document.body.classList.contains('m-land') || cards.length < 2) return;
   // 手牌不再互相叠压：放不下时按比例缩小每张牌（选中的牌会放大显示）
   const tray = container.parentElement || container;
+  // 性能：同样的手牌、同样的宽度直接套用上次算好的缩放，不再强制重排测量
+  if (!tray._fitRO && typeof ResizeObserver !== 'undefined') {
+    tray._fitRO = new ResizeObserver(() => { tray._fitCache = null; });
+    tray._fitRO.observe(tray);
+  }
+  const key = cards.map(c => c.dataset.cardId || '').join(',');
+  const cached = tray._fitCache;
+  if (cached && cached.key === key) {
+    if (cached.z) cards.forEach(c => { c.style.zoom = String(cached.z); });
+    container.classList.toggle('hand-scroll', cached.scroll);
+    tray.classList.toggle('hand-tray-scroll', cached.scroll);
+    return;
+  }
+  tray._fitCache = { key, z: 0, scroll: false };
   const avail = tray.clientWidth - 12;
   const first = cards[0].getBoundingClientRect();
   const last = cards[cards.length - 1].getBoundingClientRect();
@@ -350,6 +364,7 @@ export function fitHandStrip(container = document.getElementById('hand-container
   // 缩到 80% 仍放不下：保持 80%，改为左右滑动查看（仍然不叠压）
   const f = Math.max(0.8, fit);
   const z = +(z0 * f).toFixed(3);
+  tray._fitCache = { key, z, scroll: fit < 0.8 };
   cards.forEach(c => { c.style.zoom = String(z); });
   container.classList.toggle('hand-scroll', fit < 0.8);
   tray.classList.toggle('hand-tray-scroll', fit < 0.8);

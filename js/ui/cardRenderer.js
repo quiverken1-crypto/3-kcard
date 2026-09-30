@@ -31,7 +31,7 @@ export const KEYWORD_GLOSSARY = ({
   '突袭': '【突袭】进场的回合可以立即行动。',
   '潜袭': '【潜袭】背面进场，行动花费视为1，不受战法影响；交战时揭示。',
   '游击': '【游击】可从前线移动回支援阵线；敌方回合首次受到攻击时可撤退，使该次攻击无效（这一击会致命时自动发动）。',
-  '军机': '【军机X】新词条，官方规则尚未公布，暂无效果。',
+  '军机': '【军机X】进场/使用时，由我方指定对方X张手牌成为明牌（双方可见）。',
   '奇袭': '【奇袭】部署时可直接部署在没有敌方单位的前线。',
   '补给': '【补给】在场时，己方粮草上限额外+1，可叠加。',
   '声望': '【声望X】进场/使用时己方声望+X（对手有声望则改为扣减对手）；己方部署单位时可用声望减免花费，每回合1次。',
@@ -39,7 +39,7 @@ export const KEYWORD_GLOSSARY = ({
   '治军': '【治军】相同兵种的其他友军行动花费-1。',
   '督战': '【督战】相邻友方军队（不含谋士）战力+1。',
   '降将': '【降将】可组入其他势力的牌组；被击败后进入敌方弃牌区。',
-  '聚众': '【聚众】回合开始时+1+1，受到伤害后失去聚众。',
+  '聚众': '【聚众】己方回合开始时，获得+1+1；受到伤害后失去聚众（词条消失）。',
   '幕僚': '【幕僚】己方回合结束时，若位于支援阵线，己方主城恢复1点生命。',
   '护卫': '【护卫】同区域友军被攻击时，改由护卫单位承受此次攻击（谋士与铁骑同样适用）。',
   '侦查': '【侦查X】进场时查看己方牌库顶X张牌，费用过高的牌将被置于牌库底。',
@@ -69,7 +69,7 @@ export const TRAIT_GLOSSARY = Object.freeze({
 
 /** 卡面插画（取自魏蜀图鉴） */
 const COMMON_ART = new Set(['shipo', 'shanjia', 'cefan', 'shengdong', 'jueshui', 'chengsheng', 'youdi', 'tuchi', 'tuqi', 'andu']);
-const NO_ART = new Set(['shu_huang_quan', 'shu_yi_shou_wei_gong', 'shu_fu_tong', 'wu_pan_zhang', 'wu_sun_quan', 'wu_zhou_tai', 'wu_cheng_pu', 'lb_chen_gong', 'lb_lv_bu', 'wei_guo_jia_x']);
+const NO_ART = new Set(['shu_huang_quan', 'shu_yi_shou_wei_gong', 'shu_fu_tong', 'wei_guo_jia_x']);
 export function getCardArtUrl(card) {
   // 自定义卡：可填 https 图片链接作为卡面
   if (card?.art && /^https:\/\/[^\s'\"()<>\\]{4,300}$/.test(card.art)) return card.art;
@@ -82,7 +82,8 @@ export function getCardArtUrl(card) {
 
 function artStyle(card) {
   const url = getCardArtUrl(card);
-  return url ? ` style="background-image:url('${url}')"` : '';
+  // 没有插画的卡：用名字首字做一枚大印章，不留白
+  return url ? ` style="background-image:url('${url}')"` : ` data-glyph="${escapeHtml(String(card?.name || '').slice(0, 1))}"`;
 }
 
 function traitsHtml(card, cls = 'card-traits') {

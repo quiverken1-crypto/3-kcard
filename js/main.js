@@ -37,6 +37,8 @@ import { loadCustom, setKeywordRegistrar, customFactions, onCustomChange, regist
 import { registerKeyword } from './ui/cardRenderer.js';
 import { listDecks, getDeck, validateDeck, deckStats, deckCardDefs, lastDeckId, rememberDeckFor, dualPresets, generateDualDeck, DUAL, customPayloadFor } from './data/deckStore.js';
 import { createCard, createKingdomDeck } from './engine/state.js';
+import { autoChoiceTarget } from './engine/cardSkills.js';
+import { factionDropdown } from './ui/factionPicker.js';
 
 const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb', 'gsz', 'ys', 'hj', 'dz', 'xl', 'lbiao', 'yshu'];
 
@@ -360,6 +362,10 @@ export class AppCoordinator {
       if (deckId) rememberDeckFor(kingdom, mode, deckId);
       close(); this._lastKingdom = kingdom; this._lastMode = mode; onPick(kingdom, hq, enemy, deckId, mode);
     };
+    const pick = (container, opts, current, onSel, label) => {
+      if (!container) return;
+      container.replaceChildren(factionDropdown(doc, { label, current, onSelect: onSel, options: opts.map(([k, ch, name]) => [k, ch, name]) }));
+    };
     const chips = (container, opts, current, onSel) => {
       if (!container) return;
       container.replaceChildren(...opts.map(([k, label]) => {
@@ -375,10 +381,10 @@ export class AppCoordinator {
       chips(doc.getElementById('hq-pick-mode-options'), [['single', '单阵营'], ['dual', '双阵营·测试']], mode, m => { mode = m; draw(); });
       const selfLabel = doc.getElementById('hq-pick-self-label');
       if (selfLabel) selfLabel.textContent = mode === 'dual' ? '主阵营' : '我方';
-      chips(doc.getElementById('hq-pick-self-options'), ALL.map(k => [k, KINGDOMS[k].name]), kingdom, k => { kingdom = k; if (enemy === k) enemy = 'RANDOM'; draw(); });
+      pick(doc.getElementById('hq-pick-self-options'), ALL.map(k => [k, KINGDOMS[k].name, KINGDOMS[k].army]), kingdom, k => { kingdom = k; if (enemy === k) enemy = 'RANDOM'; draw(); }, '我方势力');
       fillDecks();
       for (const id of ['hq-pick-enemy-label', 'hq-pick-enemy-options']) { const el = doc.getElementById(id); if (el) el.style.display = lan ? 'none' : ''; }
-      chips(doc.getElementById('hq-pick-enemy-options'), [['RANDOM', '随机'], ...BUILTIN.filter(k => k !== kingdom).map(k => [k, KINGDOMS[k].name])], enemy, k => { enemy = k; draw(); });
+      pick(doc.getElementById('hq-pick-enemy-options'), [['RANDOM', '?', '随机对手'], ...BUILTIN.filter(k => k !== kingdom).map(k => [k, KINGDOMS[k].name, KINGDOMS[k].army])], enemy, k => { enemy = k; draw(); }, '对手势力');
       box.replaceChildren(...HQ_CARDS[kingdom].map(hq => {
         const card = doc.createElement('button');
         card.className = `hq-card hq-card-${kingdom}`;
@@ -413,6 +419,7 @@ export class AppCoordinator {
     doc.getElementById('side-drawer')?.classList.add('collapsed');
     doc.getElementById('home-screen')?.classList.remove('hidden');
     doc.body.classList.add('at-home');
+    this._clearMatchOverlays(doc);
     this.audio?.setScene('lobby');
   }
 
@@ -511,6 +518,7 @@ export class AppCoordinator {
     const drawer = doc.getElementById('side-drawer');
     const toggleLog = () => {
       drawer?.classList.toggle('collapsed');
+      if (!drawer?.classList.contains('collapsed')) this.combatLog?.scrollToBottom();
       doc.getElementById('btn-open-log')?.classList.toggle('active', !drawer?.classList.contains('collapsed'));
       requestAnimationFrame(() => this._fitBoard());
     };
@@ -756,6 +764,8 @@ export class AppCoordinator {
     let bar = doc.getElementById('choice-bar');
     doc.querySelectorAll('.choice-target').forEach(el => el.classList.remove('choice-target'));
     doc.body.classList.toggle('choice-active', Boolean(mine));
+    // 必须在提前返回之前更新：否则弃牌选择结束后手牌一直是灰色遮罩
+    doc.body.classList.toggle('choice-hand', Boolean(mine && mine.pool === 'hand'));
     this._activeChoice = mine;
     if (!choice) { bar?.classList.add('hidden'); return; }
     if (!bar) {
@@ -915,7 +925,17 @@ export class AppCoordinator {
     overlay.classList.remove('hidden');
   }
 
+  /** 离开对局：清掉技能提示、选择条、浮字等局内浮层 */
+  _clearMatchOverlays(doc = globalThis.document) {
+    if (!doc) return;
+    doc.querySelectorAll('.toast-stack, .toast-alert, .floating-combat-text').forEach(el => el.remove());
+    doc.getElementById('choice-bar')?.classList.add('hidden');
+    doc.body.classList.remove('choice-active', 'choice-hand', 'is-selecting', 'tactic-targeting', 'is-dragging');
+    if (this._botChoiceTimer) { clearTimeout(this._botChoiceTimer); this._botChoiceTimer = null; }
+  }
+
   _teardownCurrentMode() {
+    this._clearMatchOverlays();
     this.isSandboxRunning = false;
     this._surrendered = false;
     if (this._lobbyTimer) { clearInterval(this._lobbyTimer); this._lobbyTimer = null; }
@@ -1448,6 +1468,23 @@ export class AppCoordinator {
     this._checkTurnState();
   }
 
+  /** AI 一方在对方回合里要做的选择（被挟持弃牌、贾诩乱武选目标等）：稍等片刻后由 AI 自动选 */
+  _autoResolveBotChoices(state) {
+    if (!this.rulesEngine || this._botChoiceTimer) return;
+    const seats = this.mode === APP_MODE.BOT_VS_BOT ? [FACTIONS.WEI, FACTIONS.SHU] : (this.mode === APP_MODE.SOLO_VS_BOT && this.bot ? [this.opponentPlayerId] : []);
+    const seat = seats.find(pid => pid !== state.activePlayer && state.players?.[pid]?.pendingChoices?.length);
+    if (!seat) return;
+    this._botChoiceTimer = setTimeout(() => {
+      this._botChoiceTimer = null;
+      const st = this.rulesEngine?.state;
+      const c = st?.players?.[seat]?.pendingChoices?.[0];
+      if (!c || st.phase === PHASES.GAME_OVER) return;
+      try { this.rulesEngine.dispatch({ type: ACTION_TYPES.CHOOSE_TARGET, playerId: seat, payload: { choiceId: c.id, targetId: autoChoiceTarget(st, seat) } }); } catch (err) { console.warn('AI 选择失败', err); }
+      this._updateCombatLog?.();
+      this.render();
+    }, 600);
+  }
+
   async _runSandboxLoop(botWei, botShu, stepSpeedMs) {
     while (this.isSandboxRunning && this.rulesEngine?.state?.phase !== PHASES.GAME_OVER) {
       const activePlayer = this.rulesEngine.state.activePlayer;
@@ -1485,6 +1522,7 @@ export class AppCoordinator {
   render() {
     const state = this.getCurrentState();
     if (!state) return;
+    this._autoResolveBotChoices(state);
     setSeatKingdoms({ WEI: state.players?.WEI?.kingdom, SHU: state.players?.SHU?.kingdom });
 
     const doc = typeof document !== 'undefined' ? document : globalThis.document;
@@ -1495,8 +1533,15 @@ export class AppCoordinator {
     if (bfContainer) {
       // 记录重绘前每张单位卡的位置：有单位阵亡/离场时，其余单位先原地不动，
       // 等阵亡动画播完再滑动补位（FLIP）
+      // 性能：只有站位变化时才测量（测量会强制重排，每步都测很卡）
+      const bf = state.battlefield;
+      const sig = bf ? ['WEI', 'SHU'].map(p => (bf.support[p]?.slots || []).map(u => u.instanceId).join(',')).join('|') + '#' +
+        ['LEFT', 'CENTER', 'RIGHT'].map(k => (bf.frontline[k]?.units || []).map(u => u.instanceId).join(',')).join('|') : '';
       const before = new Map();
-      bfContainer.querySelectorAll('.board-unit[data-instance-id]').forEach(el => before.set(el.dataset.instanceId, el.getBoundingClientRect()));
+      if (sig !== this._lastBoardSig) {
+        bfContainer.querySelectorAll('.board-unit[data-instance-id]').forEach(el => before.set(el.dataset.instanceId, el.getBoundingClientRect()));
+      }
+      this._lastBoardSig = sig;
       renderBoard(bfContainer, state, this.localPlayerId, {
         player: state.players?.[this.localPlayerId]
       });

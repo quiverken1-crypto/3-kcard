@@ -14,7 +14,7 @@ import {
   hasKeyword,
   getKeywordValue
 } from './constants.js';
-import { findUnit, getAllUnits, removeUnitFromBoard, drawCard } from './state.js';
+import { findUnit, getAllUnits, removeUnitFromBoard, drawCard, markDamaged } from './state.js';
 import {
   getAttackValue, getActionCost, actsLikeCavalry as skillActsLikeCavalry, ignoresGuardian,
   isArtillery, isSiege, isIronWall, findBodyguard, effectiveTroop, hasShiShi, fireMultiplier, isGuardedUnit, isGuardedHq, unitTerrain, baseId, ignoresJianZhen, ignoresWeiWo, cannotAttack, hasLongRange, hqAttackMultiplier, counterOverride, notifyYouJi, notifyAttacked, combatDamageRedirect, immuneToShiShi, allianceBlocks, targetSurcharge, triggerCounters, hasVanguard as hasVanguardSkill, damageHq, zhaXiang, retreatUnit
@@ -56,7 +56,7 @@ export function applyFireSplash(state, targetLoc, oppFaction, splashDamage, init
       if (visited.has(u.instanceId)) continue;
       visited.add(u.instanceId);
       u.hp -= splashDamage;
-      u.status[STATUS_TYPES.DAMAGED] = true;
+      markDamaged(u, splashDamage);
       if (u.hp <= 0) {
         removeUnitFromBoard(state, u.instanceId);
         const next = zone.units.find(zu => !visited.has(zu.instanceId));
@@ -437,10 +437,9 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
       rawAmbushCounter = Math.max(0, rawAmbushCounter - getJianZhenValue(attacker));
     }
     counterDealt = rawAmbushCounter;
-    attacker.hp -= combatDamageRedirect(state, attacker, counterDealt);
-    if (counterDealt > 0) {
-      attacker.status[STATUS_TYPES.DAMAGED] = true;
-    }
+    const ambushTaken = combatDamageRedirect(state, attacker, counterDealt);
+    attacker.hp -= ambushTaken;
+    markDamaged(attacker, ambushTaken);
 
     if (attacker.hp <= 0) {
       attackerDied = true;
@@ -506,8 +505,9 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
   }
   if (attacker.keywords.includes(KEYWORDS.HUO_GONG)) rawAttackerDmg *= fireMultiplier(state, defender, targetLoc);
   damageDealt = rawAttackerDmg;
-  defender.hp -= combatDamageRedirect(state, defender, damageDealt);
-  defender.status[STATUS_TYPES.DAMAGED] = true;
+  const defenderTaken = combatDamageRedirect(state, defender, damageDealt);
+  defender.hp -= defenderTaken;
+  markDamaged(defender, defenderTaken);
   if (defender.hp <= 0) {
     defenderDied = true;
   }
@@ -528,8 +528,9 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
       rawCounterDmg = Math.max(0, rawCounterDmg - getJianZhenValue(attacker));
     }
     counterDealt = rawCounterDmg;
-    attacker.hp -= combatDamageRedirect(state, attacker, counterDealt);
-    if (counterDealt > 0) attacker.status[STATUS_TYPES.DAMAGED] = true;
+    const counterTaken = combatDamageRedirect(state, attacker, counterDealt);
+    attacker.hp -= counterTaken;
+    markDamaged(attacker, counterTaken);
     if (attacker.hp <= 0) attackerDied = true;
   }
 

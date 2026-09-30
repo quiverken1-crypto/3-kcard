@@ -10,7 +10,7 @@
 
 import { FACTIONS, PHASES, STATUS_TYPES, TROOP_TYPES, GAME_CONFIG, hasKeyword } from './constants.js';
 import {
-  drawCard, adjustPrestige, getAllUnits, findUnit, removeUnitFromBoard, registerTurnHooks
+  drawCard, adjustPrestige, getAllUnits, findUnit, removeUnitFromBoard, registerTurnHooks, markDamaged
 } from './state.js';
 import { registerAbilityHooks, applyUnitEffect, auraModifiers, activeAbilitiesOf, activeCostBlock, runActiveAbility, refreshAuraKeywords } from './abilities.js';
 
@@ -303,13 +303,13 @@ export function activateSkill(state, pid, payload = {}) {
 }
 
 // ==========================================
-// 结算中途的目标选择（孙权·御将、法正·谋主）：玩家选，15 秒未选则随机
+// 结算中途的目标选择（孙权·鼎峙、法正·谋主）：玩家选，15 秒未选则随机
 // ==========================================
 export const CHOICE_SPECS = {
   sunQuan: {
-    source: '孙权·御将', prompt: '选择1个敌军，造成1点伤害',
+    source: '孙权·鼎峙', prompt: '选择1个敌军，造成1点伤害',
     auto: list => [...list].sort((a, b) => a.hp - b.hp)[0],
-    apply(state, pid, t) { damageUnit(state, t, 1, '孙权·御将'); }
+    apply(state, pid, t) { damageUnit(state, t, 1, '孙权·鼎峙'); }
   },
   luLue: {
     source: '掳掠', prompt: '击败敌军：选择获得粮草或抽1张牌', pool: 'option',
@@ -374,6 +374,28 @@ export const CHOICE_SPECS = {
     source: '公孙续·遗志', prompt: '选择1个友军，获得+1+1',
     auto: list => [...list].sort((a, b) => b.atk - a.atk)[0],
     apply(state, pid, t) { buff(t, 1, 1); log(state, pid, `公孙续·遗志：【${t.name}】获得+1+1`); }
+  },
+  oppHand: {
+    source: '手牌', prompt: '指定对方1张手牌', pool: 'option',
+    auto: list => list.find(o => String(o.name).startsWith('【')) || list[0],
+    apply(state, pid, opt, choice = {}) {
+      const foe = opp(pid);
+      const fp = state.players[foe];
+      let card = fp.hand.find(c => c.instanceId === opt.instanceId);
+      if (choice.mode === 'reveal') {
+        if (!card || card._known) card = fp.hand.find(c => !c._known); // 已公开则顺延
+        if (!card) return;
+        card._known = true;
+        log(state, pid, `${choice.source || '军机'}：对方【${card.name}】成为明牌`);
+        return;
+      }
+      if (!card) card = fp.hand[0];
+      if (!card) return;
+      fp.hand.splice(fp.hand.indexOf(card), 1);
+      fp.discard.push(card);
+      log(state, pid, `${choice.source || '弃牌'}：弃掉对方手牌【${card.name}】`);
+      extRun('discard', state, foe, card);
+    }
   },
   block: {
     source: '技能', prompt: '选择目标',
@@ -580,7 +602,7 @@ export function damageUnit(state, unit, amount, source = '') {
   amount = extFold('unitDamage', amount, state, unit, source);
   if (amount <= 0 || !isOnBoard(state, unit)) return !isOnBoard(state, unit);
   unit.hp -= amount;
-  unit.status[STATUS_TYPES.DAMAGED] = true;
+  markDamaged(unit, amount);
   if (unit.hp > 0 && isId(unit, 'wu_zhou_tai')) unit.atk += amount;
   state.combatLog.push({ type: 'SKILL_DAMAGE', unitId: unit.instanceId, unitName: unit.name, damage: amount, source, playerId: opp(unit.faction) });
   if (unit.hp <= 0) {
@@ -879,14 +901,20 @@ export function applyJunJi(state, card, playerId) {
   return revealHand(state, playerId, n, `${card.name}·军机`);
 }
 export function revealHand(state, playerId, n, source = '军机') {
-  const hidden = state.players[opp(playerId)].hand.filter(c => !c._known);
-  let k = 0;
-  for (; k < n && hidden.length; k++) {
-    const c = hidden.splice(hidden.length === 1 ? 0 : state.prng.randomInt(0, hidden.length - 1), 1)[0];
-    c._known = true;
-  }
-  if (k) log(state, playerId, `${source}：对手${k}张手牌成为明牌`);
+  // 由我方指定对方手牌中的 n 张（按位置点选暗牌），逐张选择
+  const hidden = state.players[opp(playerId)].hand.filter(c => !c._known).length;
+  const k = Math.min(n, hidden);
+  for (let i = 0; i < k; i++) queueOppHandPick(state, playerId, 'reveal', source, `${source}：指定对方1张手牌成为明牌（${i + 1}/${k}）`);
   return k;
+}
+
+/** 在对方手牌里点选1张（暗牌只显示位置，明牌显示名字）：mode = 'reveal' 变明牌 / 'discard' 弃掉 */
+export function queueOppHandPick(state, playerId, mode, source, prompt) {
+  const hand = state.players[opp(playerId)].hand;
+  const opts = hand.map((c, i) => ({ c, i })).filter(({ c }) => mode !== 'reveal' || !c._known)
+    .map(({ c, i }) => ({ instanceId: c.instanceId, name: c._known ? `【${c.name}】` : `第${i + 1}张（暗牌）` }));
+  if (!opts.length) return;
+  queueChoice(state, playerId, 'oppHand', null, opts, { mode, source, prompt });
 }
 
 function scout(state, unit, n) {
@@ -1723,7 +1751,7 @@ export function afterAttack(state, attacker, defender, result, targetIsHq) {
         attacker.status[STATUS_TYPES.CHARGE_USED] = false;
         log(state, attacker.faction, '赵云·突围：击败敌军，重新获得【冲阵】');
       }
-      if (result.defenderDied && isId(attacker, 'shu_guan_yu')) discardRandom(state, enemy, 1, '关羽·威震');
+      if (result.defenderDied && isId(attacker, 'shu_guan_yu')) queueOppHandPick(state, attacker.faction, 'discard', '关羽·威震', '关羽·威震：指定弃掉对方1张手牌');
       if (result.defenderDied && isId(attacker, 'wei_xu_huang')) {
         const overflow = Math.max(0, -(defender.hp ?? 0));
         if (overflow > 0) {
@@ -1844,7 +1872,7 @@ function afterRefill(state, pid) {
   for (const u of getAllUnits(state, pid)) {
     // 于禁·毅重：回合开始时完全恢复
     if (isId(u, 'wei_yu_jin') && u.hp < u.maxHp) { u.hp = u.maxHp; log(state, pid, '于禁·毅重：完全恢复'); }
-    // 孙权·御将：若上回合未被攻击，对任意敌军造成1伤害
+    // 孙权·鼎峙：若上回合未被攻击，对任意敌军造成1伤害
     if (isId(u, 'wu_sun_quan') && u._attackedOnTurn !== state.turnNumber - 1) {
       _stateForTarget = state;
       queueChoice(state, pid, 'sunQuan', u, getAllUnits(state, opp(pid)).filter(canSkillTarget));

@@ -136,8 +136,14 @@ export class InteractionController {
 
     // 3. Document/Window Pointer Move & Up
     if (win) {
-      win.addEventListener('pointermove', (e) => this._handlePointerMove(e));
-      win.addEventListener('pointerup', (e) => this._handlePointerUp(e));
+      // 手指/鼠标移动一帧内可能来好几次：只处理每帧最后一次，避免重复查找目标与预演
+      win.addEventListener('pointermove', (e) => {
+        this._pendingMove = e;
+        if (this._moveRaf) return;
+        const raf = win.requestAnimationFrame || (fn => setTimeout(fn, 16));
+        this._moveRaf = raf(() => { this._moveRaf = 0; const ev = this._pendingMove; this._pendingMove = null; if (ev) this._handlePointerMove(ev); });
+      }, { passive: true });
+      win.addEventListener('pointerup', (e) => { if (this._pendingMove) { const ev = this._pendingMove; this._pendingMove = null; this._handlePointerMove(ev); } this._handlePointerUp(e); });
       win.addEventListener('pointercancel', (e) => this._handlePointerCancel(e));
 
       // 4. Keyboard Shortcuts
@@ -198,6 +204,12 @@ export class InteractionController {
     if (!loc?.unit) return;
     const u = loc.unit.faction === this.localPlayerId && loc.unit.status?.isFaceDown ? { ...loc.unit, status: { ...loc.unit.status, isFaceDown: false } } : loc.unit;
     this._showTouchInfo(u, unitEl);
+  }
+
+  /** 详情浮窗延后一帧再画：先让选中、高亮等即时反馈出来，避免按下瞬间卡一下 */
+  _showTouchInfoSoon(card, el) {
+    clearTimeout(this._infoSoon);
+    this._infoSoon = setTimeout(() => { if (!this.isDragging && el.isConnected !== false) this._showTouchInfo(card, el); }, 60);
   }
 
   _showTouchInfo(card, el) {
@@ -261,11 +273,13 @@ export class InteractionController {
     if (!player) return;
     const card = player.hand?.find(c => c.instanceId === instanceId);
     if (!card) return;
-    if (this._isTouch(e)) this._showTouchInfo(card, cardEl);
+    if (this._isTouch(e)) this._showTouchInfoSoon(card, cardEl);
 
     // Check provision affordability
     const cost = getCardPlayCost(this.gameState, this.localPlayerId, card);
     if (player.provisions < cost) {
+      // 点了打不起的牌：先取消之前选中的牌，免得高亮留在别的牌上
+      if (this.selectedCard) this.cancelSelection();
       this._triggerShake(cardEl);
       this._showToast(`粮草不足 (需 ${cost} 粮草，当前仅存 ${player.provisions})`);
       return;
@@ -574,6 +588,10 @@ export class InteractionController {
     }
     const data = this._previewData;
     if (!data) { this._hidePreview(); return; }
+    // 同一目标：浮窗内容和位置都没变，不再重写、不再测量
+    if (this.previewEl && this.previewEl.style.display === 'block' && this._previewShownKey === key && this._previewAnchor === anchorEl) return;
+    this._previewShownKey = key;
+    this._previewAnchor = anchorEl;
     if (!this.previewEl) {
       this.previewEl = doc.createElement('div');
       this.previewEl.className = 'action-preview';
@@ -623,6 +641,7 @@ export class InteractionController {
       this._showToast(text);
       return;
     }
+    this.previewEl.querySelector('.pv-confirm')?.remove();
     const d = globalThis.document.createElement('div');
     d.className = 'pv-confirm';
     d.textContent = `👆 ${text}`;
@@ -635,6 +654,8 @@ export class InteractionController {
   _hidePreview() {
     this._armedTarget = null;
     this._previewKey = null;
+    this._previewShownKey = null;
+    if (this.previewEl && this.previewEl.style.display === 'none') return;
     if (this.previewEl) this.previewEl.style.display = 'none';
   }
 
@@ -1403,6 +1424,17 @@ export class InteractionController {
     toast.className = 'toast-alert';
     toast.textContent = msg;
     (doc.getElementById('game-app') || doc.body).appendChild(toast);
+    // 竖屏：卡牌详情浮窗显示时，提示贴在浮窗正上方，信息和提示放在一起
+    try {
+      const tip = doc.body.classList.contains('m-port') ? doc.querySelector('.card-inspector-tooltip') : null;
+      const r = tip && getComputedStyle(tip).display !== 'none' && getComputedStyle(tip).visibility !== 'hidden' && !tip.classList.contains('hidden') ? tip.getBoundingClientRect() : null;
+      if (r && r.height > 20) {
+        toast.classList.add('toast-near-info');
+        toast.style.top = `${Math.max(8, r.top + 1)}px`;
+        toast.style.left = `${r.left}px`;
+        toast.style.width = `${r.width}px`;
+      }
+    } catch { /* ignore */ }
     setTimeout(() => toast.classList?.add('toast-show'), 10);
     setTimeout(() => {
       toast.classList?.remove('toast-show');
