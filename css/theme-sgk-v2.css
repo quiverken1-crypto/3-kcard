@@ -512,3 +512,14 @@
   border-image-repeat: stretch !important;
 }
 .modal-box::after { content: none !important; display: none !important; }
+
+
+/* Ornate frame v2: four dedicated generated corners + stretch-safe straight edges. */
+.modal-box {
+  border-image-slice: 104 !important;
+  border-image-width: 30px !important;
+  border-image-repeat: stretch !important;
+}
+@media (max-width:560px), (max-height:620px) and (orientation:landscape) {
+  .modal-box { border-image-width: 24px !important; }
+}
