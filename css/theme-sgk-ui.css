@@ -374,3 +374,427 @@
   .hm-item,
   .hm-link { transition: none !important; }
 }
+
+
+/* ==========================================================================
+   Interior UI skin — networking, HQ selection, common modals, command menu.
+   Visual-only overrides: no DOM, rules, or network behavior changes.
+   ========================================================================== */
+
+.modal-overlay {
+  background:
+    radial-gradient(circle at 50% 30%, rgba(95,43,24,.12), transparent 32%),
+    rgba(7,5,4,.78) !important;
+  backdrop-filter: blur(5px) saturate(.8) !important;
+  -webkit-backdrop-filter: blur(5px) saturate(.8) !important;
+}
+
+.modal-box,
+.network-box,
+.hq-pick-box,
+.game-menu-box,
+.confirm-box {
+  --sgk-panel-line: rgba(218,173,91,.48);
+  --sgk-panel-line-soft: rgba(218,173,91,.20);
+  border: 1px solid var(--sgk-panel-line) !important;
+  border-radius: 7px !important;
+  background:
+    linear-gradient(180deg, rgba(42,25,16,.96), rgba(20,13,9,.97) 52%, rgba(12,9,7,.98)) !important;
+  color: #eadbb8 !important;
+  box-shadow:
+    0 28px 80px rgba(0,0,0,.68),
+    inset 0 1px 0 rgba(255,231,170,.08),
+    inset 0 0 0 1px rgba(0,0,0,.40),
+    inset 0 0 38px rgba(130,49,29,.06) !important;
+}
+
+.network-box,
+.hq-pick-box,
+.game-menu-box,
+.confirm-box {
+  overflow: hidden;
+}
+
+/* Very subtle use of the generated 三国 frame sheet; decorative only and
+   intentionally low-opacity so text remains crisp. */
+.network-box::before,
+.hq-pick-box::before,
+.game-menu-box::before,
+.confirm-box::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .075;
+  background: url("../assets/ui/panels.webp") left top / 175% auto no-repeat;
+  mix-blend-mode: screen;
+}
+
+.network-box > *,
+.hq-pick-box > *,
+.game-menu-box > *,
+.confirm-box > * {
+  position: relative;
+  z-index: 1;
+}
+
+.modal-header {
+  min-height: 54px;
+  padding: 12px 18px !important;
+  border-bottom: 1px solid rgba(218,173,91,.27) !important;
+  background:
+    linear-gradient(90deg, rgba(116,35,25,.32), rgba(39,22,14,.62) 44%, rgba(15,11,8,.55)) !important;
+  box-shadow: inset 0 -1px 0 rgba(0,0,0,.35);
+}
+
+.modal-title {
+  color: #f1d79b !important;
+  font-family: var(--font-serif-calligraphy) !important;
+  letter-spacing: 3px;
+  text-shadow: 0 2px 8px rgba(0,0,0,.65);
+}
+
+.modal-subtitle {
+  color: #b9a37d !important;
+}
+
+.modal-close-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(218,173,91,.28) !important;
+  border-radius: 50% !important;
+  background: rgba(20,13,9,.72) !important;
+  color: #c9b78f !important;
+}
+.modal-close-btn:hover {
+  border-color: rgba(230,184,98,.65) !important;
+  background: rgba(112,34,25,.62) !important;
+  color: #fff0c8 !important;
+}
+
+.modal-actions {
+  border-top-color: rgba(218,173,91,.20) !important;
+  background: linear-gradient(180deg, rgba(255,255,255,.015), rgba(0,0,0,.08));
+}
+
+.modal-btn {
+  min-height: 38px;
+  border-radius: 4px !important;
+  letter-spacing: 1px;
+  box-shadow: inset 0 1px 0 rgba(255,237,188,.07), 0 4px 10px rgba(0,0,0,.20);
+}
+.modal-btn.btn-primary {
+  border-color: rgba(234,185,94,.72) !important;
+  background: linear-gradient(180deg, #8e3024, #5d1f19) !important;
+  color: #fff0c9 !important;
+}
+.modal-btn.btn-primary:hover {
+  background: linear-gradient(180deg, #ad3b2b, #70231b) !important;
+  border-color: #edc16d !important;
+}
+.modal-btn.btn-secondary {
+  border-color: rgba(190,145,75,.40) !important;
+  background: linear-gradient(180deg, #38291d, #20170f) !important;
+  color: #decea9 !important;
+}
+.modal-btn.btn-secondary:hover {
+  border-color: rgba(226,178,90,.68) !important;
+  background: linear-gradient(180deg, #4a3522, #2a1d13) !important;
+  color: #f4e3ba !important;
+}
+
+/* --- 联机大厅 ---------------------------------------------------------- */
+.network-box {
+  width: min(590px, calc(100vw - 24px)) !important;
+}
+
+.network-tabs {
+  gap: 3px;
+  padding: 6px 8px 0;
+  border-bottom: 1px solid rgba(218,173,91,.24) !important;
+  background: rgba(13,9,7,.82) !important;
+}
+
+.network-tabs .tab-btn {
+  position: relative;
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 4px 4px 0 0;
+  color: #9e8f74 !important;
+  background: rgba(255,255,255,.015);
+  letter-spacing: 1px;
+}
+
+.network-tabs .tab-btn:hover {
+  color: #dfc898 !important;
+  background: rgba(99,42,27,.20);
+}
+
+.network-tabs .tab-btn.active {
+  color: #f0d395 !important;
+  border-color: rgba(218,173,91,.34) !important;
+  border-bottom-color: transparent !important;
+  background: linear-gradient(180deg, rgba(126,37,27,.52), rgba(48,25,17,.42)) !important;
+  box-shadow: inset 0 2px 0 rgba(231,183,91,.45);
+}
+
+.tab-pane {
+  color: #ddcba6;
+}
+
+.tab-desc,
+.net-list-title {
+  color: #b8a482 !important;
+}
+
+.net-room-panel {
+  padding-top: 16px !important;
+}
+
+.net-server-status {
+  border: 1px solid rgba(218,173,91,.15);
+  background: rgba(10,8,6,.42) !important;
+}
+.net-server-status.ok {
+  border-color: rgba(104,159,92,.25);
+  background: rgba(55,97,50,.16) !important;
+}
+.net-server-status.warn {
+  border-color: rgba(190,110,40,.28);
+  background: rgba(130,71,29,.15) !important;
+}
+
+.net-big-btn {
+  min-height: 48px;
+  font-family: var(--font-serif-calligraphy);
+  font-size: 16px !important;
+  letter-spacing: 4px !important;
+}
+
+.net-code-input,
+.net-invite-link,
+.token-textarea {
+  border: 1px solid rgba(218,173,91,.32) !important;
+  background: rgba(8,6,5,.58) !important;
+  color: #efe0bc !important;
+  box-shadow: inset 0 1px 7px rgba(0,0,0,.36);
+}
+.net-code-input:focus,
+.net-invite-link:focus,
+.token-textarea:focus {
+  outline: none;
+  border-color: rgba(239,192,102,.76) !important;
+  box-shadow: 0 0 0 2px rgba(192,72,46,.16), inset 0 1px 7px rgba(0,0,0,.36);
+}
+
+.net-room-item {
+  border-color: rgba(218,173,91,.28) !important;
+  background: linear-gradient(90deg, rgba(59,37,23,.74), rgba(25,17,12,.72)) !important;
+  color: #eadab7 !important;
+}
+.net-room-item:hover {
+  border-color: rgba(234,187,94,.58) !important;
+  background: linear-gradient(90deg, rgba(102,39,27,.72), rgba(37,21,15,.72)) !important;
+}
+.net-room-item span { color: #ebc773 !important; }
+
+.net-waiting {
+  margin: 4px 0 2px;
+  padding: 18px 14px 16px;
+  border: 1px solid rgba(218,173,91,.19);
+  border-radius: 6px;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(150,52,34,.13), transparent 48%),
+    rgba(8,6,5,.30);
+}
+
+.net-room-code {
+  color: #f4d37c !important;
+  text-shadow:
+    0 2px 0 rgba(92,37,20,.9),
+    0 0 18px rgba(233,181,83,.23) !important;
+}
+
+.net-invite,
+.net-lan-share {
+  border: 1px solid rgba(218,173,91,.20);
+  background: rgba(11,8,6,.38) !important;
+}
+.net-invite-qr,
+.net-lan-qr {
+  padding: 6px;
+  border: 1px solid rgba(218,173,91,.26);
+  border-radius: 7px;
+  background: #e8ddc3;
+}
+.net-url { color: #efcc76 !important; }
+
+/* --- 出征 / 主城选择 --------------------------------------------------- */
+.hq-pick-box {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(128,48,28,.12), transparent 34%),
+    linear-gradient(180deg, rgba(43,26,16,.98), rgba(18,12,8,.98)) !important;
+}
+
+.hq-pick-title {
+  position: relative;
+  color: #f1d594 !important;
+  padding-bottom: 10px;
+  text-shadow: 0 2px 8px rgba(0,0,0,.64);
+}
+.hq-pick-title::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  width: 118px;
+  height: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, #cfa255, transparent);
+}
+
+.hqp-label {
+  color: #c4ae82 !important;
+}
+
+.hqp-seg {
+  border-color: rgba(218,173,91,.32) !important;
+  background: rgba(9,7,5,.35);
+}
+
+.hqp-field .enemy-chip,
+.enemy-chip {
+  border-color: rgba(218,173,91,.30) !important;
+  background: linear-gradient(180deg, #34261a, #20160f) !important;
+  color: #dfcda7 !important;
+}
+.hqp-field .enemy-chip:hover,
+.enemy-chip:hover {
+  border-color: rgba(232,184,94,.60) !important;
+  color: #f0ddb0 !important;
+}
+
+.hqp-deck {
+  border-color: rgba(218,173,91,.24) !important;
+  background: linear-gradient(180deg, rgba(48,33,21,.92), rgba(24,17,12,.94)) !important;
+}
+.hqp-deck:hover {
+  border-color: rgba(232,184,94,.55) !important;
+}
+.hqp-deck.active {
+  border-color: #dfb35f !important;
+  background: linear-gradient(180deg, #5b3a1c, #2f2113) !important;
+  box-shadow: 0 0 0 1px rgba(240,207,106,.55) inset, 0 4px 14px rgba(0,0,0,.24) !important;
+}
+
+.hq-card {
+  border: 1px solid rgba(222,177,91,.60) !important;
+  border-radius: 7px !important;
+  background:
+    linear-gradient(180deg, #654327 0%, #4a2d1d 57%, #ded0ae 57%, #cdbb95 100%) !important;
+  box-shadow:
+    0 12px 28px rgba(0,0,0,.46),
+    inset 0 0 0 1px rgba(255,232,174,.07) !important;
+}
+.hq-card:hover {
+  transform: translateY(-4px) scale(1.015) !important;
+  border-color: #efc46f !important;
+  box-shadow: 0 0 0 1px rgba(239,196,111,.56), 0 16px 34px rgba(0,0,0,.55) !important;
+}
+.hq-card-name {
+  color: #f5dfae;
+  text-shadow: 0 2px 6px rgba(0,0,0,.70) !important;
+}
+.hq-card-shield {
+  border-color: #ead39f !important;
+  background: linear-gradient(180deg, #56231c, #321612) !important;
+}
+
+.hq-pick-sub {
+  color: #b9a47e !important;
+}
+
+/* --- 军令菜单 ---------------------------------------------------------- */
+.game-menu-box {
+  padding: 24px 26px 20px !important;
+}
+
+.game-menu-seal {
+  margin: 0 auto 18px !important;
+  border: 1px solid #d9a55c;
+  border-radius: 3px !important;
+  background: linear-gradient(145deg, #922f24, #5b1b16) !important;
+  color: #fff0c8 !important;
+  box-shadow: 0 8px 20px rgba(0,0,0,.30), inset 0 0 0 2px rgba(255,225,157,.08) !important;
+}
+
+.menu-item {
+  border: 1px solid rgba(218,173,91,.30) !important;
+  border-radius: 4px !important;
+  background: linear-gradient(180deg, #39291b, #21170f) !important;
+  color: #e7d4aa !important;
+  box-shadow: inset 0 1px 0 rgba(255,233,179,.05), 0 4px 10px rgba(0,0,0,.17);
+}
+.menu-item:hover:not(:disabled) {
+  border-color: rgba(234,187,94,.65) !important;
+  background: linear-gradient(180deg, #51351f, #2d1d13) !important;
+  filter: none !important;
+}
+.menu-item.menu-primary {
+  border-color: rgba(239,190,98,.74) !important;
+  background: linear-gradient(180deg, #95362a, #611f19) !important;
+  color: #fff0c7 !important;
+}
+.menu-item.menu-danger {
+  color: #e4a492 !important;
+  border-color: rgba(188,92,71,.45) !important;
+  background: linear-gradient(180deg, #44221b, #281512) !important;
+}
+
+.game-menu-audio {
+  border-top-color: rgba(218,173,91,.18) !important;
+}
+.menu-audio-btn {
+  border-color: rgba(218,173,91,.35) !important;
+  background: #241811 !important;
+}
+.game-menu-hint {
+  color: #978769 !important;
+}
+
+/* --- Common confirmation / text modals -------------------------------- */
+.confirm-title {
+  color: #f0d393 !important;
+}
+.confirm-text {
+  color: #dac8a3 !important;
+}
+
+.rulebook-content-scroll,
+.inspector-details-pane,
+.discard-cards-grid {
+  scrollbar-color: #8e6230 #17100b;
+}
+
+@media (max-width: 520px) {
+  .network-tabs { padding-left: 5px; padding-right: 5px; }
+  .network-tabs .tab-btn { padding: 8px 4px; font-size: 11px; }
+  .net-room-panel { padding-left: 12px !important; padding-right: 12px !important; }
+  .hq-pick-box { border-radius: 5px !important; }
+  .game-menu-box { padding-left: 18px !important; padding-right: 18px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-btn,
+  .menu-item,
+  .network-tabs .tab-btn,
+  .hq-card,
+  .hqp-deck {
+    transition: none !important;
+  }
+}
