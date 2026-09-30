@@ -266,6 +266,8 @@ export class InteractionController {
     // Check provision affordability
     const cost = getCardPlayCost(this.gameState, this.localPlayerId, card);
     if (player.provisions < cost) {
+      // 点了打不起的牌：先取消之前选中的牌，免得高亮留在别的牌上
+      if (this.selectedCard) this.cancelSelection();
       this._triggerShake(cardEl);
       this._showToast(`粮草不足 (需 ${cost} 粮草，当前仅存 ${player.provisions})`);
       return;
@@ -1403,6 +1405,17 @@ export class InteractionController {
     toast.className = 'toast-alert';
     toast.textContent = msg;
     (doc.getElementById('game-app') || doc.body).appendChild(toast);
+    // 竖屏：卡牌详情浮窗显示时，提示贴在浮窗正上方，信息和提示放在一起
+    try {
+      const tip = doc.body.classList.contains('m-port') ? doc.querySelector('.card-inspector-tooltip') : null;
+      const r = tip && getComputedStyle(tip).display !== 'none' && getComputedStyle(tip).visibility !== 'hidden' && !tip.classList.contains('hidden') ? tip.getBoundingClientRect() : null;
+      if (r && r.height > 20) {
+        toast.classList.add('toast-near-info');
+        toast.style.top = `${Math.max(8, r.top + 1)}px`;
+        toast.style.left = `${r.left}px`;
+        toast.style.width = `${r.width}px`;
+      }
+    } catch { /* ignore */ }
     setTimeout(() => toast.classList?.add('toast-show'), 10);
     setTimeout(() => {
       toast.classList?.remove('toast-show');

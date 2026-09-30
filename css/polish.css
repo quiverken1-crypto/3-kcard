@@ -510,3 +510,18 @@ body.m-port #player-dock #btn-end-turn .seal-text { white-space: nowrap; }
 body.m-port #player-dock .granary-cluster, body.m-port #player-dock .prestige-cluster { width: auto !important; }
 body.m-port #player-dock .granary-cluster { flex: 1 1 0 !important; }
 body.m-port #player-dock .prestige-cluster { padding-left: 8px; border-left: 1px solid rgba(217,179,106,.25); }
+/* 竖屏：提示贴在卡牌详情上方 */
+.toast-alert.toast-near-info { transform: translateY(-100%) !important; bottom: auto !important; max-width: none !important; box-sizing: border-box; border-radius: 10px 10px 0 0; z-index: 990 !important; }
+.toast-alert.toast-near-info.toast-show { transform: translateY(-100%) !important; }
+/* 竖屏倒计时：居中、不换行 */
+body.m-port #player-dock #turn-timer.dock-timer { display: flex !important; align-items: center !important; justify-content: center !important; padding: 0 !important; overflow: hidden; }
+body.m-port #player-dock #turn-timer .turn-timer-chip { width: 100%; display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; text-align: center; white-space: nowrap; }
+body.m-port #player-dock #turn-timer #turn-timer-text { white-space: nowrap; word-break: keep-all; display: block; text-align: center; min-width: 2.2em; }
+body.m-port #player-dock #turn-timer .turn-timer-fill, body.m-port #player-dock #turn-timer .turn-timer-track { display: none; }
+/* 弹窗整体避开手机状态栏/底部横条（规则、菜单等的关闭按钮不再被遮挡） */
+.modal-overlay { box-sizing: border-box; padding: calc(env(safe-area-inset-top, 0px) + 8px) calc(env(safe-area-inset-right, 0px) + 8px) calc(env(safe-area-inset-bottom, 0px) + 8px) calc(env(safe-area-inset-left, 0px) + 8px); }
+.modal-overlay > .modal-box { max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 16px) !important; }
+.rulebook-box { display: flex; flex-direction: column; overflow: hidden !important; }
+.rulebook-box .modal-header { flex: none; position: sticky; top: 0; z-index: 2; }
+.rulebook-box .rulebook-content-scroll { flex: 1 1 auto; min-height: 0; }
+.toast-alert.toast-near-info { font-size: 14px !important; line-height: 1.45; padding: 7px 12px !important; background: rgba(120,40,24,.96) !important; border-color: rgba(240,180,120,.6) !important; border-bottom: 0 !important; }
