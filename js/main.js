@@ -85,6 +85,10 @@ function decorateSgkChrome(doc) {
       layer.className = 'sgk-frame-corners';
       layer.setAttribute('aria-hidden', 'true');
       layer.innerHTML =
+        '<i class="sgk-edge sgk-edge-top"></i>' +
+        '<i class="sgk-edge sgk-edge-right"></i>' +
+        '<i class="sgk-edge sgk-edge-bottom"></i>' +
+        '<i class="sgk-edge sgk-edge-left"></i>' +
         '<i class="sgk-corner sgk-corner-tl"></i>' +
         '<i class="sgk-corner sgk-corner-tr"></i>' +
         '<i class="sgk-corner sgk-corner-bl"></i>' +
