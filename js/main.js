@@ -76,41 +76,6 @@ function preloadUiSkinAssets() {
   })));
 }
 
-/** Visual-only chrome. The frame is CSS-first, these corner pieces are enhancement. */
-function decorateSgkChrome(doc) {
-  const decorate = (root = doc) => {
-    for (const box of root.querySelectorAll?.('.modal-box') || []) {
-      if (box.querySelector(':scope > .sgk-frame-corners')) continue;
-      const layer = doc.createElement('span');
-      layer.className = 'sgk-frame-corners';
-      layer.setAttribute('aria-hidden', 'true');
-      layer.innerHTML =
-        '<i class="sgk-edge sgk-edge-top"></i>' +
-        '<i class="sgk-edge sgk-edge-right"></i>' +
-        '<i class="sgk-edge sgk-edge-bottom"></i>' +
-        '<i class="sgk-edge sgk-edge-left"></i>' +
-        '<i class="sgk-corner sgk-corner-tl"></i>' +
-        '<i class="sgk-corner sgk-corner-tr"></i>' +
-        '<i class="sgk-corner sgk-corner-bl"></i>' +
-        '<i class="sgk-corner sgk-corner-br"></i>';
-      box.prepend(layer);
-    }
-  };
-  decorate();
-  if (doc.documentElement.dataset.sgkChromeObserver) return;
-  doc.documentElement.dataset.sgkChromeObserver = '1';
-  const observer = new MutationObserver(records => {
-    for (const record of records) {
-      for (const node of record.addedNodes) {
-        if (!(node instanceof Element)) continue;
-        if (node.matches?.('.modal-box')) decorate(node.parentElement || doc);
-        else if (node.querySelector?.('.modal-box')) decorate(node);
-      }
-    }
-  });
-  observer.observe(doc.body, { childList: true, subtree: true });
-}
-
 export const APP_MODE = Object.freeze({
   UNINITIALIZED: 'UNINITIALIZED',
   SOLO_VS_BOT: 'SOLO_VS_BOT',
@@ -171,9 +136,6 @@ export class AppCoordinator {
   async init() {
     const doc = typeof document !== 'undefined' ? document : globalThis.document;
     if (!doc) return;
-
-    // UI V2 decorative chrome is visual-only and does not alter gameplay.
-    decorateSgkChrome(doc);
 
     // 1. Initialize Card Inspector Tooltip
     CardInspector.init();
@@ -635,7 +597,6 @@ export class AppCoordinator {
       drawer?.classList.toggle('collapsed');
       if (!drawer?.classList.contains('collapsed')) this.combatLog?.scrollToBottom();
       doc.getElementById('btn-open-log')?.classList.toggle('active', !drawer?.classList.contains('collapsed'));
-      requestAnimationFrame(() => this._fitBoard());
     };
     doc.getElementById('btn-open-log')?.addEventListener('click', toggleLog);
     doc.getElementById('btn-close-drawer')?.addEventListener('click', () => { if (!drawer?.classList.contains('collapsed')) toggleLog(); });
