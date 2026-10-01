@@ -1,0 +1,174 @@
+/* Battle chrome: decorative edges do not change the fitted board geometry. */
+#battlefield-main {
+  background: radial-gradient(ellipse at center,rgba(28,21,13,.57),rgba(10,8,6,.9)),
+    url('../assets/ui/home-bg.webp') center/cover no-repeat !important;
+}
+#top-bar.hud-top-bar {
+  background: linear-gradient(180deg,#332318,#1b140e) !important;
+  border-bottom: 1px solid #b48a48 !important;
+  box-shadow: 0 4px 18px #0008,inset 0 -3px 0 #6f4b222e;
+}
+#top-bar :is(.resource-badge,.phase-badge) {
+  background: linear-gradient(180deg,#32271c,#1c160f) !important;
+  border: 1px solid #876639 !important;
+  color: #f1dfb6 !important;
+  border-radius: 4px;
+  box-shadow: inset 0 1px 0 #fff1c00a;
+}
+#top-bar .phase-badge.phase-friendly {
+  background: var(--sgk-selected) !important;
+  border-color: #deb063 !important;
+}
+#top-bar .phase-badge.phase-opponent { color: #d2bf99 !important; }
+.hq-name { color: #f4deb0; letter-spacing: 1px; }
+.hq-hp-numeric { color: #f8e9c9; font-weight: 700; }
+.hq-hp-bar { background: #0c0906; border: 1px solid #765733; }
+.hq-hp-bar .hp-fill { background: linear-gradient(90deg,#98502f,#d1a457) !important; }
+
+.board-aspect-wrapper { filter: drop-shadow(0 10px 20px #0008); }
+.battlefield-line.line-support {
+  background: linear-gradient(180deg,#35261bdd,#1c160fee) !important;
+  border: 1px solid #a37c44 !important;
+  border-image: var(--sgk-modal-frame) 104 / 20px / 0 stretch !important;
+  border-radius: 3px !important;
+  box-shadow: inset 0 0 36px #0006,0 4px 14px #0006;
+}
+.line-support.line-opp { background: linear-gradient(180deg,#42271ddd,#241810ee) !important; }
+.line-support.line-friendly { background: linear-gradient(180deg,#3a2b1ddd,#211910ee) !important; }
+.line-support .line-header { left: 16px; top: 22px; }
+.line-support .line-title {
+  color: #ead5a7 !important;
+  opacity: 1;
+  text-shadow: 0 1px 3px #000;
+  font-family: var(--sgk-serif);
+}
+.battlefield-line.line-frontline {
+  background: linear-gradient(180deg,#211a12e8,#15100bed) !important;
+  border: 1px solid #aa8247 !important;
+  border-image: var(--sgk-modal-frame) 104 / 18px / 0 stretch !important;
+  border-radius: 3px !important;
+}
+.frontline-zone {
+  border-radius: 4px !important;
+  box-shadow: inset 0 0 28px #0005,inset 0 0 0 3px #d8aa5912;
+}
+.frontline-zone .zone-terrain-banner {
+  background: linear-gradient(90deg,#20170ce8,#21190dc9) !important;
+  border-bottom: 1px solid #ac854559 !important;
+  color: #f2dfb8;
+}
+.frontline-zone.terrain-water .zone-terrain-banner { background: linear-gradient(90deg,#142f3ce8,#1d2520dc) !important; }
+.frontline-zone.terrain-forest .zone-terrain-banner { background: linear-gradient(90deg,#243821eb,#25251cdc) !important; }
+.terrain-name { color: #f3dfb0; font-family: var(--sgk-serif); }
+.terrain-effect-line { color: #e3d4b7; }
+.zone-capacity-tag { color: #efe0bc; border-color: #a17b4359; background: #100d08a6; }
+.zone-occupant-badge.occupant-neutral { color: #ddcfb1; background: #17110cb5; }
+.slot:not(.slot-occupied):not(.hq-slot) {
+  border-color: #d0a75a40 !important;
+  background: #08060329 !important;
+  border-radius: 4px !important;
+}
+.hq-slot,.hq-fortress {
+  border-radius: 4px !important;
+  border-image: var(--sgk-modal-frame) 104 / 16px / 0 stretch !important;
+  box-shadow: inset 0 0 20px #0005,0 4px 12px #0007 !important;
+}
+.board-unit { border-radius: 5px; box-shadow: 0 5px 12px #0008; }
+.hq-card-view .hq-crest {
+  width: 60px; height: 49px; margin: 0 auto;
+  font-size: 0 !important;
+  background: var(--sgk-icons) -246px -120px / 307px 230px no-repeat;
+  filter: drop-shadow(0 3px 4px #0008);
+}
+.hq-card-view .hq-hp-chip { border-radius: 3px; background: #3b2a19; border: 1px solid #b28a47; color: #f8e3b9; }
+.hq-card-view .hq-hp-chip.val-damaged { background: #662a20; border-color: #d78967; color: #ffe3cd; }
+.hq-slot.fortress-danger { border-image: none !important; border-color: #ea7252 !important; }
+
+/* Resource blocks, hand tray and turn control share one lacquered dock. */
+#player-dock.dock-bottom-bar {
+  background: linear-gradient(180deg,#38281cf5,#1a120cfb) !important;
+  border-top: 1px solid #c19854 !important;
+  box-shadow: 0 -6px 22px #0008,inset 0 4px 0 #d8aa5912;
+}
+#player-dock :is(.player-hq-meta,.player-resources) {
+  border: 1px solid #a27c415e;
+  border-radius: 4px;
+  background: linear-gradient(180deg,#2a1e16,#17110c);
+  box-shadow: inset 0 1px 0 #fff0c10a;
+}
+#player-dock #hand-tray {
+  border: 1px solid #d8aa5930;
+  border-radius: 4px;
+  background: linear-gradient(180deg,#18110d66,#24190e55);
+  box-sizing: border-box;
+}
+#player-dock :is(.granary-header,.prestige-header,.granary-label,.prestige-label) { color: #dcc59a; }
+#player-dock :is(.granary-count,.prestige-count,.resource-val) { color: #f3dfb6; }
+#player-dock :is(.deck-pile-widget,.btn-graveyard) {
+  position: relative;
+  background: var(--sgk-control) !important;
+  color: #eedbb3 !important;
+  border: 1px solid #af874b !important;
+  border-radius: 4px !important;
+}
+#player-dock #btn-end-turn {
+  position: relative !important;
+  border-radius: 4px !important;
+  border: 1px solid #b68c4c !important;
+  background: var(--sgk-control) !important;
+  color: #c8b28d !important;
+  font-family: var(--sgk-serif);
+  letter-spacing: 3px;
+  box-shadow: inset 0 1px 0 #ffefc21a,0 4px 12px #0005;
+}
+#player-dock #btn-end-turn.state-active {
+  background: var(--sgk-selected) !important;
+  color: #fff0ce !important;
+  border-color: #e0b15f !important;
+}
+#player-dock #btn-end-turn.state-active:hover { filter: brightness(1.15); }
+#player-dock #btn-end-turn:disabled { opacity: .6; }
+#player-dock .turn-timer-chip { border-radius: 4px; color: #f2ddb3; }
+
+/* The floating report gets the same frame without reserving board space. */
+#side-drawer.tactical-drawer {
+  border: 10px solid transparent !important;
+  border-image: var(--sgk-modal-frame) 104 / 22px / 0 stretch !important;
+  border-radius: 4px !important;
+  box-sizing: border-box;
+  background: linear-gradient(180deg,#302218fc,#15100bfc) !important;
+}
+#side-drawer .drawer-header { padding: 10px; background: #68312640 !important; }
+#side-drawer .drawer-title { font-family: var(--sgk-serif); font-size: 17px; }
+#side-drawer .log-entry { color: #eadbbc; line-height: 1.65; border-radius: 3px; }
+#side-drawer .log-entry strong { color: #f3d18d; }
+.icon-tool-btn { border: 1px solid #9a743e; border-radius: 4px; color: #e8d5ae; background: #291d13; }
+.game-menu-hint { color: #ccb890 !important; line-height: 1.6; }
+.game-menu-audio { border-top: 1px solid #d8aa5933; padding-top: 12px; color: #e9d5ae; }
+.inspector-box { border-image: var(--sgk-modal-frame) 104 / 18px / 0 stretch !important; }
+.card-inspector-tooltip .inspector-card {
+  border: 8px solid transparent;
+  border-image: var(--sgk-modal-frame) 104 / 18px / 0 stretch;
+  border-radius: 4px;
+  background: linear-gradient(180deg,#302219,#17110c);
+  box-shadow: 0 12px 36px #000a;
+}
+.card-inspector-tooltip .inspector-header { background: #5d2b2145; border-bottom-color: #d8aa5933; }
+.card-inspector-tooltip .inspector-glossary li { color: #dccaa7; }
+
+#player-dock :is(.btn-end-turn,.btn-graveyard,.deck-pile-widget)::after {
+  content: ""; position: absolute; inset: 4px; pointer-events: none;
+  background:
+    linear-gradient(#d8aa59,#d8aa59) left top / 9px 1px no-repeat,
+    linear-gradient(#d8aa59,#d8aa59) left top / 1px 9px no-repeat,
+    linear-gradient(#d8aa59,#d8aa59) right top / 9px 1px no-repeat,
+    linear-gradient(#d8aa59,#d8aa59) right top / 1px 9px no-repeat,
+    linear-gradient(#d8aa59,#d8aa59) left bottom / 9px 1px no-repeat,
+    linear-gradient(#d8aa59,#d8aa59) left bottom / 1px 9px no-repeat,
+    linear-gradient(#d8aa59,#d8aa59) right bottom / 9px 1px no-repeat,
+    linear-gradient(#d8aa59,#d8aa59) right bottom / 1px 9px no-repeat;
+  opacity: .65;
+}
+@media (max-height:620px) and (orientation:landscape) {
+  #side-drawer.tactical-drawer { border-width: 7px !important; border-image-width: 17px !important; }
+}
