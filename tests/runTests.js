@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const testFiles = [
+  { name: 'Courier Runner', path: resolve(__dirname, 'courierRunner.test.js') },
   { name: 'Tier 1: Feature Coverage', path: resolve(__dirname, 'tier1_feature.test.js') },
   { name: 'Tier 2: Boundary & Corner Cases', path: resolve(__dirname, 'tier2_boundary.test.js') },
   { name: 'Tier 3: Pairwise Combinations', path: resolve(__dirname, 'tier3_pairwise.test.js') },

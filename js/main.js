@@ -30,6 +30,7 @@ import { HQ_CARDS } from './data/terrains.js';
 import { KINGDOMS } from './data/cardDB.js';
 import { setSeatKingdoms, seatArmy } from './ui/seats.js';
 import { preloadAssets } from './ui/preloader.js';
+import { mountCourierRunner } from './ui/courierRunner.js';
 import { DeckBuilder } from './ui/deckBuilder.js';
 import { Workshop } from './ui/workshop.js';
 import './api.js'; // 开放接口：window.SGK
@@ -258,18 +259,54 @@ export class AppCoordinator {
     const label = doc.getElementById('boot-label');
     const pct = doc.getElementById('boot-pct');
     const skip = doc.getElementById('boot-skip');
+    const canvas = doc.getElementById('courier-canvas');
+    let runner;
+    let returnFocus;
+    const inertBefore = new Map();
+    const openRunner = () => {
+      returnFocus = doc.activeElement;
+      closed = false;
+      box.classList.remove('hidden', 'done');
+      for (const sibling of box.parentElement.children) {
+        if (sibling === box) continue;
+        inertBefore.set(sibling, sibling.hasAttribute('inert'));
+        sibling.setAttribute('inert', '');
+      }
+      runner = mountCourierRunner(canvas, {
+        button: doc.getElementById('courier-jump'), status: doc.getElementById('courier-status'),
+        score: doc.getElementById('courier-score'), best: doc.getElementById('courier-best')
+      });
+      skip?.focus();
+    };
     let chip = null;
     let closed = false;
     const close = () => {
       if (closed) return;
       closed = true;
+      runner?.destroy();
+      for (const [sibling, wasInert] of inertBefore) if (!wasInert) sibling.removeAttribute('inert');
+      inertBefore.clear();
       box.classList.add('done');
-      setTimeout(() => box.remove(), 600);
+      setTimeout(() => { if (closed) box.classList.add('hidden'); }, 300);
+      if (returnFocus?.isConnected && returnFocus !== doc.body) returnFocus.focus();
+      else doc.getElementById('home-btn-pve')?.focus();
     };
-    setTimeout(() => skip?.classList.remove('hidden'), 2500);
+    openRunner();
+    doc.getElementById('home-btn-runner')?.addEventListener('click', openRunner);
+    box.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Escape') { e.preventDefault(); close(); }
+      if (e.key === 'Tab') {
+        const controls = [canvas, doc.getElementById('courier-jump'), skip].filter(Boolean);
+        const index = controls.indexOf(doc.activeElement);
+        e.preventDefault(); controls[(index + (e.shiftKey ? -1 : 1) + controls.length) % controls.length]?.focus();
+      }
+    });
     skip?.addEventListener('click', () => {
       close();
       this.audio?.loadMusicInBackground?.();
+      if (pct?.textContent === '100%') return;
+      chip?.remove();
       chip = doc.createElement('div');
       chip.className = 'bg-load-chip';
       doc.body.appendChild(chip);
@@ -281,13 +318,13 @@ export class AppCoordinator {
         if (fill) fill.style.width = `${p}%`;
         if (pct) pct.textContent = `${p}%`;
         if (label) label.textContent = ratio >= 1 ? '加载完成' : `正在加载${l}…`;
-        box.setAttribute('aria-valuenow', String(p));
+        doc.getElementById('boot-progress')?.setAttribute('aria-valuenow', String(p));
         if (chip) chip.textContent = `资源加载 ${p}%`;
       }
     }).then(() => {
       this.audio?.loadMusicInBackground?.();
       if (chip) { chip.textContent = '资源已就绪'; setTimeout(() => chip.remove(), 1500); }
-      setTimeout(close, 250);
+      if (label) label.textContent = '资源就绪，随时出征';
     });
   }
 

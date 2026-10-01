@@ -1,0 +1,142 @@
+/* V2 atlas parts retain their aspect ratios. Ornament lives in reserved space,
+   never in a layer above card names, descriptions, counters or hit targets. */
+:root {
+  --v2-ink: #171c19;
+  --v2-jade: #45645b;
+  --v2-paper: #eadfc6;
+  --v2-gold: #b89b60;
+  --v2-red: #a9382b;
+  --v2-muted: #b7b19e;
+}
+.theme-martial { --font-serif-calligraphy: "SimSun", "Songti SC", "STSong", serif; }
+.home-screen.hm {
+  --ink: var(--v2-ink); --paper: var(--v2-paper); --paper-dim: var(--v2-muted);
+  --cinnabar: var(--v2-red); --hm-serif: "SimSun", "Songti SC", "STSong", serif;
+  background: radial-gradient(ellipse at 30% 30%, #2d3930 0, #171c19 60%) !important;
+}
+.hm-sun { opacity: .65; background: #8e362d; }
+.hm-brand { position: relative; padding-bottom: 28px; }
+.hm-brand::after {
+  content: ""; position: absolute; bottom: 0; left: 0; width: min(100%, 440px); height: 27px;
+  background: url('../assets/ui/kit_v2/parts/divider.webp') center / contain no-repeat;
+  opacity: .65; pointer-events: none;
+}
+.hm-item { grid-template-columns: 48px minmax(0, 1fr) 20px; gap: 14px; padding: 20px 16px 20px 6px; }
+.hm-item em { font-size: 0; width: 48px; height: 48px; background: center / contain no-repeat; }
+#home-btn-pve em { background-image: url('../assets/ui/kit_v2/parts/swords.webp'); }
+#home-btn-pvp em { background-image: url('../assets/ui/kit_v2/parts/network.webp'); }
+#home-btn-eve em { background-image: url('../assets/ui/kit_v2/parts/helmet.webp'); }
+.hm-it b { letter-spacing: .15em; }
+.hm-it small { white-space: normal; overflow: visible; line-height: 1.5; }
+.hm-item.hm-primary { background: #394c40; color: #f6edda; border-color: #a6905b; }
+.hm-item.hm-primary small { color: #d1ceb9; }
+.hm-item.hm-primary:hover { background: #49624f; }
+.hm-links { flex-wrap: wrap; row-gap: 8px; }
+.hm-link { letter-spacing: 1px; min-height: 44px; }
+.hm-foot { letter-spacing: 1px; line-height: 1.7; }
+.hm-repo { color: #c9ba98; }
+
+/* Smooth fine bronze lines replace repeated heavy outlines. A compact corner
+   appears only on spacious dialogs; it is not stretched around the content. */
+.theme-martial .modal-box {
+  border: 1px solid #8e784c !important; border-radius: 12px !important;
+  background: radial-gradient(ellipse at top left, #29342c, #171b17 65%) !important;
+  box-shadow: 0 18px 80px #0009, inset 0 0 0 4px #b89b6010 !important;
+  padding: clamp(18px, 3vw, 28px) !important; box-sizing: border-box;
+}
+.theme-martial .modal-header { gap: 12px; min-width: 0; }
+.theme-martial .modal-header h2 { min-width: 0; overflow-wrap: anywhere; }
+.theme-martial .modal-close-btn { flex-shrink: 0; min-width: 36px; min-height: 36px; }
+.theme-martial .modal-btn { min-height: 44px; line-height: 1.35; white-space: normal; }
+.theme-martial .modal-btn.btn-primary {
+  background: #712b22 !important;
+  border: solid transparent !important; border-width: 9px 15px !important;
+  border-image: url('../assets/ui/kit_v2/parts/button-red.webp') 18 28 fill / 9px 15px / 0 stretch !important;
+  border-radius: 6px; padding: 4px 17px !important;
+  color: #fff2d3; text-shadow: 0 1px 2px #000;
+}
+/* Small battle controls use light CSS borders to keep numbers and labels clear. */
+.theme-martial .battlefield-line.line-support,
+.theme-martial .battlefield-line.line-frontline {
+  border-width: 1px !important; border-color: #a28b514d !important;
+  border-radius: 8px !important; box-shadow: inset 0 1px 0 #eee3bc08 !important;
+}
+.theme-martial .phase-badge { border-color: #aa915969 !important; box-shadow: none !important; border-radius: 5px; }
+.theme-martial .hud-action-btn { border-color: #aa91595e; border-radius: 5px; }
+.theme-martial #btn-open-log span { font-size: 0 !important; width: 22px; height: 22px; background: url('../assets/ui/kit_v2/parts/book.webp') center / contain no-repeat; }
+.theme-martial #btn-open-menu span { font-size: 0 !important; width: 22px; height: 22px; background: url('../assets/ui/kit_v2/parts/workshop.webp') center / contain no-repeat; }
+.theme-martial .card-name-banner, .theme-martial .unit-name-text { text-shadow: 0 1px 3px #000; }
+.theme-martial .card-description { line-height: 1.35; }
+.theme-martial .hq-card-view .hq-crest { font-size: 0 !important; width: 52px; height: 44px; flex: none; margin: 0 auto; background: url('../assets/ui/kit_v2/parts/city.webp') center / contain no-repeat; }
+body.m-port .hq-card-view .hq-crest, body.m-land .hq-card-view .hq-crest { width: 30px; height: 24px; }
+
+/* Opening: an optional playable road, not an ambient animation. */
+.boot-loader { background: radial-gradient(ellipse at 50% 25%, #2c3930, #121813 75%); overflow: auto; padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); box-sizing: border-box; }
+.boot-loader.hidden { display: none !important; }
+.boot-panel { width: min(640px, 100%); position: relative; margin: auto; padding: 30px; box-sizing: border-box; border: 1px solid #b89b604d; border-radius: 12px; background: #171e19; color: var(--v2-paper); box-shadow: 0 20px 70px #0006; }
+.boot-panel::before, .boot-panel::after {
+  content: ""; position: absolute; width: 54px; height: 56px;
+  background: url('../assets/ui/kit_v2/parts/corner.webp') center / contain no-repeat;
+  pointer-events: none; opacity: .65; bottom: 6px;
+}
+.boot-panel::before { left: 6px; }
+.boot-panel::after { right: 6px; transform: scaleX(-1); }
+.courier-eyebrow { color: #b3a886; letter-spacing: .25em; font-size: 11px; margin: 0 0 12px; }
+.boot-title { margin: 0; font-size: clamp(28px, 6vw, 40px); letter-spacing: .2em; color: #ecdfbd; line-height: 1.3; }
+.courier-subtitle { color: #bcb39b; font: 14px/1.5 "SimSun", serif; margin: 12px 0 22px; letter-spacing: .12em; }
+.courier-scoreboard { display: flex; justify-content: space-between; gap: 16px; padding: 0 4px 10px; color: #aaa58e; font-size: 11px; }
+.courier-scoreboard b { font: 14px/1.5 Consolas, monospace; letter-spacing: 2px; color: #e5d7b0; margin-left: 6px; }
+#courier-canvas { display: block; width: 100%; aspect-ratio: 32 / 9; height: auto; background: #111813; border-radius: 6px; touch-action: manipulation; cursor: pointer; }
+.courier-status { font-size: 12px; color: #c6bea5; line-height: 1.6; min-height: 2em; margin: 12px 0 16px; }
+.courier-actions { display: flex; justify-content: center; gap: 12px; }
+.courier-button { min-height: 46px; min-width: 130px; max-width: 250px; flex: 1; padding: 4px 12px; font: 15px/1.3 "SimSun", serif; color: #f6e5bb; background: #282a22; border: solid transparent; border-width: 9px 15px; border-image: url('../assets/ui/kit_v2/parts/button-dark.webp') 18 28 fill / 9px 15px / 0 stretch; cursor: pointer; border-radius: 6px; }
+.courier-enter { border-image-source: url('../assets/ui/kit_v2/parts/button-red.webp'); background-color: #712b22; }
+.courier-button:hover { filter: brightness(1.15); }
+.courier-button:focus-visible, #courier-canvas:focus-visible, .hm-link:focus-visible { outline: 2px solid #edd494; outline-offset: 4px; }
+.boot-bar { margin-top: 26px; height: 3px; border: 0; background: #b89b6026; }
+.boot-bar-fill { background: linear-gradient(90deg, #45645b, #c7a760); }
+.boot-info { font-size: 11px; gap: 12px; text-align: left; }
+.boot-tip { color: #a49e89; font-size: 11px; line-height: 1.6; margin-top: 12px; }
+
+@media (min-width: 1000px) and (min-height: 650px) {
+  .hm-link::before { content: ""; display: block; height: 24px; margin: 0 auto 6px; background: center / contain no-repeat; pointer-events: none; }
+  #home-btn-decks::before { background-image: url('../assets/ui/kit_v2/parts/cards.webp'); }
+  #home-btn-rules::before { background-image: url('../assets/ui/kit_v2/parts/book.webp'); }
+  #home-btn-editor::before { background-image: url('../assets/ui/kit_v2/parts/workshop.webp'); }
+  #home-btn-audio::before { background-image: url('../assets/ui/kit_v2/parts/music.webp'); }
+  .theme-martial .modal-box { background-image: url('../assets/ui/kit_v2/parts/corner.webp'), radial-gradient(ellipse at top left, #29342c, #171b17 65%) !important; background-position: left 6px bottom 6px, center !important; background-size: 38px 40px, auto !important; background-repeat: no-repeat !important; padding-bottom: 48px !important; }
+}
+@media (max-width: 640px) and (orientation: portrait) {
+  .home-screen.hm { grid-template-rows: minmax(190px, 1fr) auto auto; gap: 14px; overflow-y: auto !important; padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
+  .hm-brand { padding-top: 0; padding-bottom: 30px; }
+  .hm-title { font-size: min(29vw, 21vh); }
+  .hm-side { gap: 9px; }
+  .hm-tag { letter-spacing: 1px; }
+  .hm-item { padding: 12px 10px; grid-template-columns: 40px minmax(0, 1fr) 16px; gap: 12px; }
+  .hm-item em { width: 40px; height: 40px; }
+  .hm-it b { font-size: 20px; }
+  .hm-links { margin-top: 10px; }
+  .hm-foot { margin-top: 0; font-size: 10px; }
+  .boot-panel { padding: 24px 16px 28px; }
+  #courier-canvas { aspect-ratio: 32 / 13; }
+  .courier-button { min-width: 0; padding: 4px 7px; font-size: 14px; }
+  .theme-martial .modal-btn.btn-primary { padding: 4px 12px !important; }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .boot-panel { width: min(700px, 100%); padding: 14px 22px; }
+  .courier-eyebrow { margin-bottom: 4px; }
+  .boot-title { font-size: 25px; }
+  .courier-subtitle { display: none; }
+  #courier-canvas { height: min(25vh, 110px); aspect-ratio: auto; }
+  .courier-scoreboard { padding-bottom: 4px; }
+  .courier-status { margin: 5px 0; min-height: 0; }
+  .courier-button { min-height: 42px; padding-top: 3px; padding-bottom: 3px; }
+  .boot-panel::before, .boot-panel::after { display: none; }
+  .boot-bar { margin-top: 12px; }
+  .boot-tip { display: none; }
+  .hm-item { padding: 8px 10px; grid-template-columns: 34px minmax(0, 1fr) 16px; gap: 10px; }
+  .hm-item em { width: 34px; height: 34px; }
+  .hm-brand { padding-bottom: 18px; }
+  .hm-brand::after { height: 18px; }
+}
+@media (prefers-reduced-motion: reduce) { .boot-loader, .boot-bar-fill { transition: none; } }

@@ -24,6 +24,7 @@
   <link rel="stylesheet" href="css/mobile.css">
   <link rel="stylesheet" href="css/deck.css">
   <link rel="stylesheet" href="css/polish.css">
+  <link rel="stylesheet" href="css/ui-v2.css">
 </head>
 <body class="theme-martial">
 
@@ -46,14 +47,18 @@
     <button id="touch-cancel" class="touch-cancel-btn" type="button">✕ 取消</button>
 
     <!-- 资源加载 -->
-    <div id="boot-loader" class="boot-loader" role="progressbar" aria-label="资源加载进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+    <div id="boot-loader" class="boot-loader" role="dialog" aria-modal="true" aria-labelledby="courier-title">
       <div class="boot-panel">
-        <div class="home-seal boot-seal">三国</div>
-        <div class="boot-title">三国 KARDS</div>
-        <div class="boot-bar"><div id="boot-bar-fill" class="boot-bar-fill"></div></div>
+        <p class="courier-eyebrow">三国 KARDS · 出征之前</p>
+        <h1 id="courier-title" class="boot-title">驿路疾行</h1>
+        <p class="courier-subtitle">一封军令，一路风尘。</p>
+        <div class="courier-scoreboard"><span>路程 <b id="courier-score">0000</b></span><span>最佳 <b id="courier-best">0000</b></span></div>
+        <canvas id="courier-canvas" width="640" height="180" tabindex="0" aria-label="驿使跑酷：空格、上箭头或点按跳过路障">点按下方按钮或空格跳跃。也可直接进入主菜单。</canvas>
+        <p id="courier-status" class="courier-status" aria-live="polite">空格 / ↑ / 点按跳跃，随时可进入主菜单</p>
+        <div class="courier-actions"><button id="courier-jump" type="button" class="courier-button">开始跑酷</button><button id="boot-skip" type="button" class="courier-button courier-enter">进入主菜单</button></div>
+        <div id="boot-progress" class="boot-bar" role="progressbar" aria-label="资源加载进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="boot-bar-fill" class="boot-bar-fill"></div></div>
         <div class="boot-info"><span id="boot-label">正在准备资源…</span><span id="boot-pct">0%</span></div>
-        <div class="boot-tip">首次约 1 MB，之后缓存在本机、秒开。浏览器限制：点一下屏幕后才会响起音乐。</div>
-        <button id="boot-skip" class="boot-skip hidden">先进入，后台继续加载</button>
+        <div class="boot-tip">资源在后台准备，跑酷成绩不影响对战。</div>
       </div>
     </div>
 
@@ -78,6 +83,7 @@
           <button id="home-btn-decks" class="hm-link">卡组</button>
           <button id="home-btn-rules" class="hm-link">规则</button>
           <button id="home-btn-editor" class="hm-link">工坊</button>
+          <button id="home-btn-runner" class="hm-link">驿路</button>
           <button id="home-btn-install" class="hm-link hm-touch-only">全屏</button>
           <button id="home-btn-audio" class="hm-link"><span class="hl-label">音乐</span></button>
         </div>
