@@ -1,5 +1,5 @@
 /* 三国KARDS 离线缓存：卡图/音频缓存优先（改资源时请把 VERSION 加一），代码网络优先、断网回落缓存 */
-const VERSION = 'sgk-v36-ui2-battle';
+const VERSION = 'sgk-v37-ui2-isolated-icons';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {

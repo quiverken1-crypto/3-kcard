@@ -60,7 +60,9 @@ const UI_SKIN_ASSETS = [
   'assets/ui/kit_v2/button_kit.webp',
   'assets/ui/kit_v2/icon_kit.webp',
   'assets/ui/kit_v2/divider_kit.webp',
-  'assets/ui/kit_v2/loading_kit.webp'
+  'assets/ui/kit_v2/loading_kit.webp',
+  ...['solo','battle','sandbox','decks','rules','workshop','fullscreen','audio','castle','close'].map(name => `assets/ui/kit_v2/icons/${name}.webp`),
+  ...Array.from({ length: 12 }, (_, i) => `assets/ui/kit_v2/icons/loading-${String(i).padStart(2, '0')}.webp`)
 ];
 
 function preloadUiSkinAssets() {
@@ -294,15 +296,12 @@ export class AppCoordinator {
     let energy = 0;
     let frame = 0;
 
-    // loading_kit 的 12 帧：6×2，缩放到 50% 后直接切 background-position。
-    const frames = [
-      [-6,-51],[-92,-51],[-175,-51],[-258,-51],[-341,-51],[-425,-51],
-      [-5,-144],[-93,-144],[-175,-144],[-258,-144],[-342,-144],[-426,-144]
-    ];
+    // Independent frames have a stable transparent canvas at every display size.
+    const frames = Array.from({ length: 12 }, (_, i) =>
+      `assets/ui/kit_v2/icons/loading-${String(i).padStart(2, '0')}.webp`);
     const frameTimer = setInterval(() => {
       if (!emblem || closed) return;
-      const [x,y] = frames[frame++ % frames.length];
-      emblem.style.backgroundPosition = `${x}px ${y}px`;
+      emblem.style.backgroundImage = `url("${frames[frame++ % frames.length]}")`;
     }, 115);
 
     const hit = () => {
