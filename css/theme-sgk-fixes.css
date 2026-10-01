@@ -86,3 +86,39 @@ body.m-port #player-dock #hand-tray .hand-card-fan .card-hand.selected {
 .targeting-curve { filter: none !important; animation: none !important; stroke-dasharray: none !important; }
 body.is-dragging :is(.frontline-zone,.board-unit,.insert-marker) { animation: none !important; }
 body.is-dragging .card-drag-ghost { will-change: transform; filter: none !important; transition: none !important; }
+
+/* Mobile status is a separate grid row/column. Reserve lift space inside the
+   hand row instead of shifting the scrollport over the status controls. */
+body.m-land #game-app.game-container {
+  grid-template-rows: 32px auto auto auto minmax(0,1fr) auto 116px;
+}
+body.m-port #game-app.game-container {
+  grid-template-rows: 34px minmax(0,1fr) 48px 128px;
+}
+body.m-land #player-dock #hand-tray.hand-fan-tray {
+  top: 0;
+  height: 100% !important;
+  min-height: 0;
+  padding-top: 24px !important;
+  background-clip: border-box !important;
+}
+body.m-land #player-dock :is(.player-hq-meta,.player-resources,.player-deck-actions,#turn-timer) {
+  position: relative;
+  z-index: 260;
+}
+body.m-land #player-dock #hand-tray .hand-card-fan .card-hand:hover:not(.selected) {
+  transform: none !important;
+  outline: none !important;
+}
+body.m-port .card-inspector-tooltip {
+  zoom: 1;
+  top: auto !important;
+  bottom: calc(184px + env(safe-area-inset-bottom,0px)) !important;
+  max-height: calc(var(--app-h,100dvh) - 230px);
+}
+@media (max-height:360px) {
+  body.m-land:not(.m-port) #game-app.game-container {
+    grid-template-rows: 28px auto auto auto minmax(0,1fr) auto 98px;
+  }
+  body.m-land:not(.m-port) #player-dock #hand-tray.hand-fan-tray { height: 100% !important; }
+}

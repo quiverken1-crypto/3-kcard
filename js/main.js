@@ -29,7 +29,8 @@ import { TurnClock } from './ui/turnClock.js';
 import { HQ_CARDS } from './data/terrains.js';
 import { KINGDOMS } from './data/cardDB.js';
 import { setSeatKingdoms, seatArmy } from './ui/seats.js';
-import { BOOT_ASSETS, BOOT_LEVELS, BOOT_GEMS, DEFERRED_UI_ASSETS, bootLevelAt } from './ui/bootAssets.js';
+import { BOOT_ASSETS, DEFERRED_UI_ASSETS } from './ui/bootAssets.js';
+import { MatchArtLoader } from './ui/matchArtLoader.js';
 import { DeckBuilder } from './ui/deckBuilder.js';
 import { Workshop } from './ui/workshop.js';
 import './api.js'; // 开放接口：window.SGK
@@ -267,7 +268,7 @@ export class AppCoordinator {
     doc.addEventListener('fullscreenchange', refit);
   }
 
-  /** 启动缓冲：先确保 UI 皮肤缓存；3–5 秒后允许直接进入，重资源继续后台加载。 */
+  /** Only the home UI is prepared before entering; match art is loaded separately. */
   _runPreloader(doc) {
     const box = doc.getElementById('boot-loader');
     if (!box) return;
@@ -275,45 +276,10 @@ export class AppCoordinator {
     const label = doc.getElementById('boot-label');
     const pct = doc.getElementById('boot-pct');
     const enter = doc.getElementById('boot-skip');
-    const emblem = doc.getElementById('boot-emblem');
-    const miniLabel = doc.getElementById('boot-mini-label');
-    const pips = [...doc.querySelectorAll('#boot-pips i')];
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
     let closed = false;
     let uiDone = false;
-    let energy = 0;
-    const maxEnergy = BOOT_LEVELS.length - 1;
-    const decodedLevels = new Map();
-    const showEnergy = () => {
-      const level = bootLevelAt(energy);
-      if (emblem) {
-        if (!decodedLevels.has(level)) {
-          const img = new Image();
-          img.src = BOOT_LEVELS[level];
-          decodedLevels.set(level, img.decode ? img.decode() : new Promise(resolve => { img.onload = resolve; img.onerror = resolve; if (img.complete) resolve(); }));
-        }
-        decodedLevels.get(level).then(() => {
-          if (!closed && bootLevelAt(energy) === level) emblem.style.backgroundImage = `url("${BOOT_LEVELS[level]}")`;
-        }).catch(() => {});
-        emblem.style.setProperty('--boot-brightness', String(.8 + level * .1));
-        emblem.style.setProperty('--boot-glow', `${level * 3}px`);
-      }
-      pips.forEach((pip, i) => {
-        pip.classList.toggle('on', i < level);
-        pip.style.backgroundImage = `url("${BOOT_GEMS[i < level ? Math.min(i + 2, 6) : 0]}")`;
-      });
-    };
-    showEnergy();
-
-    const hit = () => {
-      if (closed) return;
-      energy = Math.min(maxEnergy, energy + 1);
-      showEnergy();
-      if (miniLabel) miniLabel.textContent = energy >= maxEnergy ? '军印已亮 · 军心齐聚' : `军印渐亮 · 聚势 ${energy}/${maxEnergy}`;
-    };
-    emblem?.addEventListener('click', hit);
-
     const close = () => {
       if (closed) return;
       closed = true;
@@ -1580,6 +1546,8 @@ export class AppCoordinator {
     if (!doc) return;
 
     // 1. Render Battlefield Grid (Support lines, 3 Frontline zones)
+    this._matchArtLoader ||= new MatchArtLoader();
+    this._matchArtLoader.update(state, this.localPlayerId);
     const bfContainer = doc.getElementById('battlefield-main');
     if (bfContainer) {
       // 记录重绘前每张单位卡的位置：有单位阵亡/离场时，其余单位先原地不动，
