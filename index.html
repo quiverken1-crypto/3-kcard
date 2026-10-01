@@ -11,8 +11,7 @@
   <meta name="apple-mobile-web-app-title" content="三国KARDS">
   <link rel="apple-touch-icon" href="assets/icons/icon-180.png">
   <link rel="preload" as="image" href="assets/ui/home-bg.webp" type="image/webp" fetchpriority="high">
-  <link rel="preload" as="image" href="assets/ui/kit_v2/loading_kit.webp" type="image/webp" fetchpriority="high">
-  <link rel="preload" as="image" href="assets/ui/kit_v2/modal_frame.svg" type="image/svg+xml" fetchpriority="high">
+  <link rel="preload" as="image" href="assets/ui/kit_v2/icons/loading-00.webp" type="image/webp" fetchpriority="high">
   <title>三国KARDS — 纯前端局域网对战</title>
   
   <!-- Modular Stylesheets -->
@@ -30,6 +29,7 @@
   <link rel="stylesheet" href="css/theme-sgk-v2.css">
   <link rel="stylesheet" href="css/theme-sgk-refine.css">
   <link rel="stylesheet" href="css/theme-sgk-battle.css">
+  <link rel="stylesheet" href="css/theme-sgk-fixes.css">
 </head>
 <body class="theme-martial">
 
@@ -60,12 +60,12 @@
           <button id="boot-emblem" class="boot-emblem" type="button" aria-label="点击军印聚势"></button>
           <div id="boot-mini-label" class="boot-mini-label">点击军印 · 聚势候战</div>
           <div id="boot-pips" class="boot-pips" aria-hidden="true">
-            <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+            <i></i><i></i><i></i><i></i><i></i>
           </div>
         </div>
         <div class="boot-bar"><div id="boot-bar-fill" class="boot-bar-fill"></div></div>
         <div class="boot-info"><span id="boot-label">正在准备资源…</span><span id="boot-pct">0%</span></div>
-        <div class="boot-tip">先缓存界面与常用资源；约 3–5 秒后可直接进入，其余资源会在后台继续准备。</div>
+        <div class="boot-tip">仅准备首页素材；点击军印逐渐点亮，可就绪即进入。卡图按需加载。</div>
         <button id="boot-skip" class="boot-skip hidden">直接进入</button>
       </div>
     </div>
@@ -704,7 +704,7 @@
           <section class="rule-chapter">
             <h3>二、粮草与声望资源</h3>
             <p><strong>双粮仓机制</strong>：主城粮仓上限每回合+1自然增长至10；额外粮仓无上限，优先消耗与扣减。</p>
-            <p><strong>声望拔河</strong>：声望上限2点，动态争夺。己方获得声望时若对手有则偷扣对手，无则自增。每回合首次部署按当前声望直接减免费用！</p>
+            <p><strong>声望拔河</strong>：初始0点，上限2点。每获得1点声望，先扣除对方1点；只有对方声望为0时，才增加己方1点。每回合可享受一次单位部署减费：减免等于当时声望，花费最低0，声望本身不消耗。普通击杀不会自动获得声望，需要【声望X】或孙策【霸王】等效果。</p>
             <p><strong>士气透支</strong>：牌库抽空后，第N次透支扣除N点主城生命值。</p>
           </section>
           <section class="rule-chapter">

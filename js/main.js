@@ -29,7 +29,7 @@ import { TurnClock } from './ui/turnClock.js';
 import { HQ_CARDS } from './data/terrains.js';
 import { KINGDOMS } from './data/cardDB.js';
 import { setSeatKingdoms, seatArmy } from './ui/seats.js';
-import { preloadAssets } from './ui/preloader.js';
+import { BOOT_ASSETS, BOOT_LEVELS, BOOT_GEMS, DEFERRED_UI_ASSETS, bootLevelAt } from './ui/bootAssets.js';
 import { DeckBuilder } from './ui/deckBuilder.js';
 import { Workshop } from './ui/workshop.js';
 import './api.js'; // 开放接口：window.SGK
@@ -54,20 +54,13 @@ function injectFactionStyles() {
 const randomOther = k => { const o = KINGDOM_KEYS.filter(x => x !== k); return o[Math.floor(Math.random() * o.length)]; };
 
 
-const UI_SKIN_ASSETS = [
-  'assets/ui/kit_v2/frame_kit.webp',
-  'assets/ui/kit_v2/modal_frame.svg',
-  'assets/ui/kit_v2/button_kit.webp',
-  'assets/ui/kit_v2/icon_kit.webp',
-  'assets/ui/kit_v2/divider_kit.webp',
-  'assets/ui/kit_v2/loading_kit.webp'
-];
-
-function preloadUiSkinAssets() {
+function preloadUiSkinAssets(paths = BOOT_ASSETS, onProgress = () => {}) {
   if (typeof Image === 'undefined') return Promise.resolve();
-  return Promise.all(UI_SKIN_ASSETS.map(src => new Promise(resolve => {
+  let completed = 0;
+  return Promise.all(paths.map(src => new Promise(resolve => {
     const img = new Image();
-    const done = () => resolve(src);
+    let settled = false;
+    const done = () => { if (settled) return; settled = true; onProgress(++completed / paths.length); resolve(src); };
     img.onload = done;
     img.onerror = done;
     img.decoding = 'async';
@@ -287,85 +280,66 @@ export class AppCoordinator {
     const pips = [...doc.querySelectorAll('#boot-pips i')];
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-    let chip = null;
     let closed = false;
-    let coreDone = false;
     let uiDone = false;
     let energy = 0;
-    let frame = 0;
-
-    // loading_kit 的 12 帧：6×2，缩放到 50% 后直接切 background-position。
-    const frames = [
-      [-6,-51],[-92,-51],[-175,-51],[-258,-51],[-341,-51],[-425,-51],
-      [-5,-144],[-93,-144],[-175,-144],[-258,-144],[-342,-144],[-426,-144]
-    ];
-    const frameTimer = setInterval(() => {
-      if (!emblem || closed) return;
-      const [x,y] = frames[frame++ % frames.length];
-      emblem.style.backgroundPosition = `${x}px ${y}px`;
-    }, 115);
+    const maxEnergy = BOOT_LEVELS.length - 1;
+    const decodedLevels = new Map();
+    const showEnergy = () => {
+      const level = bootLevelAt(energy);
+      if (emblem) {
+        if (!decodedLevels.has(level)) {
+          const img = new Image();
+          img.src = BOOT_LEVELS[level];
+          decodedLevels.set(level, img.decode ? img.decode() : new Promise(resolve => { img.onload = resolve; img.onerror = resolve; if (img.complete) resolve(); }));
+        }
+        decodedLevels.get(level).then(() => {
+          if (!closed && bootLevelAt(energy) === level) emblem.style.backgroundImage = `url("${BOOT_LEVELS[level]}")`;
+        }).catch(() => {});
+        emblem.style.setProperty('--boot-brightness', String(.8 + level * .1));
+        emblem.style.setProperty('--boot-glow', `${level * 3}px`);
+      }
+      pips.forEach((pip, i) => {
+        pip.classList.toggle('on', i < level);
+        pip.style.backgroundImage = `url("${BOOT_GEMS[i < level ? Math.min(i + 2, 6) : 0]}")`;
+      });
+    };
+    showEnergy();
 
     const hit = () => {
       if (closed) return;
-      energy = Math.min(8, energy + 1);
-      pips.forEach((pip, i) => pip.classList.toggle('on', i < energy));
-      if (miniLabel) miniLabel.textContent = energy >= 8 ? '军心已聚 · 静候开阵' : `点击军印 · 聚势 ${energy}/8`;
-      emblem?.classList.add('hit');
-      setTimeout(() => emblem?.classList.remove('hit'), 90);
+      energy = Math.min(maxEnergy, energy + 1);
+      showEnergy();
+      if (miniLabel) miniLabel.textContent = energy >= maxEnergy ? '军印已亮 · 军心齐聚' : `军印渐亮 · 聚势 ${energy}/${maxEnergy}`;
     };
     emblem?.addEventListener('click', hit);
 
     const close = () => {
       if (closed) return;
       closed = true;
-      clearInterval(frameTimer);
       box.classList.add('done');
       setTimeout(() => box.remove(), 600);
     };
 
-    // 首先缓存 UI；如果网络慢，最晚 5 秒也会开放进入，不把用户锁死。
-    const uiReady = preloadUiSkinAssets().then(() => { uiDone = true; });
-    Promise.all([
-      sleep(3200),
-      Promise.race([uiReady, sleep(5000)])
-    ]).then(() => {
+    const uiReady = preloadUiSkinAssets(BOOT_ASSETS, ratio => {
+      const p = Math.round(ratio * 100);
+      if (fill) fill.style.width = `${p}%`;
+      if (pct) pct.textContent = `${p}%`;
+      box.setAttribute('aria-valuenow', String(p));
+    }).then(() => { uiDone = true; });
+    // No minimum wait: cached home assets unlock entry immediately.
+    Promise.race([uiReady, sleep(1800)]).then(() => {
       if (closed) return;
       enter?.classList.remove('hidden');
       if (label) label.textContent = uiDone ? '界面已就绪，可直接进入' : '可直接进入，其余资源后台加载';
-      if (miniLabel && energy < 8) miniLabel.textContent = '军阵已开 · 可直接进入';
     });
 
     enter?.addEventListener('click', () => {
       close();
       this.audio?.loadMusicInBackground?.();
-      if (!coreDone) {
-        chip = doc.createElement('div');
-        chip.className = 'bg-load-chip';
-        chip.textContent = '资源后台加载 0%';
-        doc.body.appendChild(chip);
-      }
-    });
-
-    preloadAssets({
-      audio: this.audio,
-      onProgress: ({ ratio, label: l }) => {
-        const p = Math.round(ratio * 100);
-        if (fill) fill.style.width = `${p}%`;
-        if (pct) pct.textContent = `${p}%`;
-        if (label && !enter?.classList.contains('hidden') === false) label.textContent = ratio >= 1 ? '资源加载完成' : `正在加载${l}…`;
-        box.setAttribute('aria-valuenow', String(p));
-        if (chip) chip.textContent = `资源后台加载 ${p}%`;
-      }
-    }).then(() => {
-      coreDone = true;
-      this.audio?.loadMusicInBackground?.();
-      if (fill) fill.style.width = '100%';
-      if (pct) pct.textContent = '100%';
-      if (!closed && label) label.textContent = enter?.classList.contains('hidden') ? '资源就绪，正在整备界面…' : '全部资源已就绪';
-      if (chip) {
-        chip.textContent = '资源已就绪';
-        setTimeout(() => chip.remove(), 1500);
-      }
+      const warm = () => preloadUiSkinAssets(DEFERRED_UI_ASSETS);
+      if (globalThis.requestIdleCallback) globalThis.requestIdleCallback(warm, { timeout: 2000 });
+      else setTimeout(warm, 250);
     });
   }
 

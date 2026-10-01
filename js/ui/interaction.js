@@ -910,9 +910,11 @@ export class InteractionController {
 
       if (this.isDragging && this.dragGhostEl) {
         const small = globalThis.document?.body?.classList.contains('m-land');
-        this.dragGhostEl.style.transform = small
+        const transform = small
           ? `translate(${(e.clientX ?? 0) - 35}px, ${(e.clientY ?? 0) - 95}px) scale(0.6)`
           : `translate(${(e.clientX ?? 0) - 45}px, ${(e.clientY ?? 0) - 60}px) scale(0.9)`;
+        // Legacy selected/ghost rules use !important; coordinates must win.
+        this.dragGhostEl.style.setProperty('transform', transform, 'important');
         this.dragGhostEl.style.transformOrigin = 'top left';
       }
     }
@@ -956,12 +958,18 @@ export class InteractionController {
     const doc = typeof document !== 'undefined' ? document : globalThis.document;
     if (!doc || !sourceEl) return;
 
-    const sourceRect = typeof sourceEl.getBoundingClientRect === 'function'
-      ? sourceEl.getBoundingClientRect()
-      : { left: 100, top: 400, width: 90, height: 130 };
-    const svgRect = typeof this.svgOverlay.getBoundingClientRect === 'function'
-      ? this.svgOverlay.getBoundingClientRect()
-      : { left: 0, top: 0 };
+    const now = globalThis.performance?.now?.() ?? Date.now();
+    // Source movement settles over a transition; refresh its geometry at 30 Hz,
+    // while the arrow endpoint continues to follow every animation frame.
+    let geometry = this._curveGeometry;
+    if (!geometry || geometry.source !== sourceEl || geometry.overlay !== this.svgOverlay || now - geometry.at >= 32) {
+      geometry = this._curveGeometry = {
+        source: sourceEl, overlay: this.svgOverlay, at: now,
+        sourceRect: sourceEl.getBoundingClientRect?.() || { left: 100, top: 400, width: 90, height: 130 },
+        svgRect: this.svgOverlay.getBoundingClientRect?.() || { left: 0, top: 0 }
+      };
+    }
+    const { sourceRect, svgRect } = geometry;
 
     const startX = sourceRect.left + sourceRect.width / 2 - svgRect.left;
     const startY = sourceRect.top + sourceRect.height / 2 - svgRect.top;
@@ -978,14 +986,11 @@ export class InteractionController {
     const c2y = startY + dy * 0.9 - Math.min(30, Math.abs(dx) * 0.15);
 
     const d = `M ${startX.toFixed(1)} ${startY.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${endX.toFixed(1)} ${endY.toFixed(1)}`;
-    this.targetingCurve.setAttribute('d', d);
-
     // Identify hover element under pointer
     const elemBelow = typeof doc.elementFromPoint === 'function' ? doc.elementFromPoint(pointerX, pointerY) : null;
     const attackTarget = !isHandCard && this._attackTargetAt(pointerX, pointerY, elemBelow);
     const moveTarget = elemBelow?.closest?.(isHandCard ? '.legal-drop-highlight' : '.legal-move-target');
 
-    this.targetingCurve.classList?.remove('curve-attack', 'curve-move', 'curve-neutral');
     if (!isHandCard && attackTarget && this.selectedUnit) {
       const tEl = attackTarget === 'HQ' ? doc.getElementById('slot-opp-hq') : doc.querySelector(`.board-unit[data-instance-id="${attackTarget}"]`);
       const fd = attackTarget !== 'HQ' && tEl?.dataset?.isFaceDown === 'true';
@@ -997,19 +1002,21 @@ export class InteractionController {
         this._previewFor({ type: ACTION_TYPES.PLAY_TACTIC, playerId: this.localPlayerId, payload: { cardInstanceId: this.selectedCard.instanceId, targetId: uEl.dataset.instanceId } }, uEl);
       } else this._hidePreview();
     } else this._hidePreview();
-    if (attackTarget) {
-      this.targetingCurve.classList?.add('curve-attack');
-      this.targetingCurve.setAttribute('marker-end', 'url(#arrowhead-attack)');
-    } else if (moveTarget) {
-      this.targetingCurve.classList?.add('curve-move');
-      this.targetingCurve.setAttribute('marker-end', 'url(#arrowhead-legal)');
-    } else {
-      this.targetingCurve.classList?.add('curve-neutral');
-      this.targetingCurve.removeAttribute('marker-end');
+    // Do all hit testing and layout reads before changing the SVG.
+    this.targetingCurve.setAttribute('d', d);
+    const mode = attackTarget ? 'attack' : moveTarget ? 'move' : 'neutral';
+    if (mode !== this._curveMode) {
+      this._curveMode = mode;
+      this.targetingCurve.classList?.remove('curve-attack', 'curve-move', 'curve-neutral');
+      this.targetingCurve.classList?.add(`curve-${mode}`);
+      if (mode === 'neutral') this.targetingCurve.removeAttribute('marker-end');
+      else this.targetingCurve.setAttribute('marker-end', mode === 'attack' ? 'url(#arrowhead-attack)' : 'url(#arrowhead-legal)');
     }
   }
 
   _clearTargetingCurve() {
+    this._curveGeometry = null;
+    this._curveMode = null;
     if (this.targetingCurve) {
       this.targetingCurve.setAttribute('d', '');
       this.targetingCurve.removeAttribute('marker-end');
@@ -1389,6 +1396,7 @@ export class InteractionController {
     if (!orig || typeof orig.cloneNode !== 'function') return;
 
     this.dragGhostEl = orig.cloneNode(true);
+    this.dragGhostEl.classList?.remove('selected', 'dragging');
     this.dragGhostEl.classList?.add('card-drag-ghost');
     this.dragGhostEl.style.position = 'fixed';
     this.dragGhostEl.style.left = '0px';
@@ -1396,8 +1404,9 @@ export class InteractionController {
     this.dragGhostEl.style.margin = '0';
     this.dragGhostEl.style.pointerEvents = 'none';
     this.dragGhostEl.style.zIndex = '9999';
-    this.dragGhostEl.style.transform = `translate(${x - 45}px, ${y - 60}px) scale(0.9)`;
+    this.dragGhostEl.style.setProperty('transform', `translate(${x - 45}px, ${y - 60}px) scale(0.9)`, 'important');
     doc.body.appendChild(this.dragGhostEl);
+    doc.body.classList?.add('is-dragging');
   }
 
   _removeCardGhost() {
