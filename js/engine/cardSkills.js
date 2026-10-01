@@ -1719,8 +1719,17 @@ export function afterAttack(state, attacker, defender, result, targetIsHq) {
     Object.assign(attacker.status, { actionsUsed: 0, movedThisTurn: false, attackedThisTurn: false, attacksThisTurn: 0 });
     log(state, attacker.faction, '吕布·飞将：斩敌后可额外行动1次');
   }
-  // 孙策·霸王：每击败1敌军，声望+1
-  if (!targetIsHq && attackerAlive && result.defenderDied && isId(attacker, 'wu_sun_ce')) { adjustPrestige(state, attacker.faction, 1); log(state, attacker.faction, '孙策·霸王：声望+1'); }
+  // 孙策·霸王：主动攻击和反击击败敌军都触发；按声望拔河结算。
+  if (!targetIsHq) {
+    for (const [unit, alive, killed] of [[attacker, attackerAlive, result.defenderDied], [defender, defenderAlive, result.attackerDied]]) {
+      if (!alive || !killed || !isId(unit, 'wu_sun_ce')) continue;
+      const rival = opp(unit.faction);
+      const ownBefore = state.players[unit.faction].prestige;
+      const rivalBefore = state.players[rival].prestige;
+      adjustPrestige(state, unit.faction, 1);
+      log(state, unit.faction, `孙策·霸王：争夺1声望（己方 ${ownBefore}→${state.players[unit.faction].prestige}，敌方 ${rivalBefore}→${state.players[rival].prestige}）`);
+    }
+  }
   runHooks('afterAttack', state, attacker, defender, result, targetIsHq);
   // 黄盖·诈降：攻击过一次后失效
   if (attacker) attacker._hasAttacked = true;

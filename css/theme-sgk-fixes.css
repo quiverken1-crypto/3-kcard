@@ -1,0 +1,88 @@
+/* Independent transparent assets: no sprite offsets at any breakpoint. */
+#home-screen .hm-item em,
+#home-screen .hm-link::before,
+.hq-card-view .hq-crest,
+.modal-close-btn::after {
+  background-size: contain !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+}
+#home-screen #home-btn-pve em { background-image: url('../assets/ui/kit_v2/icons/solo.webp'); }
+#home-screen #home-btn-pvp em { background-image: url('../assets/ui/kit_v2/icons/battle.webp'); }
+#home-screen #home-btn-eve em { background-image: url('../assets/ui/kit_v2/icons/sandbox.webp'); }
+#home-screen #home-btn-decks::before { background-image: url('../assets/ui/kit_v2/icons/decks.webp'); }
+#home-screen #home-btn-rules::before { background-image: url('../assets/ui/kit_v2/icons/rules.webp'); }
+#home-screen #home-btn-editor::before { background-image: url('../assets/ui/kit_v2/icons/workshop.webp'); }
+#home-screen #home-btn-install::before { background-image: url('../assets/ui/kit_v2/icons/fullscreen.webp'); }
+#home-screen #home-btn-audio::before { background-image: url('../assets/ui/kit_v2/icons/audio.webp'); }
+.hq-card-view .hq-crest { background-image: url('../assets/ui/kit_v2/icons/castle.webp'); }
+.modal-close-btn::after { inset: 2px; background-image: url('../assets/ui/kit_v2/icons/close.webp'); }
+
+/* All painting remains in the border allocation or just beyond the edge. */
+.modal-box {
+  border-image-width: 18px !important;
+  border-image-outset: 6px !important;
+  background-clip: padding-box !important;
+}
+.hq-card {
+  box-sizing: border-box;
+  border: 6px solid transparent !important;
+  border-image: var(--sgk-modal-frame) 104 / 12px / 4px stretch !important;
+  border-radius: 3px !important;
+  background-clip: padding-box !important;
+}
+.hq-card::before,.hq-card::after { content: none !important; display: none !important; }
+.battlefield-line.line-support,.battlefield-line.line-frontline,
+.hq-slot,.hq-fortress { border-image-outset: 3px !important; }
+#side-drawer.tactical-drawer { border-image-width: 16px !important; border-image-outset: 4px !important; }
+.deck-builder .db-shell { border-image-width: 16px; border-image-outset: 0; }
+
+/* Extend the scrollport above the dock, keeping the extra space transparent.
+   This permits lift while retaining horizontal scrolling on narrow screens. */
+body #player-dock #hand-tray.hand-fan-tray {
+  position: relative;
+  top: -36px;
+  height: calc(100% + 36px) !important;
+  padding-top: 36px !important;
+  box-sizing: border-box;
+  z-index: 200;
+  border: none !important;
+  background-clip: content-box !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}
+#player-dock { z-index: 200; overflow: visible; }
+body #player-dock #hand-tray .hand-card-fan .card-hand:hover,
+body #player-dock #hand-tray .hand-card-fan .card-hand.selected,
+body.m-land #player-dock #hand-tray .hand-card-fan .card-hand.selected,
+body.m-port #player-dock #hand-tray .hand-card-fan .card-hand.selected {
+  transform: translateY(-18px) scale(1.06) !important;
+  outline: 2px solid #f0cf6a !important;
+  outline-offset: -2px !important;
+  z-index: 100 !important;
+  box-shadow: inset 0 0 0 2px #f0cf6a80,0 3px 10px #0007 !important;
+}
+#player-dock #hand-tray .hand-card-fan { padding: 0 4px !important; box-sizing: border-box; }
+.boot-emblem { background-image: url('../assets/ui/kit_v2/icons/loading-00.webp'); background-size: contain !important; background-position: center !important; }
+.boot-emblem { filter: brightness(var(--boot-brightness,.8)) drop-shadow(0 0 var(--boot-glow,0px) #eea637); transition: filter .25s ease,transform .09s; }
+.boot-emblem { animation: bootEmblemFloat 2.4s ease-in-out infinite; will-change: transform; }
+@keyframes bootEmblemFloat { 0%,100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-3px) rotate(1deg); } }
+@media (prefers-reduced-motion:reduce) { .boot-emblem { animation: none; will-change: auto; } }
+.boot-pips { height: 24px; gap: 4px; }
+.boot-pips i,.boot-pips i.on {
+  width: 23px; height: 23px; transform: none; border: none;
+  background-color: transparent; background-size: contain; background-repeat: no-repeat; background-position: center;
+  box-shadow: none;
+}
+.modal-title::before,.hq-pick-title::before { display: none; }
+.modal-title::after,.hq-pick-title::after {
+  width: 180px; height: 14px; bottom: 0;
+  background: url('../assets/ui/kit_v2/icons/title-divider.webp') center/contain no-repeat;
+  transform: translateX(-50%);
+}
+
+/* Avoid full-board and continuously changing SVG blur surfaces during aiming. */
+.board-aspect-wrapper { filter: none !important; }
+.targeting-curve { filter: none !important; animation: none !important; stroke-dasharray: none !important; }
+body.is-dragging :is(.frontline-zone,.board-unit,.insert-marker) { animation: none !important; }
+body.is-dragging .card-drag-ghost { will-change: transform; filter: none !important; transition: none !important; }

@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-test('the preloaded modal frame is complete and decodable', () => {
-  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const path = html.match(/href="(assets\/ui\/kit_v2\/modal_frame\.[^"]+)"/)[1];
+test('the modal frame is complete and decodable', () => {
+  const css = fs.readFileSync(new URL('../css/theme-sgk-v2.css', import.meta.url), 'utf8');
+  const path = css.match(/--sgk-modal-frame: url\("\.\.\/([^"]+)"\)/)[1];
   const bytes = fs.readFileSync(new URL('../' + path, import.meta.url));
   if (path.endsWith('.webp')) assert.equal(bytes.length, bytes.readUInt32LE(4) + 8);
   else {

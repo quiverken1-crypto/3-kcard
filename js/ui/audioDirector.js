@@ -132,7 +132,7 @@ export class AudioDirector {
   unlock() {
     const ctx = this._ctx();
     if (ctx?.state === 'suspended') ctx.resume?.();
-    this._preloadSfx();
+    if (!this.muted && this.scene && this.scene !== 'home') this._preloadSfx();
     if (this.muted || !this.music) return;
     if (!this.music.paused) return;
     const promise = this.music.play();
@@ -173,7 +173,7 @@ export class AudioDirector {
     this.musicBlobs = this.musicBlobs || {};
     const conn = globalThis.navigator?.connection;
     const lean = Boolean(conn?.saveData) || /(^|-)2g$/.test(conn?.effectiveType || '');
-    let order = [...Object.keys(MUSIC_FILES)].sort((a, b) => (a === this.scene ? -1 : b === this.scene ? 1 : 0));
+    let order = [this.scene && MUSIC_FILES[this.scene] ? this.scene : 'home'];
     if (lean) order = order.slice(0, 1);
     (async () => {
       for (const scene of order) {
