@@ -456,6 +456,30 @@ export class HeuristicBot {
    * @returns {object}
    */
   chooseBestAction(state, botFaction = this.faction) {
+    const planner = this._planAction(state, botFaction);
+    let step;
+    do { step = planner.next(); } while (!step.done);
+    return step.value;
+  }
+
+  /** Evaluate the same candidates while yielding between short batches on phones. */
+  async chooseBestActionAsync(state, botFaction = this.faction, options = {}) {
+    const planner = this._planAction(state, botFaction);
+    const now = () => globalThis.performance?.now?.() ?? Date.now();
+    const yieldTask = options.yieldTask || (() => new Promise(resolve => setTimeout(resolve, 0)));
+    const budget = options.budgetMs ?? 6;
+    let started = now();
+    for (;;) {
+      const step = planner.next();
+      if (step.done) return step.value;
+      if (now() - started >= budget) {
+        await yieldTask();
+        started = now();
+      }
+    }
+  }
+
+  *_planAction(state, botFaction) {
     const pick = state.players?.[botFaction]?.pendingPick;
     if (pick) return { type: ACTION_TYPES.PICK_CARDS, playerId: botFaction, payload: { cardIds: autoPickCards(pick) } };
     const choice = state.players?.[botFaction]?.pendingChoices?.[0];
@@ -509,6 +533,7 @@ export class HeuristicBot {
       } catch {
         scoredActions.push({ action, utility: -Infinity });
       }
+      yield;
     }
 
     // 5. Select action
@@ -578,7 +603,11 @@ export async function executeBotTurnAsync(rulesEngine, bot, options = {}) {
   const maxActions = options.maxActions || 15;
 
   while (state.phase === PHASES.ACTION && state.activePlayer === botFaction && actionsTaken < maxActions) {
-    const action = bot.chooseBestAction(state, botFaction);
+    if (options.shouldContinue && !options.shouldContinue()) return;
+    const action = options.cooperative
+      ? await bot.chooseBestActionAsync(state, botFaction)
+      : bot.chooseBestAction(state, botFaction);
+    if (options.shouldContinue && !options.shouldContinue()) return;
 
     if (!action || action.type === ACTION_TYPES.END_TURN) {
       rulesEngine.dispatch({ type: ACTION_TYPES.END_TURN, playerId: botFaction, payload: {} });
@@ -609,6 +638,7 @@ export async function executeBotTurnAsync(rulesEngine, bot, options = {}) {
       await new Promise(resolve => setTimeout(resolve, stepDelayMs));
     }
   }
+  if (options.shouldContinue && !options.shouldContinue()) return;
   if (state.phase === PHASES.ACTION && state.activePlayer === botFaction) {
     try { rulesEngine.dispatch({ type: ACTION_TYPES.END_TURN, playerId: botFaction, payload: {} }); } catch (_) { /* ignore */ }
     if (onActionCallback) onActionCallback({ type: ACTION_TYPES.END_TURN });

@@ -29,7 +29,9 @@ import { TurnClock } from './ui/turnClock.js';
 import { HQ_CARDS } from './data/terrains.js';
 import { KINGDOMS } from './data/cardDB.js';
 import { setSeatKingdoms, seatArmy } from './ui/seats.js';
-import { BOOT_ASSETS, BOOT_LEVELS, BOOT_GEMS, DEFERRED_UI_ASSETS, bootLevelAt } from './ui/bootAssets.js';
+import { BOOT_ASSETS, DEFERRED_UI_ASSETS } from './ui/bootAssets.js';
+import { MatchArtLoader } from './ui/matchArtLoader.js';
+import { whenDocumentReady } from './ui/startup.js';
 import { DeckBuilder } from './ui/deckBuilder.js';
 import { Workshop } from './ui/workshop.js';
 import './api.js'; // 开放接口：window.SGK
@@ -131,6 +133,8 @@ export class AppCoordinator {
     const doc = typeof document !== 'undefined' ? document : globalThis.document;
     if (!doc) return;
 
+    this._runPreloader(doc);
+
     // 1. Initialize Card Inspector Tooltip
     CardInspector.init();
     this.battleFx = new BattleFx({ getLocalPlayer: () => this.localPlayerId });
@@ -165,7 +169,6 @@ export class AppCoordinator {
     this.audio = new AudioDirector();
     this.audio.setScene('lobby');
     this.audio.armUnlock(doc);
-    this._runPreloader(doc);
     this._bindTouchControls(doc);
 
     // 5. Wire Drawer & Global Controls
@@ -231,7 +234,13 @@ export class AppCoordinator {
     const applyLayout = () => {
       const vv = globalThis.visualViewport;
       const w = Math.round(vv?.width || globalThis.innerWidth), h = Math.round(vv?.height || globalThis.innerHeight);
-      doc.documentElement.style.setProperty('--app-h', `${h}px`);
+      const top = Math.max(0, vv?.offsetTop || 0);
+      const innerH = Math.round(globalThis.innerHeight || h);
+      // Safari can report a shorter visualViewport after hiding its toolbar.
+      // Fill the available layout viewport unless the keyboard is open.
+      const appH = h >= innerH * .75 ? Math.max(h, innerH - top) : h;
+      doc.documentElement.style.setProperty('--app-h', `${appH}px`);
+      doc.documentElement.style.setProperty('--app-top', `${top}px`);
       const port = h > w && w <= 600;
       const land = (w >= h && h <= 540) || port;
       doc.body.classList.toggle('m-land', land);
@@ -241,6 +250,7 @@ export class AppCoordinator {
     this._applyLayout = applyLayout;
     globalThis.addEventListener?.('resize', applyLayout);
     globalThis.visualViewport?.addEventListener?.('resize', applyLayout);
+    globalThis.visualViewport?.addEventListener?.('scroll', applyLayout);
     applyLayout();
     // 离线缓存：第二次打开秒开
     try {
@@ -267,7 +277,7 @@ export class AppCoordinator {
     doc.addEventListener('fullscreenchange', refit);
   }
 
-  /** 启动缓冲：先确保 UI 皮肤缓存；3–5 秒后允许直接进入，重资源继续后台加载。 */
+  /** Only the home UI is prepared before entering; match art is loaded separately. */
   _runPreloader(doc) {
     const box = doc.getElementById('boot-loader');
     if (!box) return;
@@ -275,45 +285,10 @@ export class AppCoordinator {
     const label = doc.getElementById('boot-label');
     const pct = doc.getElementById('boot-pct');
     const enter = doc.getElementById('boot-skip');
-    const emblem = doc.getElementById('boot-emblem');
-    const miniLabel = doc.getElementById('boot-mini-label');
-    const pips = [...doc.querySelectorAll('#boot-pips i')];
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
     let closed = false;
     let uiDone = false;
-    let energy = 0;
-    const maxEnergy = BOOT_LEVELS.length - 1;
-    const decodedLevels = new Map();
-    const showEnergy = () => {
-      const level = bootLevelAt(energy);
-      if (emblem) {
-        if (!decodedLevels.has(level)) {
-          const img = new Image();
-          img.src = BOOT_LEVELS[level];
-          decodedLevels.set(level, img.decode ? img.decode() : new Promise(resolve => { img.onload = resolve; img.onerror = resolve; if (img.complete) resolve(); }));
-        }
-        decodedLevels.get(level).then(() => {
-          if (!closed && bootLevelAt(energy) === level) emblem.style.backgroundImage = `url("${BOOT_LEVELS[level]}")`;
-        }).catch(() => {});
-        emblem.style.setProperty('--boot-brightness', String(.8 + level * .1));
-        emblem.style.setProperty('--boot-glow', `${level * 3}px`);
-      }
-      pips.forEach((pip, i) => {
-        pip.classList.toggle('on', i < level);
-        pip.style.backgroundImage = `url("${BOOT_GEMS[i < level ? Math.min(i + 2, 6) : 0]}")`;
-      });
-    };
-    showEnergy();
-
-    const hit = () => {
-      if (closed) return;
-      energy = Math.min(maxEnergy, energy + 1);
-      showEnergy();
-      if (miniLabel) miniLabel.textContent = energy >= maxEnergy ? '军印已亮 · 军心齐聚' : `军印渐亮 · 聚势 ${energy}/${maxEnergy}`;
-    };
-    emblem?.addEventListener('click', hit);
-
     const close = () => {
       if (closed) return;
       closed = true;
@@ -329,7 +304,7 @@ export class AppCoordinator {
     }).then(() => { uiDone = true; });
     // No minimum wait: cached home assets unlock entry immediately.
     Promise.race([uiReady, sleep(1800)]).then(() => {
-      if (closed) return;
+      if (closed || globalThis.__TK_INIT_FAILED__) return;
       enter?.classList.remove('hidden');
       if (label) label.textContent = uiDone ? '界面已就绪，可直接进入' : '可直接进入，其余资源后台加载';
     });
@@ -506,6 +481,11 @@ export class AppCoordinator {
     const availW = viewport.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     const availH = viewport.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
     Object.assign(board.style, { transform: 'none', marginLeft: '0px', marginTop: '0px', marginRight: '0px', marginBottom: '0px', transformOrigin: 'top left' });
+    board.style.setProperty('height', 'auto', 'important');
+    if (doc.body.classList.contains('m-port') && board.offsetWidth > 0 && availW > 0) {
+      const fillHeight = availH * board.offsetWidth / availW;
+      if (fillHeight > board.offsetHeight) board.style.setProperty('height', `${fillHeight.toFixed(1)}px`, 'important');
+    }
     const naturalW = board.offsetWidth;
     const naturalH = board.offsetHeight;
     if (!naturalW || !naturalH || availW <= 0 || availH <= 0) return;
@@ -1499,6 +1479,9 @@ export class AppCoordinator {
 
   async _executeBotTurn() {
     if (!this.bot || !this.rulesEngine) return;
+    const engine = this.rulesEngine;
+    if (this._botTurnEngine === engine) return;
+    this._botTurnEngine = engine;
     if (this.interaction) {
       this.interaction.state = 'DISABLED';
     }
@@ -1507,13 +1490,20 @@ export class AppCoordinator {
     const statusBanner = doc?.getElementById('phase-name-text');
     if (statusBanner) statusBanner.textContent = 'AI 运筹帷幄中...';
 
-    await executeBotTurnAsync(this.rulesEngine, this.bot, {
-      stepDelayMs: 800,
-      onActionCallback: () => {
-        this._updateCombatLog();
-        this.render();
-      }
-    });
+    try {
+      await executeBotTurnAsync(engine, this.bot, {
+        stepDelayMs: 800,
+        cooperative: Boolean(doc?.body?.classList.contains('m-land')),
+        shouldContinue: () => this.rulesEngine === engine && this.mode === APP_MODE.SOLO_VS_BOT,
+        onActionCallback: () => {
+          this._updateCombatLog();
+          this.render();
+        }
+      });
+    } finally {
+      if (this._botTurnEngine === engine) this._botTurnEngine = null;
+    }
+    if (this.rulesEngine !== engine || this.mode !== APP_MODE.SOLO_VS_BOT) return;
 
     this.render();
     this._checkTurnState();
@@ -1580,6 +1570,8 @@ export class AppCoordinator {
     if (!doc) return;
 
     // 1. Render Battlefield Grid (Support lines, 3 Frontline zones)
+    this._matchArtLoader ||= new MatchArtLoader();
+    this._matchArtLoader.update(state, this.localPlayerId);
     const bfContainer = doc.getElementById('battlefield-main');
     if (bfContainer) {
       // 记录重绘前每张单位卡的位置：有单位阵亡/离场时，其余单位先原地不动，
@@ -1710,12 +1702,24 @@ export class AppCoordinator {
 
 // Auto-bootstrap when loaded in browser
 if (typeof document !== 'undefined') {
-  document.addEventListener('DOMContentLoaded', () => {
+  whenDocumentReady(document, () => {
+    if (typeof window !== 'undefined' && window.__TK_APP__) return;
     const app = new AppCoordinator();
     if (typeof window !== 'undefined') {
       window.__TK_APP__ = app;
     }
-    app.init().catch(err => console.error('App bootstrap error:', err));
+    app.init().then(() => {
+      if (typeof window !== 'undefined') {
+        window.__TK_READY = true;
+        window.dispatchEvent(new Event('sgk-ready'));
+      }
+    }).catch(err => {
+      console.error('App bootstrap error:', err);
+      if (typeof window !== 'undefined') {
+        window.__TK_INIT_FAILED__ = true;
+        window.dispatchEvent(new Event('sgk-init-error'));
+      }
+    });
   });
 }
 

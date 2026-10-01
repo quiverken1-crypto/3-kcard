@@ -73,7 +73,9 @@ export function selectAudioCues(event) {
 }
 
 export class AudioDirector {
-  constructor(storage = globalThis.localStorage) {
+  constructor(storage) {
+    try { storage = storage === undefined ? globalThis.localStorage : storage; }
+    catch { storage = null; }
     this.storage = storage;
     this.muted = false;
     this.volume = 0.65;
@@ -132,7 +134,7 @@ export class AudioDirector {
   unlock() {
     const ctx = this._ctx();
     if (ctx?.state === 'suspended') ctx.resume?.();
-    if (!this.muted && this.scene && this.scene !== 'home') this._preloadSfx();
+    if (!this.muted && this.scene === 'match') this._preloadSfx();
     if (this.muted || !this.music) return;
     if (!this.music.paused) return;
     const promise = this.music.play();
@@ -173,7 +175,7 @@ export class AudioDirector {
     this.musicBlobs = this.musicBlobs || {};
     const conn = globalThis.navigator?.connection;
     const lean = Boolean(conn?.saveData) || /(^|-)2g$/.test(conn?.effectiveType || '');
-    let order = [this.scene && MUSIC_FILES[this.scene] ? this.scene : 'home'];
+    let order = [this.scene && MUSIC_FILES[this.scene] ? this.scene : 'lobby'];
     if (lean) order = order.slice(0, 1);
     (async () => {
       for (const scene of order) {
@@ -234,9 +236,11 @@ export class AudioDirector {
 
   _ctx() {
     if (this.ctx) return this.ctx;
+    if (this._ctxUnavailable) return null;
     const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
     if (!AC) return null;
-    this.ctx = new AC();
+    try { this.ctx = new AC(); }
+    catch { this._ctxUnavailable = true; return null; }
     return this.ctx;
   }
 

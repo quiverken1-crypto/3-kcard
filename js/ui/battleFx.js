@@ -9,6 +9,7 @@
 
 const doc = () => (typeof document !== 'undefined' ? document : null);
 const reduced = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const lightweight = () => doc()?.body?.classList?.contains('m-land');
 const baseId = id => String(id || '').replace(/_[0-9]+$/, '');
 
 let layer = null;
@@ -82,7 +83,7 @@ export class BattleFx {
     if (!at) return;
     const d = doc();
     setTimeout(() => {
-      const n = Math.min(12, 4 + amount);
+      const n = Math.min(lightweight() ? 4 : 12, 4 + amount);
       for (let i = 0; i < n; i++) {
         const drop = d.createElement('div');
         drop.className = 'bfx-blood';
@@ -193,7 +194,7 @@ export class BattleFx {
       el.style.top = `${at.y}px`;
       spawn(el, 900);
       if (kind === 'fire' && !reduced()) {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < (lightweight() ? 3 : 10); i++) {
           const e = d.createElement('div');
           e.className = 'bfx-ember';
           const a = Math.random() * Math.PI * 2, dist = 20 + Math.random() * 40;
