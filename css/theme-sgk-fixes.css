@@ -37,16 +37,36 @@
 #side-drawer.tactical-drawer { border-image-width: 16px !important; border-image-outset: 4px !important; }
 .deck-builder .db-shell { border-image-width: 16px; border-image-outset: 0; }
 
-/* A scrollport cannot show a card lifted past its top. Select in place instead. */
+/* Extend the scrollport above the dock, keeping the extra space transparent.
+   This permits lift while retaining horizontal scrolling on narrow screens. */
+body #player-dock #hand-tray.hand-fan-tray {
+  position: relative;
+  top: -36px;
+  height: calc(100% + 36px) !important;
+  padding-top: 36px !important;
+  box-sizing: border-box;
+  z-index: 200;
+  border: none !important;
+  background-clip: content-box !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}
+#player-dock { z-index: 200; overflow: visible; }
 body #player-dock #hand-tray .hand-card-fan .card-hand:hover,
 body #player-dock #hand-tray .hand-card-fan .card-hand.selected,
 body.m-land #player-dock #hand-tray .hand-card-fan .card-hand.selected,
 body.m-port #player-dock #hand-tray .hand-card-fan .card-hand.selected {
-  transform: none !important;
+  transform: translateY(-18px) scale(1.06) !important;
   outline: 2px solid #f0cf6a !important;
   outline-offset: -2px !important;
-  z-index: 30 !important;
+  z-index: 100 !important;
   box-shadow: inset 0 0 0 2px #f0cf6a80,0 3px 10px #0007 !important;
 }
 #player-dock #hand-tray .hand-card-fan { padding: 0 4px !important; box-sizing: border-box; }
 .boot-emblem { background-image: url('../assets/ui/kit_v2/icons/loading-00.webp'); background-size: contain !important; background-position: center !important; }
+
+/* Avoid full-board and continuously changing SVG blur surfaces during aiming. */
+.board-aspect-wrapper { filter: none !important; }
+.targeting-curve { filter: none !important; animation: none !important; stroke-dasharray: none !important; }
+body.is-dragging :is(.frontline-zone,.board-unit,.insert-marker) { animation: none !important; }
+body.is-dragging .card-drag-ghost { will-change: transform; filter: none !important; transition: none !important; }
