@@ -15,17 +15,20 @@ function placeOpenPanel() {
   const vw = globalThis.visualViewport?.width || globalThis.innerWidth || document.documentElement.clientWidth;
   const vh = globalThis.visualViewport?.height || globalThis.innerHeight || document.documentElement.clientHeight;
   const gap = 7;
-  const width = Math.min(460, Math.max(260, vw - 16));
+  const width = Math.min(460, Math.max(1, vw - 16));
   panel.style.width = `${width}px`;
-  panel.style.maxHeight = `${Math.min(360, Math.max(150, vh - 24))}px`;
+  panel.style.maxHeight = `${Math.min(360, Math.max(1, vh - 16))}px`;
   panel.style.left = `${Math.max(8, Math.min(r.left, vw - width - 8))}px`;
   panel.style.zIndex = '1600';
-  const measured = Math.min(panel.scrollHeight || 260, Math.min(360, vh - 24));
-  const below = vh - r.bottom - gap;
-  const top = below >= Math.min(measured, 180)
-    ? r.bottom + gap
-    : Math.max(8, r.top - measured - gap);
-  panel.style.top = `${Math.round(top)}px`;
+  const measured = panel.offsetHeight;
+  const below = Math.max(0, vh - 8 - r.bottom - gap);
+  const above = Math.max(0, r.top - gap - 8);
+  const opensBelow = below >= measured || below >= above;
+  const available = Math.max(1, opensBelow ? below : above);
+  const height = Math.min(measured, available);
+  panel.style.maxHeight = `${height}px`;
+  const top = opensBelow ? r.bottom + gap : r.top - gap - height;
+  panel.style.top = `${Math.round(Math.max(8, Math.min(top, vh - height - 8)))}px`;
   panel.style.visibility = '';
 }
 

@@ -56,7 +56,7 @@ const randomOther = k => { const o = KINGDOM_KEYS.filter(x => x !== k); return o
 
 const UI_SKIN_ASSETS = [
   'assets/ui/kit_v2/frame_kit.webp',
-  'assets/ui/kit_v2/modal_frame.webp',
+  'assets/ui/kit_v2/modal_frame.svg',
   'assets/ui/kit_v2/button_kit.webp',
   'assets/ui/kit_v2/icon_kit.webp',
   'assets/ui/kit_v2/divider_kit.webp',
