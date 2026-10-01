@@ -64,6 +64,22 @@ body.m-port #player-dock #hand-tray .hand-card-fan .card-hand.selected {
 }
 #player-dock #hand-tray .hand-card-fan { padding: 0 4px !important; box-sizing: border-box; }
 .boot-emblem { background-image: url('../assets/ui/kit_v2/icons/loading-00.webp'); background-size: contain !important; background-position: center !important; }
+.boot-emblem { filter: brightness(var(--boot-brightness,.8)) drop-shadow(0 0 var(--boot-glow,0px) #eea637); transition: filter .25s ease,transform .09s; }
+.boot-emblem { animation: bootEmblemFloat 2.4s ease-in-out infinite; will-change: transform; }
+@keyframes bootEmblemFloat { 0%,100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-3px) rotate(1deg); } }
+@media (prefers-reduced-motion:reduce) { .boot-emblem { animation: none; will-change: auto; } }
+.boot-pips { height: 24px; gap: 4px; }
+.boot-pips i,.boot-pips i.on {
+  width: 23px; height: 23px; transform: none; border: none;
+  background-color: transparent; background-size: contain; background-repeat: no-repeat; background-position: center;
+  box-shadow: none;
+}
+.modal-title::before,.hq-pick-title::before { display: none; }
+.modal-title::after,.hq-pick-title::after {
+  width: 180px; height: 14px; bottom: 0;
+  background: url('../assets/ui/kit_v2/icons/title-divider.webp') center/contain no-repeat;
+  transform: translateX(-50%);
+}
 
 /* Avoid full-board and continuously changing SVG blur surfaces during aiming. */
 .board-aspect-wrapper { filter: none !important; }
