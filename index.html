@@ -792,6 +792,34 @@
   </div>
 
   <!-- Entry Script -->
+  <script id="boot-guard">
+    (function () {
+      function retry(message) {
+        if (window.__TK_READY) return;
+        var label = document.getElementById('boot-label');
+        if (label) label.textContent = message;
+        var button = document.getElementById('boot-skip');
+        if (!button) return;
+        var fresh = button.cloneNode(true);
+        fresh.classList.remove('hidden');
+        fresh.textContent = '重新加载';
+        fresh.dataset.bootRetry = '1';
+        fresh.onclick = function () { window.location.reload(); };
+        button.replaceWith(fresh);
+      }
+      var timer = setTimeout(function () { retry('启动耗时较长，请点击重新加载'); }, 10000);
+      window.addEventListener('sgk-init-error', function () { clearTimeout(timer); retry('初始化失败，请点击重新加载'); });
+      window.addEventListener('sgk-ready', function () {
+        clearTimeout(timer);
+        var button = document.getElementById('boot-skip');
+        if (button && button.dataset.bootRetry) {
+          delete button.dataset.bootRetry;
+          button.onclick = null;
+          button.textContent = '直接进入';
+        }
+      });
+    }());
+  </script>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

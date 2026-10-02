@@ -20,21 +20,22 @@
 
 /* All painting remains in the border allocation or just beyond the edge. */
 .modal-box {
-  border-image-width: 18px !important;
-  border-image-outset: 6px !important;
-  background-clip: padding-box !important;
+  border-image-width: 12px !important;
+  border-image-outset: 0 !important;
+  background-clip: border-box !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,.65) !important;
 }
 .hq-card {
   box-sizing: border-box;
   border: 6px solid transparent !important;
-  border-image: var(--sgk-modal-frame) 104 / 12px / 4px stretch !important;
+  border-image: var(--sgk-modal-frame) 104 / 6px / 0 stretch !important;
   border-radius: 3px !important;
-  background-clip: padding-box !important;
+  background-clip: border-box !important;
 }
 .hq-card::before,.hq-card::after { content: none !important; display: none !important; }
 .battlefield-line.line-support,.battlefield-line.line-frontline,
-.hq-slot,.hq-fortress { border-image-outset: 3px !important; }
-#side-drawer.tactical-drawer { border-image-width: 16px !important; border-image-outset: 4px !important; }
+.hq-slot,.hq-fortress { border-image-outset: 0 !important; }
+#side-drawer.tactical-drawer { border-image-width: 10px !important; border-image-outset: 0 !important; }
 .deck-builder .db-shell { border-image-width: 16px; border-image-outset: 0; }
 
 /* Extend the scrollport above the dock, keeping the extra space transparent.
@@ -63,6 +64,11 @@ body.m-port #player-dock #hand-tray .hand-card-fan .card-hand.selected {
   box-shadow: inset 0 0 0 2px #f0cf6a80,0 3px 10px #0007 !important;
 }
 #player-dock #hand-tray .hand-card-fan { padding: 0 4px !important; box-sizing: border-box; }
+#player-dock #hand-tray .hand-card-fan.hand-scroll {
+  justify-content: flex-start !important;
+  width: max-content !important;
+  min-width: 100% !important;
+}
 .boot-emblem { background-image: url('../assets/ui/kit_v2/icons/loading-00.webp'); background-size: contain !important; background-position: center !important; }
 .boot-emblem { filter: brightness(var(--boot-brightness,.8)) drop-shadow(0 0 var(--boot-glow,0px) #eea637); transition: filter .25s ease,transform .09s; }
 .boot-emblem { animation: bootEmblemFloat 2.4s ease-in-out infinite; will-change: transform; }
@@ -76,9 +82,14 @@ body.m-port #player-dock #hand-tray .hand-card-fan .card-hand.selected {
 }
 .modal-title::before,.hq-pick-title::before { display: none; }
 .modal-title::after,.hq-pick-title::after {
-  width: 180px; height: 14px; bottom: 0;
+  left: 0; width: 100%; height: 14px; bottom: 0;
   background: url('../assets/ui/kit_v2/icons/title-divider.webp') center/contain no-repeat;
-  transform: translateX(-50%);
+  transform: none;
+}
+.modal-title::after {
+  left: 0;
+  transform: none;
+  max-width: 100%;
 }
 
 /* Avoid full-board and continuously changing SVG blur surfaces during aiming. */
@@ -122,3 +133,54 @@ body.m-port .card-inspector-tooltip {
   }
   body.m-land:not(.m-port) #player-dock #hand-tray.hand-fan-tray { height: 100% !important; }
 }
+
+/* Use Safari's measured visible viewport, including address-bar changes. */
+body.m-land #game-app.game-container {
+  top: var(--app-top,0px) !important;
+  bottom: auto !important;
+  height: var(--app-h,100dvh) !important;
+  padding-top: max(8px,env(safe-area-inset-top,0px)) !important;
+  padding-bottom: max(8px,env(safe-area-inset-bottom,0px)) !important;
+}
+body.m-port #game-app.game-container {
+  padding-top: max(52px,env(safe-area-inset-top,0px)) !important;
+  padding-bottom: max(28px,env(safe-area-inset-bottom,0px)) !important;
+}
+body.m-port .card-inspector-tooltip {
+  bottom: calc(184px + max(28px,env(safe-area-inset-bottom,0px))) !important;
+  max-height: calc(var(--app-h,100dvh) - max(52px,env(safe-area-inset-top,0px)) - max(28px,env(safe-area-inset-bottom,0px)) - 230px);
+}
+body.m-port #battlefield-main { padding: 4px 8px !important; align-items: center !important; justify-content: center !important; }
+body.m-port #player-dock #hand-tray.hand-fan-tray { padding-top: 12px !important; padding-bottom: 2px !important; }
+body.m-port #player-dock .hand-card-fan { align-items: flex-start !important; }
+body.m-port #player-dock .hand-card-fan .card-hand { zoom: .72; }
+body.m-port #player-dock #hand-tray .hand-card-fan .card-hand.selected { transform: translateY(-10px) scale(1.025) !important; }
+body.m-port #player-dock :is(.granary-title,.prestige-title) { font-size: 0 !important; }
+body.m-port #player-dock .granary-title::before { content: '粮'; font-size: 11px; }
+body.m-port #player-dock .prestige-title::before { content: '望'; font-size: 11px; }
+body.m-port .battlefield-line { border-image-width: 14px !important; border-image-outset: 0 !important; }
+body.m-port .hq-slot { border-image-width: 12px !important; border-image-outset: 0 !important; }
+body.m-port .zone-terrain-banner :is(.terrain-name,.zone-occupant-badge,.zone-capacity-tag) { white-space: nowrap; }
+body.m-port.is-dragging #hand-tray::after { inset: 12px 0 0; border-width: 1px; background: rgba(80,28,18,.18); color: transparent; }
+body.m-port #player-dock :is(.player-hq-meta,.player-resources,.player-deck-actions,#turn-timer) {
+  box-sizing: border-box;
+  align-self: stretch !important;
+  height: auto !important;
+  min-height: 0 !important;
+  margin-top: 4px !important;
+  margin-bottom: 4px !important;
+}
+body.m-port #player-dock :is(.player-hq-meta,.player-resources) { padding-top: 4px !important; padding-bottom: 4px !important; }
+body.m-port #player-dock .player-deck-actions {
+  grid-template-columns: minmax(0,1fr) !important;
+  grid-template-rows: minmax(0,1fr) !important;
+}
+body.m-port #player-dock #btn-end-turn {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  box-sizing: border-box;
+  height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+}
+#player-dock #btn-end-turn { inset: auto !important; transform: none !important; }

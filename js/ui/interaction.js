@@ -1402,9 +1402,15 @@ export class InteractionController {
     this.dragGhostEl.style.left = '0px';
     this.dragGhostEl.style.top = '0px';
     this.dragGhostEl.style.margin = '0';
+    // Reset hand zoom so fixed coordinates remain in viewport pixels.
+    this.dragGhostEl.style.setProperty('zoom', '1', 'important');
+    this.dragGhostEl.style.width = '116px';
+    this.dragGhostEl.style.height = '156px';
+    this.dragGhostEl.style.transformOrigin = 'top left';
     this.dragGhostEl.style.pointerEvents = 'none';
     this.dragGhostEl.style.zIndex = '9999';
-    this.dragGhostEl.style.setProperty('transform', `translate(${x - 45}px, ${y - 60}px) scale(0.9)`, 'important');
+    const small = doc.body.classList?.contains('m-land');
+    this.dragGhostEl.style.setProperty('transform', small ? `translate(${x - 35}px, ${y - 95}px) scale(0.6)` : `translate(${x - 45}px, ${y - 60}px) scale(0.9)`, 'important');
     doc.body.appendChild(this.dragGhostEl);
     doc.body.classList?.add('is-dragging');
   }
