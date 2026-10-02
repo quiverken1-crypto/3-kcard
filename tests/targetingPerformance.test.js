@@ -2,6 +2,23 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { InteractionController } from '../js/ui/interaction.js';
 
+test('phone dragging defers damage simulation while keeping targeting available', () => {
+  const oldDocument = globalThis.document;
+  globalThis.document = { body: { classList: { contains: name => name === 'm-land' } } };
+  const controller = Object.create(InteractionController.prototype);
+  controller.isDragging = true;
+  controller.gameState = {};
+  let hidden = false;
+  controller._hidePreview = () => { hidden = true; };
+  try {
+    controller._previewFor({ type: 'ATTACK', payload: {} }, {});
+    assert.ok(hidden);
+    assert.equal(controller._previewKey, undefined);
+  } finally {
+    if (oldDocument === undefined) delete globalThis.document; else globalThis.document = oldDocument;
+  }
+});
+
 test('aiming updates every endpoint while amortizing geometry and stable target styles', () => {
   const previousDocument = globalThis.document;
   const previousPerformance = globalThis.performance;

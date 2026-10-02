@@ -316,6 +316,7 @@ export class AppCoordinator {
       const land = (w >= h && h <= 540) || port;
       doc.body.classList.toggle('m-land', land);
       doc.body.classList.toggle('m-port', port);
+      if (!port && adjustOverlay && !adjustOverlay.classList.contains('hidden')) closeAdjust(false);
       setTimeout(() => { this._fitBoard(); fitHandStrip(); }, 50);
     };
     this._applyLayout = applyLayout;
@@ -1550,6 +1551,9 @@ export class AppCoordinator {
 
   async _executeBotTurn() {
     if (!this.bot || !this.rulesEngine) return;
+    const engine = this.rulesEngine;
+    if (this._botTurnEngine === engine) return;
+    this._botTurnEngine = engine;
     if (this.interaction) {
       this.interaction.state = 'DISABLED';
     }
@@ -1558,13 +1562,20 @@ export class AppCoordinator {
     const statusBanner = doc?.getElementById('phase-name-text');
     if (statusBanner) statusBanner.textContent = 'AI 运筹帷幄中...';
 
-    await executeBotTurnAsync(this.rulesEngine, this.bot, {
-      stepDelayMs: 800,
-      onActionCallback: () => {
-        this._updateCombatLog();
-        this.render();
-      }
-    });
+    try {
+      await executeBotTurnAsync(engine, this.bot, {
+        stepDelayMs: 800,
+        cooperative: Boolean(doc?.body?.classList.contains('m-land')),
+        shouldContinue: () => this.rulesEngine === engine && this.mode === APP_MODE.SOLO_VS_BOT,
+        onActionCallback: () => {
+          this._updateCombatLog();
+          this.render();
+        }
+      });
+    } finally {
+      if (this._botTurnEngine === engine) this._botTurnEngine = null;
+    }
+    if (this.rulesEngine !== engine || this.mode !== APP_MODE.SOLO_VS_BOT) return;
 
     this.render();
     this._checkTurnState();

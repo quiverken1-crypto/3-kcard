@@ -302,17 +302,23 @@ export function renderFrontlineZone(zoneEl, zoneKey, zoneData, options = {}) {
  * Renders player hand cards fan into #hand-container.
  */
 export function renderHandFan(container, playerData, options = {}) {
-  container.innerHTML = '';
   const hand = playerData.hand || [];
 
   const prestigeDiscount = (!playerData.prestigeDiscountUsed && playerData.prestige > 0)
     ? playerData.prestige
     : 0;
   const tacticDiscount = options.tacticDiscount || 0;
+  const skillCuts = hand.map(card => (card.type === 'UNIT' && options.unitBaseCost)
+    ? Math.max(0, (card.cost ?? 0) - options.unitBaseCost(card)) : 0);
+  const mobile = globalThis.document?.body?.classList?.contains?.('m-land');
+  const signature = mobile ? JSON.stringify([hand, prestigeDiscount, tacticDiscount, skillCuts]) : null;
+  if (mobile && container._handSignature === signature && container.children.length === hand.length) return;
+  container._handSignature = signature;
+  container.innerHTML = '';
 
   const cardEls = [];
-  hand.forEach((card) => {
-    const skillCut = (card.type === 'UNIT' && options.unitBaseCost) ? Math.max(0, (card.cost ?? 0) - options.unitBaseCost(card)) : 0;
+  hand.forEach((card, index) => {
+    const skillCut = skillCuts[index];
     const cardEl = renderHandCard(card, {
       ...options,
       prestigeDiscount: prestigeDiscount + skillCut,
