@@ -31,6 +31,7 @@ import { KINGDOMS } from './data/cardDB.js';
 import { setSeatKingdoms, seatArmy } from './ui/seats.js';
 import { BOOT_ASSETS, DEFERRED_UI_ASSETS } from './ui/bootAssets.js';
 import { MatchArtLoader } from './ui/matchArtLoader.js';
+import { whenDocumentReady } from './ui/startup.js';
 import { DeckBuilder } from './ui/deckBuilder.js';
 import { Workshop } from './ui/workshop.js';
 import './api.js'; // 开放接口：window.SGK
@@ -132,6 +133,8 @@ export class AppCoordinator {
     const doc = typeof document !== 'undefined' ? document : globalThis.document;
     if (!doc) return;
 
+    this._runPreloader(doc);
+
     // 1. Initialize Card Inspector Tooltip
     CardInspector.init();
     this.battleFx = new BattleFx({ getLocalPlayer: () => this.localPlayerId });
@@ -166,7 +169,6 @@ export class AppCoordinator {
     this.audio = new AudioDirector();
     this.audio.setScene('lobby');
     this.audio.armUnlock(doc);
-    this._runPreloader(doc);
     this._bindTouchControls(doc);
 
     // 5. Wire Drawer & Global Controls
@@ -233,6 +235,7 @@ export class AppCoordinator {
       const vv = globalThis.visualViewport;
       const w = Math.round(vv?.width || globalThis.innerWidth), h = Math.round(vv?.height || globalThis.innerHeight);
       doc.documentElement.style.setProperty('--app-h', `${h}px`);
+      doc.documentElement.style.setProperty('--app-top', `${Math.max(0, vv?.offsetTop || 0)}px`);
       const port = h > w && w <= 600;
       const land = (w >= h && h <= 540) || port;
       doc.body.classList.toggle('m-land', land);
@@ -242,6 +245,7 @@ export class AppCoordinator {
     this._applyLayout = applyLayout;
     globalThis.addEventListener?.('resize', applyLayout);
     globalThis.visualViewport?.addEventListener?.('resize', applyLayout);
+    globalThis.visualViewport?.addEventListener?.('scroll', applyLayout);
     applyLayout();
     // 离线缓存：第二次打开秒开
     try {
@@ -295,7 +299,7 @@ export class AppCoordinator {
     }).then(() => { uiDone = true; });
     // No minimum wait: cached home assets unlock entry immediately.
     Promise.race([uiReady, sleep(1800)]).then(() => {
-      if (closed) return;
+      if (closed || globalThis.__TK_INIT_FAILED__) return;
       enter?.classList.remove('hidden');
       if (label) label.textContent = uiDone ? '界面已就绪，可直接进入' : '可直接进入，其余资源后台加载';
     });
@@ -1678,12 +1682,24 @@ export class AppCoordinator {
 
 // Auto-bootstrap when loaded in browser
 if (typeof document !== 'undefined') {
-  document.addEventListener('DOMContentLoaded', () => {
+  whenDocumentReady(document, () => {
+    if (typeof window !== 'undefined' && window.__TK_APP__) return;
     const app = new AppCoordinator();
     if (typeof window !== 'undefined') {
       window.__TK_APP__ = app;
     }
-    app.init().catch(err => console.error('App bootstrap error:', err));
+    app.init().then(() => {
+      if (typeof window !== 'undefined') {
+        window.__TK_READY = true;
+        window.dispatchEvent(new Event('sgk-ready'));
+      }
+    }).catch(err => {
+      console.error('App bootstrap error:', err);
+      if (typeof window !== 'undefined') {
+        window.__TK_INIT_FAILED__ = true;
+        window.dispatchEvent(new Event('sgk-init-error'));
+      }
+    });
   });
 }
 

@@ -59,6 +59,7 @@ test('drag ghost keeps dragging state and pointer transforms override selected C
   controller.isDragging=true;
   try {
     controller._createCardGhost('card',100,200);
+    assert.deepEqual(attributes.get('zoom'),{value:'1',priority:'important'});
     assert.ok(bodyClasses.has('is-dragging'));
     assert.ok(!classes.has('selected'));
     controller._handlePointerMove({pointerId:1,clientX:200,clientY:300,pointerType:'mouse'});

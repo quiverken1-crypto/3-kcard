@@ -335,7 +335,7 @@ export function fitHandStrip(container = document.getElementById('hand-container
   cards.forEach(c => { c.style.marginLeft = ''; c.style.zoom = ''; });
   container.classList.remove('hand-dense', 'hand-scroll');
   container.parentElement?.classList.remove('hand-tray-scroll');
-  if (!document.body.classList.contains('m-land') || cards.length < 2) return;
+  if (cards.length < 2) return;
   // 手牌不再互相叠压：放不下时按比例缩小每张牌（选中的牌会放大显示）
   const tray = container.parentElement || container;
   // 性能：同样的手牌、同样的宽度直接套用上次算好的缩放，不再强制重排测量
@@ -362,13 +362,15 @@ export function fitHandStrip(container = document.getElementById('hand-container
   const widths = total - gap * (cards.length - 1);
   const fit = (avail - gap * (cards.length - 1)) / widths;
   // 缩到 80% 仍放不下：保持 80%，改为左右滑动查看（仍然不叠压）
-  const f = Math.max(0.8, fit);
+  const compactLandscape = document.body.classList.contains('m-land') && !document.body.classList.contains('m-port');
+  const minFit = compactLandscape ? 0.8 : 1;
+  const f = Math.max(minFit, fit);
   const z = +(z0 * f).toFixed(3);
-  tray._fitCache = { key, z, scroll: fit < 0.8 };
+  tray._fitCache = { key, z, scroll: fit < minFit };
   cards.forEach(c => { c.style.zoom = String(z); });
-  container.classList.toggle('hand-scroll', fit < 0.8);
-  tray.classList.toggle('hand-tray-scroll', fit < 0.8);
-  if (fit < 0.8 && !tray._handScrolled) tray.scrollLeft = 0;
+  container.classList.toggle('hand-scroll', fit < minFit);
+  tray.classList.toggle('hand-tray-scroll', fit < minFit);
+  if (fit < minFit && !tray._handScrolled) tray.scrollLeft = 0;
   if (!tray._handScrollBound) { tray._handScrollBound = true; tray.addEventListener('scroll', () => { tray._handScrolled = tray.scrollLeft > 0; }, { passive: true }); }
 }
 
