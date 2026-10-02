@@ -193,7 +193,7 @@ body.m-port #player-dock #btn-end-turn {
   --port-bottom-space: calc(max(12px, env(safe-area-inset-bottom, 0px)) + var(--mobile-bottom-adjust));
 }
 body.m-port #game-app.game-container {
-  grid-template-rows: 34px minmax(0, 1fr) 48px 148px;
+  grid-template-rows: 34px minmax(0, 1fr) 48px 120px;
   padding-top: var(--port-top-space) !important;
   padding-bottom: var(--port-bottom-space) !important;
 }
@@ -202,14 +202,15 @@ body.m-port .modal-overlay {
   padding: var(--port-top-space) 8px var(--port-bottom-space);
 }
 body.m-port .touch-cancel-btn {
-  bottom: calc(var(--port-bottom-space) + 120px) !important;
+  bottom: calc(var(--port-bottom-space) + 94px) !important;
   z-index: 1100;
 }
+body.m-port.is-dragging .touch-cancel-btn { display: inline-flex !important; }
 body.m-port #player-dock #hand-tray.hand-fan-tray {
   height: 100% !important;
   align-self: stretch !important;
-  padding-top: 30px !important;
-  padding-bottom: 3px !important;
+  padding-top: 4px !important;
+  padding-bottom: 2px !important;
 }
 body.m-port.is-dragging #hand-tray {
   outline: 2px dashed #e7aa78;
@@ -218,8 +219,8 @@ body.m-port.is-dragging #hand-tray {
 }
 body.m-port.is-dragging #hand-tray::after { content: none !important; }
 body.m-port .card-inspector-tooltip {
-  bottom: calc(204px + var(--port-bottom-space)) !important;
-  max-height: calc(var(--app-h, 100dvh) - var(--port-top-space) - var(--port-bottom-space) - 230px);
+  bottom: calc(176px + var(--port-bottom-space)) !important;
+  max-height: calc(var(--app-h, 100dvh) - var(--port-top-space) - var(--port-bottom-space) - 202px);
 }
 
 /* The fortress choices use a stable, complete rim at small sizes. */
@@ -344,6 +345,7 @@ body.m-port .hm-layout-link { display: inline-flex; }
 }
 .hm-layout-link { display: none; }
 .layout-adjust.hidden { display: none !important; }
+body:not(.m-port) .layout-adjust { display: none !important; }
 .layout-adjust {
   position: fixed;
   inset: 0;
@@ -443,3 +445,64 @@ body.m-port .game-menu-box { max-height: calc(100% - var(--port-top-space) - var
   background-clip: border-box !important;
 }
 .modal-box .modal-actions { background: transparent !important; }
+
+/* The home backdrop also paints the viewport outside Safari's app-sized shell. */
+html:has(body.at-home.m-land), body.at-home.m-land {
+  background:
+    linear-gradient(90deg,rgba(7,5,3,.83) 0%,rgba(7,5,3,.55) 42%,rgba(7,5,3,.26) 68%,rgba(7,5,3,.58) 100%),
+    linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.38)),
+    url('../assets/ui/home-bg.webp') center center / cover no-repeat fixed !important;
+}
+body.at-home.m-land #game-app.game-container { background: transparent !important; }
+body.at-home.m-land #home-screen.home-screen.hm {
+  background: transparent !important;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+body.m-port #home-screen.home-screen.hm {
+  padding-top: var(--port-top-space);
+  padding-bottom: var(--port-bottom-space);
+  grid-template-rows: minmax(0, 1fr) auto auto;
+}
+body.m-port #home-screen.home-screen.hm::after {
+  background: linear-gradient(180deg,rgba(7,5,4,.15),rgba(7,5,4,.22) 31%,rgba(7,5,4,.42) 69%,rgba(7,5,4,.5));
+}
+body.m-port .hm-links { flex-wrap: nowrap; gap: 4px; }
+body.m-port .hm-link { flex: 1 1 38px; letter-spacing: 0; }
+@media (max-height: 680px) and (orientation: portrait) {
+  body.m-port .hm-title { font-size: min(24vw, 14vh); }
+}
+
+/* Revealed-card names occupy only spare room in the mobile status bar. */
+body.m-land #top-bar.hud-top-bar { min-width: 0; overflow: hidden !important; }
+body.m-land #top-bar .opponent-resources {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  margin-left: 0 !important;
+  gap: 3px !important;
+}
+body.m-land #top-bar .hud-actions { flex: 0 0 auto; margin-left: 0; }
+body.m-land #top-bar .opp-known-cards {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 128px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+body.m-land #top-bar .okc-chip { max-width: 76px; overflow: hidden; text-overflow: ellipsis; }
+body.m-port #top-bar .opponent-meta { flex: 0 0 auto; min-width: 0; }
+body.m-port #top-bar .opponent-resources { gap: 2px !important; }
+body.m-port #top-bar .opp-known-cards { max-width: 82px; }
+body.m-port #top-bar .okc-label { font-size: 0; letter-spacing: 0; }
+body.m-port #top-bar .okc-label::before { content: '明'; font-size: 9px; }
+body.m-port #top-bar .okc-chip { font-size: 9px; padding: 2px 3px; max-width: 60px; }
+@media (max-width: 360px) {
+  body.m-port #top-bar .hud-action-btn { padding: 0 2px; }
+  body.m-port #top-bar .hud-actions { gap: 2px; }
+  body.m-port #top-bar .phase-badge { padding: 2px 3px !important; }
+  body.m-port #top-bar .faction-emblem { width: 18px !important; min-width: 18px; height: 18px !important; }
+  body.m-port #top-bar .hq-status-group { width: 44px !important; }
+  body.m-port #top-bar .provisions-badge .resource-icon { display: none; }
+}
+body.m-land .bfx-layer * { filter: none !important; }

@@ -138,6 +138,8 @@ export class InteractionController {
     if (win) {
       // 手指/鼠标移动一帧内可能来好几次：只处理每帧最后一次，避免重复查找目标与预演
       win.addEventListener('pointermove', (e) => {
+        if (this.dragPointerId === null && !this.pendingTactic &&
+            this.state !== INTERACTION_STATE.CARD_SELECTED && this.state !== INTERACTION_STATE.TARGETING) return;
         this._pendingMove = e;
         if (this._moveRaf) return;
         const raf = win.requestAnimationFrame || (fn => setTimeout(fn, 16));
@@ -577,6 +579,9 @@ export class InteractionController {
   _previewFor(action, anchorEl, faceDown = false) {
     const doc = globalThis.document;
     if (!doc || !anchorEl || !this.gameState) { this._hidePreview(); return; }
+    // Touch dragging keeps immediate target feedback; full rule simulation is
+    // deferred to a tap/confirmation instead of blocking the moving pointer.
+    if (this.isDragging && doc.body?.classList?.contains('m-land')) { this._hidePreview(); return; }
     const key = JSON.stringify(action.payload) + action.type;
     if (key !== this._previewKey) {
       this._previewKey = key;
@@ -662,7 +667,8 @@ export class InteractionController {
   /** 指着（悬停/拖动经过）战法或进场技能目标时预演 */
   _previewPendingAt(x, y) {
     const pending = this.pendingTactic;
-    const el = globalThis.document?.elementFromPoint?.(x, y)?.closest?.('.board-unit');
+    const below = this._moveHitElement !== undefined ? this._moveHitElement : globalThis.document?.elementFromPoint?.(x, y);
+    const el = below?.closest?.('.board-unit');
     const id = el?.dataset?.instanceId;
     if (!pending || !id || !pending.targetIds.includes(id)) { this._hidePreview(); return; }
     const action = pending.kind === 'DEPLOY'
@@ -893,6 +899,7 @@ export class InteractionController {
   // Pointer Movement & SVG Targeting Curve
   // ==========================================
   _handlePointerMove(e) {
+    this._moveHitElement = undefined;
     if (this.dragPointerId !== null && (e.pointerId === undefined || e.pointerId === this.dragPointerId)) {
       const dx = (e.clientX ?? 0) - this.dragStartPos.x;
       const dy = (e.clientY ?? 0) - this.dragStartPos.y;
@@ -923,6 +930,7 @@ export class InteractionController {
     if (this.isDragging) {
       const doc = globalThis.document;
       const below = doc?.elementFromPoint?.(e.clientX ?? 0, e.clientY ?? 0);
+      this._moveHitElement = below;
       const zk = this._zoneKeyOfElement(below);
       if (this.repositionOnly || (this.state === INTERACTION_STATE.TARGETING && this.selectedUnit)) {
         const u = this.repositionOnly || this.selectedUnit;
@@ -962,7 +970,8 @@ export class InteractionController {
     // Source movement settles over a transition; refresh its geometry at 30 Hz,
     // while the arrow endpoint continues to follow every animation frame.
     let geometry = this._curveGeometry;
-    if (!geometry || geometry.source !== sourceEl || geometry.overlay !== this.svgOverlay || now - geometry.at >= 32) {
+    const refreshMs = this.isDragging && doc.body?.classList?.contains('m-land') ? 100 : 32;
+    if (!geometry || geometry.source !== sourceEl || geometry.overlay !== this.svgOverlay || now - geometry.at >= refreshMs) {
       geometry = this._curveGeometry = {
         source: sourceEl, overlay: this.svgOverlay, at: now,
         sourceRect: sourceEl.getBoundingClientRect?.() || { left: 100, top: 400, width: 90, height: 130 },
@@ -987,7 +996,8 @@ export class InteractionController {
 
     const d = `M ${startX.toFixed(1)} ${startY.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${endX.toFixed(1)} ${endY.toFixed(1)}`;
     // Identify hover element under pointer
-    const elemBelow = typeof doc.elementFromPoint === 'function' ? doc.elementFromPoint(pointerX, pointerY) : null;
+    const elemBelow = this._moveHitElement !== undefined ? this._moveHitElement
+      : typeof doc.elementFromPoint === 'function' ? doc.elementFromPoint(pointerX, pointerY) : null;
     const attackTarget = !isHandCard && this._attackTargetAt(pointerX, pointerY, elemBelow);
     const moveTarget = elemBelow?.closest?.(isHandCard ? '.legal-drop-highlight' : '.legal-move-target');
 

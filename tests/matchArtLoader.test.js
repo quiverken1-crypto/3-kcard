@@ -33,3 +33,9 @@ test('new combat art jumps ahead of background jobs, bounded to three requests',
   loader.update(s,'WEI');
   assert.equal(images.length,count);
 });
+test('phone loading excludes unseen decks while keeping combat and our hand',()=>{
+  const jobs=matchArtRequests(state(),'WEI',{includeDecks:false});
+  assert.equal(jobs.length,3);
+  assert.ok(jobs.every(job=>job.priority==='high'));
+  assert.ok(!jobs.some(job=>job.url.endsWith('wu_zhou_yu.webp')));
+});

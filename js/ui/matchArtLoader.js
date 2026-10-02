@@ -1,7 +1,7 @@
 import { getCardArtUrl } from './cardRenderer.js';
 
 /** Visible combat cards first, then only the decks participating in this match. */
-export function matchArtRequests(state, viewer) {
+export function matchArtRequests(state, viewer, { includeDecks = true } = {}) {
   const urls=new Map();
   const add=(cards,priority)=>{
     for(const card of cards || []) {
@@ -12,7 +12,7 @@ export function matchArtRequests(state, viewer) {
   for(const seat of ['WEI','SHU'])add(state.battlefield?.support?.[seat]?.slots,'high');
   for(const zone of Object.values(state.battlefield?.frontline || {}))add(zone.units,'high');
   add(state.players?.[viewer]?.hand,'high');
-  for(const seat of ['WEI','SHU']) {
+  if(includeDecks) for(const seat of ['WEI','SHU']) {
     add(state.players?.[seat]?.hand,'low');
     add(state.players?.[seat]?.deck,'low');
   }
@@ -26,7 +26,11 @@ export class MatchArtLoader {
   update(state,viewer) {
     if(!this.ImageType)return;
     if(this.matchId!==state.matchId){this.queue.clear();this.matchId=state.matchId;}
-    for(const item of matchArtRequests(state,viewer)) {
+    // Phones load only cards already visible in combat or our hand.
+    // Background deck downloads can contend with touch input and AI rendering.
+    const mobile = globalThis.document?.body?.classList?.contains?.('m-land') || false;
+    if(mobile) for(const [url,item] of this.queue) if(item.priority==='low') this.queue.delete(url);
+    for(const item of matchArtRequests(state,viewer,{includeDecks:!mobile})) {
       if(this.loaded.has(item.url))continue;
       const pending=this.pending.get(item.url);
       if(pending){if(item.priority==='high')pending.fetchPriority='high';continue;}
