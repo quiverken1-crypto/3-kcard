@@ -49,6 +49,16 @@
       </div>
     </div>
     <button id="touch-cancel" class="touch-cancel-btn" type="button">✕ 取消</button>
+    <div id="mobile-layout-adjust" class="layout-adjust hidden" role="dialog" aria-modal="true" aria-label="调整竖屏画面">
+      <div id="layout-top-handle" class="layout-adjust-handle layout-adjust-top" role="slider" tabindex="0" aria-label="顶部留白" aria-valuemin="0" aria-valuemax="120"><span>拖动上边界</span></div>
+      <div id="layout-bottom-handle" class="layout-adjust-handle layout-adjust-bottom" role="slider" tabindex="0" aria-label="底部留白" aria-valuemin="0" aria-valuemax="120"><span>拖动下边界</span></div>
+      <div class="layout-adjust-toolbar">
+        <span>拖动边界，实时预览</span>
+        <button id="layout-adjust-reset" type="button">重置</button>
+        <button id="layout-adjust-cancel" type="button">取消</button>
+        <button id="layout-adjust-done" type="button">完成</button>
+      </div>
+    </div>
 
     <!-- 资源加载 -->
     <div id="boot-loader" class="boot-loader" role="progressbar" aria-label="资源加载进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
@@ -83,6 +93,7 @@
           <button id="home-btn-rules" class="hm-link">规则</button>
           <button id="home-btn-editor" class="hm-link">工坊</button>
           <button id="home-btn-install" class="hm-link hm-touch-only">全屏</button>
+          <button id="home-btn-layout" class="hm-link hm-layout-link">画面</button>
           <button id="home-btn-audio" class="hm-link"><span class="hl-label">音乐</span></button>
         </div>
       </nav>
@@ -753,11 +764,7 @@
           <button id="btn-audio-toggle" class="menu-audio-btn" title="开启或关闭音频" aria-label="关闭音频">🔊</button>
           <input id="audio-volume" type="range" min="0" max="100" value="65" aria-label="音量" title="音量">
         </div>
-        <div class="game-menu-spacing" aria-label="竖屏画面留白">
-          <label>顶部留白 <input id="mobile-top-spacing" type="range" min="0" max="60" value="0" aria-label="增加顶部留白"></label>
-          <label>底部留白 <input id="mobile-bottom-spacing" type="range" min="0" max="60" value="0" aria-label="增加底部留白"></label>
-          <button id="mobile-spacing-reset" type="button">恢复默认</button>
-        </div>
+        <button id="menu-layout-adjust" class="menu-layout-adjust" type="button">调整画面位置</button>
         <p class="game-menu-hint desktop-only">Esc 开关菜单 · 右键取消选择 · 空格结束回合 · 悬停卡牌查看技能</p>
         <p class="game-menu-hint touch-only">点按卡牌看技能 · 手牌上方「✕ 取消」或拖回手牌区取消</p>
       </div>

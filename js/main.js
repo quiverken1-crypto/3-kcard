@@ -230,26 +230,76 @@ export class AppCoordinator {
     on('ios-install-close', () => doc.getElementById('ios-install')?.classList.add('hidden'));
     if (standalone) doc.body.classList.add('is-standalone');
     const spacingKey = 'sgk-mobile-spacing-v1';
-    const spacingControls = [
-      ['mobile-top-spacing', '--mobile-top-adjust'],
-      ['mobile-bottom-spacing', '--mobile-bottom-adjust'],
-    ];
     let savedSpacing = {};
     try { savedSpacing = JSON.parse(globalThis.localStorage?.getItem(spacingKey) || '{}') || {}; } catch { /* private mode */ }
-    const setSpacing = (id, value) => {
-      const amount = Math.min(60, Math.max(0, Number(value) || 0));
-      const control = doc.getElementById(id);
-      const variable = spacingControls.find(([name]) => name === id)?.[1];
-      if (control) control.value = String(amount);
-      if (variable) doc.documentElement.style.setProperty(variable, `${amount}px`);
-      savedSpacing[id] = amount;
-      try { globalThis.localStorage?.setItem(spacingKey, JSON.stringify(savedSpacing)); } catch { /* private mode */ }
+    const clampSpacing = value => Math.min(120, Math.max(0, Number(value) || 0));
+    const spacing = {
+      top: clampSpacing(savedSpacing['mobile-top-spacing']),
+      bottom: clampSpacing(savedSpacing['mobile-bottom-spacing']),
     };
-    for (const [id] of spacingControls) {
-      setSpacing(id, savedSpacing[id]);
-      doc.getElementById(id)?.addEventListener('input', event => setSpacing(id, event.target.value));
+    const adjustOverlay = doc.getElementById('mobile-layout-adjust');
+    let initialSpacing = { ...spacing };
+    let refitQueued = false;
+    const renderSpacing = () => {
+      doc.documentElement.style.setProperty('--mobile-top-adjust', `${spacing.top}px`);
+      doc.documentElement.style.setProperty('--mobile-bottom-adjust', `${spacing.bottom}px`);
+      for (const side of ['top', 'bottom']) {
+        const handle = doc.getElementById(`layout-${side}-handle`);
+        handle?.setAttribute('aria-valuenow', String(spacing[side]));
+        const label = handle?.querySelector('span');
+        if (label) label.textContent = `${side === 'top' ? '上' : '下'}边界 · 拖动调整`;
+      }
+      if (!refitQueued) {
+        refitQueued = true;
+        globalThis.requestAnimationFrame?.(() => { refitQueued = false; this._fitBoard(); });
+      }
+    };
+    const closeAdjust = save => {
+      if (!save) Object.assign(spacing, initialSpacing);
+      else {
+        try { globalThis.localStorage?.setItem(spacingKey, JSON.stringify({ 'mobile-top-spacing': spacing.top, 'mobile-bottom-spacing': spacing.bottom })); } catch { /* private mode */ }
+      }
+      adjustOverlay?.classList.add('hidden');
+      renderSpacing();
+    };
+    const openAdjust = () => {
+      initialSpacing = { ...spacing };
+      doc.getElementById('modal-game-menu')?.classList.add('hidden');
+      adjustOverlay?.classList.remove('hidden');
+      renderSpacing();
+    };
+    on('home-btn-layout', openAdjust);
+    on('menu-layout-adjust', openAdjust);
+    on('layout-adjust-done', () => closeAdjust(true));
+    on('layout-adjust-cancel', () => closeAdjust(false));
+    on('layout-adjust-reset', () => { spacing.top = 0; spacing.bottom = 0; renderSpacing(); });
+    for (const side of ['top', 'bottom']) {
+      const handle = doc.getElementById(`layout-${side}-handle`);
+      let drag = null;
+      handle?.addEventListener('pointerdown', event => {
+        event.preventDefault();
+        drag = { id: event.pointerId, y: event.clientY, value: spacing[side] };
+        handle.setPointerCapture(event.pointerId);
+        handle.classList.add('dragging');
+      });
+      handle?.addEventListener('pointermove', event => {
+        if (!drag || drag.id !== event.pointerId) return;
+        const delta = (event.clientY - drag.y) * (side === 'top' ? 1 : -1);
+        spacing[side] = clampSpacing(drag.value + delta);
+        renderSpacing();
+      });
+      const stop = () => { drag = null; handle?.classList.remove('dragging'); };
+      handle?.addEventListener('pointerup', stop);
+      handle?.addEventListener('pointercancel', stop);
+      handle?.addEventListener('keydown', event => {
+        const change = event.key === 'ArrowDown' ? 4 : event.key === 'ArrowUp' ? -4 : 0;
+        if (!change) return;
+        event.preventDefault();
+        spacing[side] = clampSpacing(spacing[side] + change * (side === 'top' ? 1 : -1));
+        renderSpacing();
+      });
     }
-    on('mobile-spacing-reset', () => { for (const [id] of spacingControls) setSpacing(id, 0); });
+    renderSpacing();
     // 手机布局：横屏矮屏 → m-land；竖屏手机 → m-land + m-port
     // 用实际可见高度（扣掉浏览器地址栏/标签栏）排版
     const applyLayout = () => {
