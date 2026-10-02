@@ -753,8 +753,13 @@
           <button id="btn-audio-toggle" class="menu-audio-btn" title="开启或关闭音频" aria-label="关闭音频">🔊</button>
           <input id="audio-volume" type="range" min="0" max="100" value="65" aria-label="音量" title="音量">
         </div>
+        <div class="game-menu-spacing" aria-label="竖屏画面留白">
+          <label>顶部留白 <input id="mobile-top-spacing" type="range" min="0" max="60" value="0" aria-label="增加顶部留白"></label>
+          <label>底部留白 <input id="mobile-bottom-spacing" type="range" min="0" max="60" value="0" aria-label="增加底部留白"></label>
+          <button id="mobile-spacing-reset" type="button">恢复默认</button>
+        </div>
         <p class="game-menu-hint desktop-only">Esc 开关菜单 · 右键取消选择 · 空格结束回合 · 悬停卡牌查看技能</p>
-        <p class="game-menu-hint touch-only">点按卡牌看技能 · 顶部「✕ 取消」或拖回手牌区取消 · 右上 ⛶ 全屏</p>
+        <p class="game-menu-hint touch-only">点按卡牌看技能 · 手牌上方「✕ 取消」或拖回手牌区取消</p>
       </div>
     </div>
 

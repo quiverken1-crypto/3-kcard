@@ -184,3 +184,152 @@ body.m-port #player-dock #btn-end-turn {
   margin: 0 !important;
 }
 #player-dock #btn-end-turn { inset: auto !important; transform: none !important; }
+
+/* Portrait Safari: fit the whole play surface between the camera and home bar. */
+:root {
+  --mobile-top-adjust: 0px;
+  --mobile-bottom-adjust: 0px;
+  --port-top-space: calc(max(66px, env(safe-area-inset-top, 0px)) + var(--mobile-top-adjust));
+  --port-bottom-space: calc(max(12px, env(safe-area-inset-bottom, 0px)) + var(--mobile-bottom-adjust));
+}
+body.m-port #game-app.game-container {
+  grid-template-rows: 34px minmax(0, 1fr) 48px 148px;
+  padding-top: var(--port-top-space) !important;
+  padding-bottom: var(--port-bottom-space) !important;
+}
+body.m-port .modal-overlay {
+  box-sizing: border-box;
+  padding: var(--port-top-space) 8px var(--port-bottom-space);
+}
+body.m-port .touch-cancel-btn {
+  bottom: calc(var(--port-bottom-space) + 120px) !important;
+  z-index: 1100;
+}
+body.m-port #player-dock #hand-tray.hand-fan-tray {
+  height: 100% !important;
+  align-self: stretch !important;
+  padding-top: 30px !important;
+  padding-bottom: 3px !important;
+}
+body.m-port.is-dragging #hand-tray {
+  outline: 2px dashed #e7aa78;
+  outline-offset: -3px;
+  background: rgba(95, 37, 25, .65) !important;
+}
+body.m-port.is-dragging #hand-tray::after { content: none !important; }
+body.m-port .card-inspector-tooltip {
+  bottom: calc(204px + var(--port-bottom-space)) !important;
+  max-height: calc(var(--app-h, 100dvh) - var(--port-top-space) - var(--port-bottom-space) - 230px);
+}
+
+/* The fortress choices use a stable, complete rim at small sizes. */
+.hq-card {
+  border: 2px solid #cda861 !important;
+  border-image: none !important;
+  background-clip: padding-box !important;
+  box-shadow: inset 0 0 0 2px #4b301c, 0 8px 20px #0008 !important;
+}
+.hq-card::before {
+  content: "" !important;
+  display: block !important;
+  position: absolute;
+  inset: 4px;
+  width: auto;
+  height: auto;
+  transform: none;
+  pointer-events: none;
+  opacity: .72;
+  background:
+    linear-gradient(#d8aa59,#d8aa59) left top / 11px 1px no-repeat,
+    linear-gradient(#d8aa59,#d8aa59) left top / 1px 11px no-repeat,
+    linear-gradient(#d8aa59,#d8aa59) right top / 11px 1px no-repeat,
+    linear-gradient(#d8aa59,#d8aa59) right top / 1px 11px no-repeat,
+    linear-gradient(#d8aa59,#d8aa59) left bottom / 11px 1px no-repeat,
+    linear-gradient(#d8aa59,#d8aa59) left bottom / 1px 11px no-repeat,
+    linear-gradient(#d8aa59,#d8aa59) right bottom / 11px 1px no-repeat,
+    linear-gradient(#d8aa59,#d8aa59) right bottom / 1px 11px no-repeat;
+}
+
+/* A two-column form saves four label rows, leaving room for both cards and actions. */
+@media (max-width: 600px) and (orientation: portrait) {
+  body.m-port #modal-hq-pick .hq-pick-box {
+    box-sizing: border-box;
+    width: min(100%, 440px) !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+    padding: 11px 12px 9px !important;
+    gap: 0;
+  }
+  body.m-port .hq-pick-title {
+    font-size: clamp(18px, 5vw, 24px) !important;
+    line-height: 1.25;
+    padding-bottom: 12px !important;
+    margin: 0 auto 5px !important;
+  }
+  body.m-port .hqp-grid {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) !important;
+    gap: 5px 7px !important;
+    margin: 3px 0 !important;
+  }
+  body.m-port .hqp-label { margin: 0 !important; text-align: left !important; letter-spacing: 0; }
+  body.m-port .hqp-field { min-height: 32px; flex-wrap: nowrap; }
+  body.m-port .hqp-field .enemy-chip { padding: 4px 8px !important; font-size: 12px !important; }
+  body.m-port .hqp-decks { padding-bottom: 2px; gap: 5px; }
+  body.m-port .hqp-deck { width: 108px; padding: 3px 6px; }
+  body.m-port .hqp-deck-name { font-size: 11px; }
+  body.m-port .hqp-manage { padding: 3px 7px !important; }
+  body.m-port .hq-pick-sub { display: none !important; }
+  body.m-port .hq-pick-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+    margin: 6px 0 !important;
+    max-width: none;
+  }
+  body.m-port .hq-card {
+    height: clamp(112px, 19dvh, 156px) !important;
+    padding: 10px 5px 7px !important;
+  }
+  body.m-port .hq-card-name { font-size: clamp(18px, 5.5vw, 26px) !important; }
+  body.m-port .hq-card-terrains { margin-top: 3px; }
+  body.m-port .hq-card-shield {
+    width: 43px !important;
+    height: 46px !important;
+    margin-top: 8px !important;
+    font-size: 21px !important;
+  }
+  body.m-port .hq-card-grain { font-size: 10px; }
+  body.m-port .hq-pick-box .modal-actions {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    margin: 0 !important;
+    padding: 5px 0 0 !important;
+  }
+  body.m-port .hq-pick-box .modal-actions .modal-btn { min-height: 36px; margin: 0; }
+}
+
+.game-menu-spacing { display: none; }
+body.m-port .game-menu-spacing {
+  display: grid;
+  gap: 4px;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid #d8aa5933;
+  font-size: 12px;
+}
+body.m-port .game-menu-spacing label { display: grid; grid-template-columns: 62px 1fr; align-items: center; gap: 8px; }
+body.m-port .game-menu-spacing input { width: 100%; accent-color: #d8aa59; }
+body.m-port .game-menu-spacing button { justify-self: end; border: 0; background: none; color: #dfc28b; font-size: 11px; }
+body.m-port .game-menu-box { max-height: calc(100% - var(--port-top-space) - var(--port-bottom-space)); }
+@media (max-height: 680px) and (orientation: portrait) {
+  body.m-port .game-menu-box { padding: 10px 13px !important; }
+  body.m-port .game-menu-seal { margin-bottom: 6px; padding: 2px 12px; font-size: 18px; }
+  body.m-port .game-menu-list { gap: 4px; }
+  body.m-port .menu-item { padding: 5px 0 !important; font-size: 14px; }
+  body.m-port .game-menu-audio { margin-top: 7px; padding-top: 7px; }
+  body.m-port .game-menu-spacing { margin-top: 5px; padding-top: 4px; gap: 2px; }
+  body.m-port .game-menu-hint { display: none !important; }
+}

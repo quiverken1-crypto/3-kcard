@@ -229,13 +229,39 @@ export class AppCoordinator {
     on('home-btn-install', goFull);
     on('ios-install-close', () => doc.getElementById('ios-install')?.classList.add('hidden'));
     if (standalone) doc.body.classList.add('is-standalone');
+    const spacingKey = 'sgk-mobile-spacing-v1';
+    const spacingControls = [
+      ['mobile-top-spacing', '--mobile-top-adjust'],
+      ['mobile-bottom-spacing', '--mobile-bottom-adjust'],
+    ];
+    let savedSpacing = {};
+    try { savedSpacing = JSON.parse(globalThis.localStorage?.getItem(spacingKey) || '{}') || {}; } catch { /* private mode */ }
+    const setSpacing = (id, value) => {
+      const amount = Math.min(60, Math.max(0, Number(value) || 0));
+      const control = doc.getElementById(id);
+      const variable = spacingControls.find(([name]) => name === id)?.[1];
+      if (control) control.value = String(amount);
+      if (variable) doc.documentElement.style.setProperty(variable, `${amount}px`);
+      savedSpacing[id] = amount;
+      try { globalThis.localStorage?.setItem(spacingKey, JSON.stringify(savedSpacing)); } catch { /* private mode */ }
+    };
+    for (const [id] of spacingControls) {
+      setSpacing(id, savedSpacing[id]);
+      doc.getElementById(id)?.addEventListener('input', event => setSpacing(id, event.target.value));
+    }
+    on('mobile-spacing-reset', () => { for (const [id] of spacingControls) setSpacing(id, 0); });
     // 手机布局：横屏矮屏 → m-land；竖屏手机 → m-land + m-port
     // 用实际可见高度（扣掉浏览器地址栏/标签栏）排版
     const applyLayout = () => {
       const vv = globalThis.visualViewport;
       const w = Math.round(vv?.width || globalThis.innerWidth), h = Math.round(vv?.height || globalThis.innerHeight);
-      doc.documentElement.style.setProperty('--app-h', `${h}px`);
-      doc.documentElement.style.setProperty('--app-top', `${Math.max(0, vv?.offsetTop || 0)}px`);
+      const top = Math.max(0, vv?.offsetTop || 0);
+      const innerH = Math.round(globalThis.innerHeight || h);
+      // Safari can report a shorter visualViewport after hiding its toolbar.
+      // Fill the available layout viewport unless the keyboard is open.
+      const appH = h >= innerH * .75 ? Math.max(h, innerH - top) : h;
+      doc.documentElement.style.setProperty('--app-h', `${appH}px`);
+      doc.documentElement.style.setProperty('--app-top', `${top}px`);
       const port = h > w && w <= 600;
       const land = (w >= h && h <= 540) || port;
       doc.body.classList.toggle('m-land', land);
@@ -476,6 +502,11 @@ export class AppCoordinator {
     const availW = viewport.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     const availH = viewport.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
     Object.assign(board.style, { transform: 'none', marginLeft: '0px', marginTop: '0px', marginRight: '0px', marginBottom: '0px', transformOrigin: 'top left' });
+    board.style.setProperty('height', 'auto', 'important');
+    if (doc.body.classList.contains('m-port') && board.offsetWidth > 0 && availW > 0) {
+      const fillHeight = availH * board.offsetWidth / availW;
+      if (fillHeight > board.offsetHeight) board.style.setProperty('height', `${fillHeight.toFixed(1)}px`, 'important');
+    }
     const naturalW = board.offsetWidth;
     const naturalH = board.offsetHeight;
     if (!naturalW || !naturalH || availW <= 0 || availH <= 0) return;
