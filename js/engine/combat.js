@@ -271,6 +271,11 @@ export function resolveCombat(state, action) {
 
   const loc = findUnit(state, attackerId);
   const attacker = loc.unit;
+  // 潜袭单位主动攻击时揭示（翻到正面）
+  if (attacker.status[STATUS_TYPES.IS_FACE_DOWN]) {
+    attacker.status[STATUS_TYPES.IS_FACE_DOWN] = false;
+    state.combatLog.push({ type: 'SKILL', playerId: attacker.faction, message: `【${attacker.name}】潜袭：发动攻击，身份揭示` });
+  }
   const player = state.players[action.playerId];
   const oppFaction = action.playerId === FACTIONS.WEI ? FACTIONS.SHU : FACTIONS.WEI;
   const opponent = state.players[oppFaction];
