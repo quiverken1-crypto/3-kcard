@@ -86,3 +86,23 @@ test('聚众 is lost after taking combat or skill damage, and no longer grows', 
   resolveCombat(state, { playerId: 'WEI', payload: { attackerId: attacker.instanceId, targetId: b.instanceId } });
   assert.ok(!b.keywords.includes('聚众'));
 });
+
+test('庞德·猛进 still grants 突袭 after units are returned by 云屯鸟散 and redeployed', async () => {
+  const { RulesEngine } = await import('../js/engine/rulesEngine.js');
+  const { startTurn, createCard: mk } = await import('../js/engine/state.js');
+  const { DB_CARD_MAP } = await import('../js/data/cardDB.js');
+  const re = new RulesEngine({ autoInit: true, seed: 1, weiKingdom: 'xl', shuKingdom: 'shu', firstPlayer: 'WEI' });
+  const s = re.state; if (s.phase === 'MULLIGAN') startTurn(s, 'WEI');
+  s.players.WEI.provisions = 60; s.players.WEI.hand.length = 0;
+  for (const k of ['LEFT', 'CENTER', 'RIGHT']) s.battlefield.frontline[k].terrain = { type: 'PLAIN', name: '平原', capacity: 3 };
+  const add = id => { const c = mk(DB_CARD_MAP[id], { faction: 'WEI', kingdom: 'xl' }); s.players.WEI.hand.push(c); return c; };
+  const foe = mk({ cardId: 'shu_x', faction: 'SHU', atk: 0, hp: 30, keywords: ['伏击'] }); s.battlefield.support.SHU.slots.push(foe);
+  const pd = add('xl_pang_de'), mw = add('xl_ma_wan');
+  const D = c => re.dispatch({ type: 'DEPLOY', playerId: 'WEI', payload: { cardInstanceId: c.instanceId, targetZone: 'SUPPORT' } });
+  D(pd); D(mw);
+  for (const c of [pd, mw]) { re.dispatch({ type: 'MOVE', playerId: 'WEI', payload: { cardInstanceId: c.instanceId, targetZone: 'FRONTLINE_CENTER' } }); re.dispatch({ type: 'ATTACK', playerId: 'WEI', payload: { attackerId: c.instanceId, targetId: foe.instanceId } }); }
+  re.dispatch({ type: 'PLAY_TACTIC', playerId: 'WEI', payload: { cardInstanceId: add('xl_yun_tun').instanceId } });
+  D(pd); D(mw);
+  assert.ok(mw.keywords.includes('突袭'));
+  assert.equal(mw.status.actionsUsed, 0);
+});
