@@ -42,6 +42,7 @@ import {
   cloneState,
   projectStateForClient,
   payCounterReserve,
+  canPayCounter,
   GameState
 } from './state.js';
 import {
@@ -382,10 +383,7 @@ function dispatchBase(state, action) {
 
       let cost = Math.max(0, card.cost - qiMouDiscount(state, action.playerId));
 
-      if (player.provisions < cost) throw new Error(`Insufficient provisions for counter (need ${cost})`);
-      // 反制：打出时不支付，只把费用预留出来（这部分粮草不能再用），生效时才真正扣除
-      player.provisions -= cost;
-      player.reservedProvisions = (player.reservedProvisions || 0) + cost;
+      // 反制：设下时不支付；生效时才从当时的粮草里扣除（是否留够粮草由玩家自己决定，不够就无法生效）
       player.hand.splice(handIdx, 1);
 
       state.activeCounters.push({
@@ -518,6 +516,7 @@ export function dispatch(state, action) {
   if (state.phase !== PHASES.GAME_OVER && [ACTION_TYPES.DEPLOY, ACTION_TYPES.MOVE, ACTION_TYPES.ATTACK, ACTION_TYPES.PLAY_TACTIC, ACTION_TYPES.SET_COUNTER].includes(action.type)) {
     for (const counter of [...state.activeCounters]) {
       if (counter.owner === action.playerId || !counter.cardDef?.abilities?.some(ability => ability.trigger === 'ON_ENEMY_ACTION')) continue;
+      if (!canPayCounter(state, counter)) continue;
       const triggered = runAbilityTrigger(state, 'ON_ENEMY_ACTION', counter.cardDef, context);
       if (triggered.length) {
         state.activeCounters = state.activeCounters.filter(active => active.id !== counter.id);
@@ -612,6 +611,10 @@ export function getLegalActions(state, playerId) {
   const qiMou = qiMouDiscount(state, playerId);
   for (const card of player.hand) {
     if (card.type !== 'TACTIC' && card.type !== 'COUNTER') continue;
+    if (card.type === 'COUNTER') { // 反制设下时不付费
+      actions.push({ type: ACTION_TYPES.SET_COUNTER, playerId, payload: { cardInstanceId: card.instanceId } });
+      continue;
+    }
     if (player.provisions < Math.max(0, card.cost - qiMou)) continue;
     if (card.type === 'COUNTER') {
       actions.push({ type: ACTION_TYPES.SET_COUNTER, playerId, payload: { cardInstanceId: card.instanceId } });

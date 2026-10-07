@@ -10,7 +10,7 @@
 
 import { FACTIONS, PHASES, STATUS_TYPES, TROOP_TYPES, GAME_CONFIG, hasKeyword } from './constants.js';
 import {
-  drawCard, adjustPrestige, getAllUnits, findUnit, removeUnitFromBoard, registerTurnHooks, markDamaged, payCounterReserve
+  drawCard, adjustPrestige, getAllUnits, findUnit, removeUnitFromBoard, registerTurnHooks, markDamaged, payCounterReserve, canPayCounter
 } from './state.js';
 import { registerAbilityHooks, applyUnitEffect, auraModifiers, activeAbilitiesOf, activeCostBlock, runActiveAbility, refreshAuraKeywords } from './abilities.js';
 
@@ -1194,6 +1194,10 @@ export function triggerCounters(state, event, ctx) {
     const spec = COUNTERS[cid] || COUNTERS[cid.replace(/^[a-z]+_/, '')];
     if (!spec || spec.event !== event || counter.owner === state.activePlayer) continue;
     if (!spec.check(state, counter.owner, ctx)) continue;
+    if (!canPayCounter(state, counter)) {
+      if (!counter._warnedTurn || counter._warnedTurn !== state.turnNumber) { counter._warnedTurn = state.turnNumber; log(state, counter.owner, `反制【${counter.name}】：粮草不足（需${counter.cost}），未能发动`); }
+      continue;
+    }
     state.activeCounters = state.activeCounters.filter(c => c.id !== counter.id);
     payCounterReserve(state, counter);
     state.players[counter.owner].discard.push(counter.cardDef);

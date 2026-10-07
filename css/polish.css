@@ -531,3 +531,4 @@ body.m-port #player-dock #turn-timer .turn-timer-fill, body.m-port #player-dock 
 .board-unit.faction-common { border-color: #d8cfb8 !important; }
 .seal-common { background: #6b6457; }
 .db-tile-src.common { background: #4b5d3a; color: #eef3e2; }
+.granary-numbers.counter-short { color: #ff9a7a !important; }

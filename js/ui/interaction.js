@@ -279,7 +279,7 @@ export class InteractionController {
 
     // Check provision affordability
     const cost = getCardPlayCost(this.gameState, this.localPlayerId, card);
-    if (player.provisions < cost) {
+    if (player.provisions < cost && card.type !== 'COUNTER') { // 反制设下时不付费，生效时才付
       // 点了打不起的牌：先取消之前选中的牌，免得高亮留在别的牌上
       if (this.selectedCard) this.cancelSelection();
       this._triggerShake(cardEl);

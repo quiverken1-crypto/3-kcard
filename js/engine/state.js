@@ -396,8 +396,7 @@ export function startTurn(state, playerId) {
   }
   if (turnHooks.beforeRefill) turnHooks.beforeRefill(state, playerId);
   player.provisionsCap = player.mainGranaryCap + player.extraGranaryCap;
-  // 反制战法预留的粮草：还没生效的反制，每回合都要先扣出来留着
-  player.provisions = Math.max(0, player.provisionsCap - (player.reservedProvisions || 0)); // Full refill!
+  player.provisions = player.provisionsCap; // Full refill!
 
   // 2. Reset prestige discount flag
   player.prestigeDiscountUsed = false;
@@ -483,11 +482,15 @@ export function endTurn(state) {
  * @param {string} gainingPlayerId
  * @param {number} [amount=1]
  */
-/** 反制战法生效：结算它预留的粮草（预留在设下时已从可用粮草里扣出，这里只是正式支付） */
+/** 反制战法：设下时不付费，生效时才付。粮草不够就不能生效（留在场上，等下次条件满足且付得起再触发） */
+export function canPayCounter(state, counter) {
+  const p = state.players[counter?.owner];
+  return Boolean(p) && p.provisions >= (counter.cost || 0);
+}
 export function payCounterReserve(state, counter) {
   const p = state.players[counter?.owner];
   if (!p || !counter) return;
-  p.reservedProvisions = Math.max(0, (p.reservedProvisions || 0) - (counter.cost || 0));
+  p.provisions = Math.max(0, p.provisions - (counter.cost || 0));
 }
 
 /** 受到伤害：标记受伤，并失去【聚众】（回合开始不再成长） */
