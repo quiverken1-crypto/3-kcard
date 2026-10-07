@@ -41,6 +41,7 @@ import { listDecks, getDeck, validateDeck, deckStats, deckCardDefs, lastDeckId, 
 import { createCard, createKingdomDeck } from './engine/state.js';
 import { autoChoiceTarget } from './engine/cardSkills.js';
 import { factionDropdown } from './ui/factionPicker.js';
+import { TrainingGround } from './ui/trainingGround.js';
 
 const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb', 'gsz', 'ys', 'hj', 'dz', 'xl', 'lbiao', 'yshu'];
 
@@ -166,6 +167,7 @@ export class AppCoordinator {
     onCustomChange(() => injectFactionStyles());
     this.deckBuilder = new DeckBuilder({ onChange: () => this._refreshDeckSelect?.() });
     this.workshop = new Workshop({ onChange: () => this._refreshDeckSelect?.() });
+    this.trainingGround = new TrainingGround(this);
     this.audio = new AudioDirector();
     this.audio.setScene('lobby');
     this.audio.armUnlock(doc);
@@ -328,6 +330,7 @@ export class AppCoordinator {
     on('home-btn-rules', () => doc.getElementById('modal-rulebook')?.classList.remove('hidden'));
     on('home-btn-decks', () => this.deckBuilder.open());
     on('home-btn-editor', () => this.workshop.open());
+    on('home-btn-training', () => this._pickHq({ lan: false, title: '演武场 · 选择双方势力' }, (k, hq, enemy, deckId, mode) => this.startSoloMatch({ faction: 'WEI', kingdom: k, hq, enemyKingdom: enemy, deckId, mode, training: true })));
     on('btn-game-over-home', () => this.showHome());
     on('btn-go-home', () => this.showHome());
     const gallery = doc.getElementById('home-gallery');
@@ -343,7 +346,7 @@ export class AppCoordinator {
   }
 
   /** 主城选择弹窗 */
-  _pickHq({ lan = false, onCancel = null } = {}, onPick) {
+  _pickHq({ lan = false, onCancel = null, title: pickTitle = '' } = {}, onPick) {
     const doc = globalThis.document;
     const modal = doc?.getElementById('modal-hq-pick');
     const box = doc?.getElementById('hq-pick-options');
@@ -424,7 +427,7 @@ export class AppCoordinator {
       }));
     };
     const title = modal.querySelector('.hq-pick-title');
-    if (title) title.textContent = lan ? '联机 · 整军备战' : '出征 · 整军备战';
+    if (title) title.textContent = pickTitle || (lan ? '联机 · 整军备战' : '出征 · 整军备战');
     draw();
     doc.getElementById('hq-pick-random').onclick = () => done('RANDOM');
     const cancelBtn = doc.getElementById('hq-pick-cancel');
@@ -967,6 +970,7 @@ export class AppCoordinator {
 
   _teardownCurrentMode() {
     this._clearMatchOverlays();
+    this.trainingGround?.stop();
     this.isSandboxRunning = false;
     this._surrendered = false;
     if (this._lobbyTimer) { clearInterval(this._lobbyTimer); this._lobbyTimer = null; }
@@ -1074,6 +1078,7 @@ export class AppCoordinator {
     });
 
     this.matchStats = { turns: 0, kills: 0, provisionsUsed: 0 };
+    if (cfg.training) this.trainingGround.start(); else this.trainingGround?.stop();
 
     if (this.combatLog) {
       this.combatLog.clear();
@@ -1368,8 +1373,9 @@ export class AppCoordinator {
 
   _syncTurnClock(force = false) {
     const state = this.getCurrentState();
-    const isHumanMatch = this.mode === APP_MODE.P2P_HOST || this.mode === APP_MODE.P2P_CLIENT ||
-      (this.mode === APP_MODE.SOLO_VS_BOT && (state?.phase === PHASES.MULLIGAN || state?.activePlayer === this.localPlayerId));
+    // 演武场不计时
+    const isHumanMatch = !this.training && (this.mode === APP_MODE.P2P_HOST || this.mode === APP_MODE.P2P_CLIENT ||
+      (this.mode === APP_MODE.SOLO_VS_BOT && (state?.phase === PHASES.MULLIGAN || state?.activePlayer === this.localPlayerId)));
     if (!state || ![PHASES.ACTION, PHASES.MULLIGAN].includes(state.phase) || !isHumanMatch) {
       this.turnClock.stop();
       this.clockTurnKey = null;
@@ -1473,6 +1479,7 @@ export class AppCoordinator {
 
     // Execute Bot Turn if Solo Mode
     if (this.mode === APP_MODE.SOLO_VS_BOT && state.activePlayer === this.opponentPlayerId && state.phase === PHASES.ACTION) {
+      if (this.training && this.trainingGround.takeOpponentTurn()) return; // 演武场：对手站桩不动
       this._executeBotTurn();
     }
   }
@@ -1563,6 +1570,7 @@ export class AppCoordinator {
   render() {
     const state = this.getCurrentState();
     if (!state) return;
+    this.trainingGround?.beforeRender(state);
     this._autoResolveBotChoices(state);
     setSeatKingdoms({ WEI: state.players?.WEI?.kingdom, SHU: state.players?.SHU?.kingdom });
 
