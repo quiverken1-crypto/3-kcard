@@ -216,7 +216,7 @@ export const PLUGIN_HOOKS = { onEnter: [], afterAttack: [], onDeath: [], onTurnE
 export const EXT = {
   attack: [], actionCost: [], deployCost: [], unitDamage: [], hqDamage: [], counter: [], hqAttackMult: [],
   cannotAttack: [], longRange: [], ignoresGuardian: [], ignoresWeiWo: [], ignoresJianZhen: [],
-  turnStart: [], tactic: [], draw: [], moved: [], discard: [], attacked: [], loseCap: [], combatDamage: [], afterReveal: [], hqDamaged: [], hqGain: [], unitDamaged: [], aura: [], youJi: [], luLue: [], taunt: []
+  turnStart: [], tactic: [], draw: [], moved: [], discard: [], attacked: [], loseCap: [], combatDamage: [], afterReveal: [], counterDamage: [], hqDamaged: [], hqGain: [], unitDamaged: [], aura: [], youJi: [], luLue: [], taunt: []
 };
 export function extFold(name, init, ...args) {
   let v = init;
@@ -789,6 +789,8 @@ export const hqAttackMultiplier = (state, unit) => extFold('hqAttackMult', 1, st
 export const counterOverride = (state, attacker, defender, can) => extFold('counter', can, state, attacker, defender);
 /** 对战伤害落到单位前的转移（刘琦·合兵）：返回该单位实际承受的伤害 */
 export function combatDamageRedirect(state, unit, amount) { return amount > 0 ? extFold('combatDamage', amount, state, unit) : amount; }
+/** 反击伤害修正（潘璋·暗袭）：defender = 做出反击的单位 */
+export const counterDamageMod = (state, defender, dmg) => (dmg > 0 ? extFold('counterDamage', dmg, state, defender) : dmg);
 /** 单位成为攻击目标（诸葛亮·对策） */
 export function notifyAttacked(state, defender, attacker) { extRun('attacked', state, defender, attacker); }
 /** 游击触发（撤退或闪避） */

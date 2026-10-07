@@ -1009,8 +1009,6 @@ export function installFactions2() {
     if (unit.troopType === TROOP_TYPES.CAVALRY && units.some(u => isId(u, 'xl_ma_teng'))) atk += 1; // 马腾·征西
     if (isId(unit, 'hj_hei_shan') && unitTerrain(state, unit, loc)?.type === 'MOUNTAIN') atk += 3;
     if (isId(unit, 'yshu_shou_chun') && state.players[unit.faction].provisionsCap <= 3) atk *= 2; // 寿春锐卒
-    // 潘璋·暗袭：己方潜袭单位的反击伤害翻倍（敌方回合被攻击时）
-    if (unit.faction !== state.activePlayer && hasKeyword(unit, '潜袭') && units.some(u => isId(u, 'wu_pan_zhang'))) atk *= 2;
     // 先登死士：敌方回合中，己方伏击单位战力翻倍
     if (unit.faction !== state.activePlayer && active(unit) && hasKeyword(unit, '伏击') && !unit.status?.ambushUsedThisTurn && units.some(u => isId(u, 'ys_xian_deng'))) atk *= 2;
     return atk;
@@ -1082,6 +1080,8 @@ export function installFactions2() {
     for (const _ of ownWith(state, defender.faction, 'shu_zhu_ge_liang_cl')) { buff(defender, 1, 1); log(state, defender.faction, `诸葛亮·对策：【${defender.name}】+1+1`); }
   });
   EXT.discard.push(onDiscard);
+  // 潘璋·暗袭：己方潜袭单位的反击伤害翻倍（只翻倍反击/伏击反打造成的伤害，战力本身不变）
+  EXT.counterDamage.push((dmg, state, defender) => (hasKeyword(defender, '潜袭') && active(defender) && getAllUnits(state, defender.faction).some(u => isId(u, 'wu_pan_zhang')) ? dmg * 2 : dmg));
   EXT.afterReveal.push((state, pid, after) => {
     if (after?.kind === 'zuoGuan') zuoGuan(state, pid, findUnit(state, after.targetId)?.unit);
   });

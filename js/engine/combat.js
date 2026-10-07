@@ -17,7 +17,7 @@ import {
 import { findUnit, getAllUnits, removeUnitFromBoard, drawCard, markDamaged } from './state.js';
 import {
   getAttackValue, getActionCost, actsLikeCavalry as skillActsLikeCavalry, ignoresGuardian,
-  isArtillery, isSiege, isIronWall, findBodyguard, effectiveTroop, hasShiShi, fireMultiplier, isGuardedUnit, isGuardedHq, unitTerrain, baseId, ignoresJianZhen, ignoresWeiWo, cannotAttack, hasLongRange, hqAttackMultiplier, counterOverride, notifyYouJi, notifyAttacked, combatDamageRedirect, immuneToShiShi, allianceBlocks, targetSurcharge, triggerCounters, hasVanguard as hasVanguardSkill, damageHq, zhaXiang, retreatUnit
+  isArtillery, isSiege, isIronWall, findBodyguard, effectiveTroop, hasShiShi, fireMultiplier, isGuardedUnit, isGuardedHq, unitTerrain, baseId, ignoresJianZhen, ignoresWeiWo, cannotAttack, hasLongRange, hqAttackMultiplier, counterOverride, notifyYouJi, notifyAttacked, combatDamageRedirect, counterDamageMod, immuneToShiShi, allianceBlocks, targetSurcharge, triggerCounters, hasVanguard as hasVanguardSkill, damageHq, zhaXiang, retreatUnit
 } from './cardSkills.js';
 
 const getAttackStyle = unit => unit.keywords.includes(KEYWORDS.HUO_GONG) || unit.keywords.includes(KEYWORDS.SHI_SHI) || ['ARCHER', 'STRATEGIST'].includes(unit.troopType)
@@ -444,7 +444,7 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
     if (getJianZhenValue(attacker) > 0 && !defender.keywords.includes(KEYWORDS.GONG_XIN)) {
       rawAmbushCounter = Math.max(0, rawAmbushCounter - getJianZhenValue(attacker));
     }
-    counterDealt = rawAmbushCounter;
+    counterDealt = counterDamageMod(state, defender, rawAmbushCounter);
     const ambushTaken = combatDamageRedirect(state, attacker, counterDealt);
     attacker.hp -= ambushTaken;
     markDamaged(attacker, ambushTaken);
@@ -536,7 +536,7 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
     if (getJianZhenValue(attacker) > 0 && !defender.keywords.includes(KEYWORDS.GONG_XIN)) {
       rawCounterDmg = Math.max(0, rawCounterDmg - getJianZhenValue(attacker));
     }
-    counterDealt = rawCounterDmg;
+    counterDealt = counterDamageMod(state, defender, rawCounterDmg);
     const counterTaken = combatDamageRedirect(state, attacker, counterDealt);
     attacker.hp -= counterTaken;
     markDamaged(attacker, counterTaken);
