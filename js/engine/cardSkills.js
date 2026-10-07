@@ -408,6 +408,22 @@ export const CHOICE_SPECS = {
     },
     apply(state, pid, t, choice) { if (choice?.effect) applyUnitEffect(state, choice.effect, pid, t); }
   },
+  youDi: {
+    source: '诱敌深入', prompt: '选择把敌军引到哪条前线', pool: 'option',
+    // AI / 超时：优先引到对它不利的地形（水域、山地），否则第一条
+    auto: (list, state) => list.find(o => ['WATER', 'MOUNTAIN'].includes(state.battlefield.frontline[o.instanceId]?.terrain?.type)) || list[0],
+    apply(state, pid, opt, c = {}) {
+      const foe = opp(pid);
+      const arr = state.battlefield.support[foe].slots;
+      const t = arr.find(u => u.instanceId === c.unitId);
+      const z = state.battlefield.frontline[opt.instanceId];
+      if (!t || !z || z.units.length >= z.capacity || (z.occupant !== null && z.occupant !== foe)) { log(state, pid, '诱敌深入：目标或位置已失效'); return; }
+      arr.splice(arr.indexOf(t), 1);
+      z.occupant = foe; z.units.push(t);
+      log(state, pid, `诱敌深入：【${t.name}】被引至${opt.name.split('（')[0]}`);
+      if (hasBadge(t, '鲁莽') || hasBadge(t, '狂傲')) { applyInhibitionLocal(t); log(state, pid, `诱敌深入：【${t.name}】被抑制`); }
+    }
+  },
   faZheng: {
     source: '法正·谋主', prompt: '选择1个友方单位，获得+1+1',
     auto: list => [...list].filter(isMilitary).sort((a, b) => b.atk - a.atk)[0] || list[0],
@@ -1284,15 +1300,13 @@ export const TACTICS = {
     targets: (state, owner) => state.battlefield.support[opp(owner)].slots.filter(canTargetEnemy),
     autoPick: (state, owner, list) => [...list].sort((a, b) => ((hasBadge(b, '鲁莽') || hasBadge(b, '狂傲')) - (hasBadge(a, '鲁莽') || hasBadge(a, '狂傲'))) || (a.hp - b.hp))[0],
     play(state, owner, card, t) {
+      // 由玩家指定把敌军引到哪条前线（空置或敌方占领且未满的区域）
       const foe = opp(owner);
-      const zk = ['LEFT', 'CENTER', 'RIGHT'].find(k => { const z = state.battlefield.frontline[k]; return (z.occupant === null || z.occupant === foe) && z.units.length < z.capacity; });
-      if (!zk) { log(state, owner, '诱敌深入：前线无处可引'); return; }
-      const arr = state.battlefield.support[foe].slots;
-      arr.splice(arr.indexOf(t), 1);
-      const z = state.battlefield.frontline[zk];
-      z.occupant = foe; z.units.push(t);
-      log(state, owner, `诱敌深入：【${t.name}】被引至前线`);
-      if (hasBadge(t, '鲁莽') || hasBadge(t, '狂傲')) { applyInhibitionLocal(t); log(state, owner, `诱敌深入：【${t.name}】被抑制`); }
+      const ZN = { LEFT: '左路', CENTER: '中路', RIGHT: '右路' };
+      const opts = ['LEFT', 'CENTER', 'RIGHT'].filter(k => { const z = state.battlefield.frontline[k]; return (z.occupant === null || z.occupant === foe) && z.units.length < z.capacity; })
+        .map(k => { const z = state.battlefield.frontline[k]; return { instanceId: k, name: `${ZN[k]}·${z.terrain?.name || '前线'}（${z.units.length}/${z.capacity}）` }; });
+      if (!opts.length) { log(state, owner, '诱敌深入：前线无处可引'); return; }
+      queueChoice(state, owner, 'youDi', null, opts, { unitId: t.instanceId, prompt: `诱敌深入：把【${t.name}】引到哪条前线` });
     }
   }),
   ...commonTactic('andu', {
