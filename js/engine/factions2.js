@@ -158,7 +158,37 @@ function controlUnit(state, owner, target, source) {
 }
 
 // ------------------------------------------------------------------ 选择
+/** 揭竿而起：可放置的位置（前线可进的区域；若一个都没有，则支援阵线） */
+function jieGanSpots(state, owner) {
+  const ZN = { LEFT: '左路', CENTER: '中路', RIGHT: '右路' };
+  const front = ZONES.filter(zk => {
+    const z = state.battlefield.frontline[zk];
+    return z && z.units.length < z.capacity && (z.occupant === null || z.occupant === owner);
+  }).map(zk => {
+    const z = state.battlefield.frontline[zk];
+    return { instanceId: zk, name: `${ZN[zk]}·${z.terrain?.name || '前线'}（${z.units.length}/${z.capacity}）` };
+  });
+  if (front.length) return front;
+  return state.battlefield.support[owner].slots.length < MAX_SUPPORT ? [{ instanceId: 'SUPPORT', name: '支援阵线' }] : [];
+}
+function jieGanNext(state, owner, left) {
+  if (left <= 0) return;
+  const spots = jieGanSpots(state, owner);
+  if (!spots.length) { log(state, owner, `揭竿而起：战场已满，还有${left}个黄巾军无处可放`); return; }
+  queueChoice(state, owner, 'f2JieGan', null, spots, { left, prompt: `揭竿而起：选择黄巾军放置的位置（还剩${left}个）` });
+}
+
 const CHOICES = {
+  f2JieGan: {
+    source: '揭竿而起', prompt: '选择黄巾军放置的位置', pool: 'option',
+    // AI / 超时：优先己方已占领的前线，其次空前线
+    auto: (list, state, pid) => list.find(o => state.battlefield.frontline[o.instanceId]?.occupant === pid) || list[0],
+    apply(state, pid, opt, c = {}) {
+      const where = opt.instanceId === 'SUPPORT' ? 'SUPPORT' : { zoneKey: opt.instanceId };
+      if (placeUnit(state, pid, makeCard(state, pid, 'hj_huang_jin_jun'), where)) log(state, pid, `揭竿而起：黄巾军加入${opt.name.split('（')[0]}`);
+      jieGanNext(state, pid, (c.left || 1) - 1);
+    }
+  },
   f2OwnTarget: {
     source: '技能', prompt: '选择1个己方目标', pool: 'option',
     auto: (list, state, pid) => (state.players[pid].hp > 10 ? list.find(o => o.instanceId === 'HQ') : null)
@@ -403,11 +433,8 @@ const TACTIC_SPECS = {
     }
   },
   hj_jie_gan: {
-    play(state, owner) {
-      let n = 0;
-      for (let i = 0; i < 2; i++) if (placeUnit(state, owner, makeCard(state, owner, 'hj_huang_jin_jun'), 'FRONT')) n++;
-      log(state, owner, `揭竿而起：${n}个黄巾军加入战场`);
-    }
+    // 玩家逐个指定放在哪条前线（能放前线就只列前线；前线都放不下才进支援阵线）
+    play(state, owner) { jieGanNext(state, owner, 2); }
   },
   hj_wu_he: {
     play(state, owner) {
