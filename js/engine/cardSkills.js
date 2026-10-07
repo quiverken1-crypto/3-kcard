@@ -145,6 +145,8 @@ export function resetCardState(card) {
   card._auraHp = 0;
   card._grantedExtraGranary = false;
   delete card._acted; // 回到手牌/牌库后重新部署，帷幄重新生效
+  // 光环记账一并清掉：否则重新上场时以为“已经加过”，铁骑突击的突袭、各类光环数值不会再给
+  card._f2Kw = []; card._f2Aura = 0; card._auraKws = []; card._auraTuXi = false;
   if (card.originalFaction) card.faction = card.originalFaction;
   card.status = {
     suppressed: false, suppressedTurnsLeft: 0, inhibited: false, isFaceDown: false,
@@ -847,7 +849,7 @@ function gszAuras(state) {
     const zhouYu = units.some(u => isId(u, 'wu_zhou_yu') && active(u));
     for (const u of units) {
       const want = active(u) && ((yanGang && u.troopType === TROOP_TYPES.CAVALRY) || (zhouYu && u.troopType === TROOP_TYPES.NAVY));
-      if (want && !u._auraTuXi && !u.keywords.includes('突袭')) { u.keywords.push('突袭'); u._auraTuXi = true; }
+      if (want && !u.keywords.includes('突袭')) { u.keywords.push('突袭'); u._auraTuXi = true; }
       else if (!want && u._auraTuXi) { u.keywords = u.keywords.filter(k => k !== '突袭'); u._auraTuXi = false; }
     }
     // 田豫：被压制的敌军同时被抑制

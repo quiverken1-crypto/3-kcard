@@ -793,8 +793,12 @@ function statAuras(state) {
       }
       const had = u._f2Kw || [];
       for (const k of had) if (!want.includes(k)) { const i = u.keywords.indexOf(k); if (i !== -1) u.keywords.splice(i, 1); }
-      const added = had.filter(k => want.includes(k));
-      for (const k of want) if (!added.includes(k) && !u.keywords.includes(k)) { u.keywords.push(k); added.push(k); }
+      // 仍需要的词条：若中途被别的效果抹掉（回手、撤退重置等），这里补回来，保证整个回合都有效
+      const added = [];
+      for (const k of want) {
+        if (!u.keywords.includes(k)) { u.keywords.push(k); added.push(k); }
+        else if (had.includes(k)) added.push(k);
+      }
       u._f2Kw = added;
     }
   }
