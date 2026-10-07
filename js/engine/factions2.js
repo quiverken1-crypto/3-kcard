@@ -413,6 +413,13 @@ function liuKou(state, unit) {
   if (placeUnit(state, unit.faction, makeCard(state, unit.faction, 'yshu_liu_kou'), 'SUPPORT')) log(state, unit.faction, `${unit.name}·山寇：流寇加入支援阵线`);
 }
 
+function zuoGuan(state, owner, t) {
+  if (!t || !onBoard(state, t)) { log(state, owner, '坐观天下：目标已不在场'); return; }
+  const n = state.players[opp(owner)].hand.filter(c => c._known).length;
+  if (n) buff(t, n, n);
+  log(state, owner, `坐观天下：对手手中${n}张明牌，【${t.name}】+${n}+${n}`);
+}
+
 function jiaJi(state, unit, who) {
   const t = chosenOr(TARGETS.hj_liu_pi.list(state, unit.faction, unit), unit, l => [...l].sort((a, b) => b.atk - a.atk)[0]);
   if (!t) return;
@@ -573,9 +580,10 @@ const TACTIC_SPECS = {
     targets: (state, owner) => getAllUnits(state, owner),
     autoPick: (state, owner, list) => [...list].sort((a, b) => b.atk - a.atk)[0],
     play(state, owner, card, t) {
-      const n = state.players[opp(owner)].hand.filter(c => c._known).length;
-      if (n) buff(t, n, n);
-      log(state, owner, `坐观天下：对手手中${n}张明牌，【${t.name}】+${n}+${n}`);
+      // 军机3 要先让玩家指定完对方的明牌，再按明牌数加成
+      const reveals = (state.players[owner].pendingChoices || []).filter(c => c.kind === 'oppHand' && c.mode === 'reveal');
+      if (reveals.length) { reveals[reveals.length - 1].after = { kind: 'zuoGuan', targetId: t.instanceId }; return; }
+      zuoGuan(state, owner, t);
     }
   },
   lbiao_shang_wu: {
@@ -1070,6 +1078,9 @@ export function installFactions2() {
     for (const _ of ownWith(state, defender.faction, 'shu_zhu_ge_liang_cl')) { buff(defender, 1, 1); log(state, defender.faction, `诸葛亮·对策：【${defender.name}】+1+1`); }
   });
   EXT.discard.push(onDiscard);
+  EXT.afterReveal.push((state, pid, after) => {
+    if (after?.kind === 'zuoGuan') zuoGuan(state, pid, findUnit(state, after.targetId)?.unit);
+  });
   ACTIVE_SKILLS.yshu_yan_xiang = {
     name: '直谏', desc: '弃1张手牌，抽1张牌（每回合1次）', needsHandCard: true, handPrompt: '点一张手牌弃置',
     apply(state, unit, payload) {

@@ -211,7 +211,7 @@ export const PLUGIN_HOOKS = { onEnter: [], afterAttack: [], onDeath: [], onTurnE
 export const EXT = {
   attack: [], actionCost: [], deployCost: [], unitDamage: [], hqDamage: [], counter: [], hqAttackMult: [],
   cannotAttack: [], longRange: [], ignoresGuardian: [], ignoresWeiWo: [], ignoresJianZhen: [],
-  turnStart: [], tactic: [], draw: [], moved: [], discard: [], attacked: [], loseCap: [], combatDamage: [], hqDamaged: [], hqGain: [], unitDamaged: [], aura: [], youJi: [], luLue: [], taunt: []
+  turnStart: [], tactic: [], draw: [], moved: [], discard: [], attacked: [], loseCap: [], combatDamage: [], afterReveal: [], hqDamaged: [], hqGain: [], unitDamaged: [], aura: [], youJi: [], luLue: [], taunt: []
 };
 export function extFold(name, init, ...args) {
   let v = init;
@@ -384,9 +384,12 @@ export const CHOICE_SPECS = {
       let card = fp.hand.find(c => c.instanceId === opt.instanceId);
       if (choice.mode === 'reveal') {
         if (!card || card._known) card = fp.hand.find(c => !c._known); // 已公开则顺延
-        if (!card) return;
-        card._known = true;
-        log(state, pid, `${choice.source || '军机'}：对方【${card.name}】成为明牌`);
+        if (card) {
+          card._known = true;
+          log(state, pid, `${choice.source || '军机'}：对方【${card.name}】成为明牌`);
+        }
+        // 军机全部指定完之后再结算的后续效果（坐观天下等）
+        if (choice.after) extRun('afterReveal', state, pid, choice.after);
         return;
       }
       if (!card) card = fp.hand[0];
