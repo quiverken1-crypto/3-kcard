@@ -1713,9 +1713,8 @@ export function afterAttack(state, attacker, defender, result, targetIsHq) {
       searchDeck(state, u.faction, 'wu_bai_yi', '吕蒙·渡江');
     }
   }
-  // 吕布/张辽·飞将：消灭敌方单位时可额外行动1次（每回合1次）
-  if (!targetIsHq && attackerAlive && result.defenderDied && isId(attacker, 'lb_lv_bu') && attacker._extraActTurn !== state.turnNumber) {
-    attacker._extraActTurn = state.turnNumber;
+  // 吕布·飞将：每消灭1个敌方单位，可额外行动1次（同一回合内不限次数，只要粮草够就能一直连斩）
+  if (!targetIsHq && attackerAlive && result.defenderDied && isId(attacker, 'lb_lv_bu')) {
     Object.assign(attacker.status, { actionsUsed: 0, movedThisTurn: false, attackedThisTurn: false, attacksThisTurn: 0 });
     log(state, attacker.faction, '吕布·飞将：斩敌后可额外行动1次');
   }
