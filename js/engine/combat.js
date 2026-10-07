@@ -389,9 +389,10 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
     return { success: true, attackerDied: true, defenderDied: false, damageDealt: 0, counterDealt: 0 };
   }
 
-  // 游击：敌方回合首次受到攻击时可撤退，并使该次攻击无效（自动在“这一击会致命”时发动）
+  // 游击：只有敌方回合“第一次”受到攻击时可以撤退并使该次攻击无效（自动在“这一击会致命”时发动）；
+  // 第一次没发动（不致命），之后再被攻击即使致命也不能再触发
   if (hasKeyword(defender, KEYWORDS.YOU_JI) && !defender.status[STATUS_TYPES.INHIBITED] && targetLoc.zoneType === 'FRONTLINE' &&
-      defender.faction !== state.activePlayer && defender._evadeTurn !== state.turnNumber &&
+      defender.faction !== state.activePlayer && defender._evadeTurn !== state.turnNumber && defender._attackedOnTurn !== state.turnNumber &&
       state.battlefield.support[defender.faction].slots.length < 5) {
     const jz = defender.keywords.find(k => k.startsWith(KEYWORDS.JIAN_ZHEN_PREFIX));
     const reduce = jz && !attacker.keywords.includes(KEYWORDS.GONG_XIN) ? (parseInt(jz.replace(KEYWORDS.JIAN_ZHEN_PREFIX, '') || '1', 10) || 1) : 0;
