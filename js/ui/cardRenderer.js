@@ -27,7 +27,7 @@ export const KEYWORD_GLOSSARY = ({
   '守护': '【守护】保护相邻的非守护目标（含主城）不被敌军优先攻击。',
   '帷幄': '【帷幄】首次行动前无法成为攻击目标，对攻心无效。',
   '警戒': '【警戒】无法成为敌方战法或反制战法的指向目标。',
-  '伏击': '【伏击】每回合首次被攻击时先造成伤害，若敌军因此被消灭则自己不受伤害。',
+  '伏击': '【伏击】每回合首次被攻击时先造成伤害，若敌军因此被消灭则自己不受伤害；触发后本回合视为失去伏击（不再免疫斩将、先登），回合结束恢复。',
   '突袭': '【突袭】进场的回合可以立即行动。',
   '潜袭': '【潜袭】背面进场，行动花费视为1，不受战法影响；主动攻击或被攻击时揭示。',
   '游击': '【游击】可从前线移动回支援阵线；敌方回合首次受到攻击时可撤退，使该次攻击无效（这一击会致命时自动发动）。',
@@ -384,6 +384,7 @@ export function renderUnitOnBoard(unit, options = {}) {
 
   // Compact Keyword Badges on Board
   const keywordBadges = (unit.keywords || []).map(kw => {
+    if (kw === '伏击' && unit.status?.ambushUsedThisTurn) return `<span class="unit-kw-mini kw-spent" title="伏击本回合已触发，回合结束后恢复">${escapeHtml(kw)}</span>`;
     return `<span class="unit-kw-mini" title="${escapeHtml(KEYWORD_GLOSSARY[kw.replace(/[0-9]/g, '')] || kw)}">${escapeHtml(kw)}</span>`;
   }).join('');
 

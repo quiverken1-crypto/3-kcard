@@ -1008,7 +1008,7 @@ export function installFactions2() {
     // 潘璋·暗袭：己方潜袭单位的反击伤害翻倍（敌方回合被攻击时）
     if (unit.faction !== state.activePlayer && hasKeyword(unit, '潜袭') && units.some(u => isId(u, 'wu_pan_zhang'))) atk *= 2;
     // 先登死士：敌方回合中，己方伏击单位战力翻倍
-    if (unit.faction !== state.activePlayer && active(unit) && hasKeyword(unit, '伏击') && units.some(u => isId(u, 'ys_xian_deng'))) atk *= 2;
+    if (unit.faction !== state.activePlayer && active(unit) && hasKeyword(unit, '伏击') && !unit.status?.ambushUsedThisTurn && units.some(u => isId(u, 'ys_xian_deng'))) atk *= 2;
     return atk;
   });
   EXT.actionCost.push((cost, state, unit, loc) => {

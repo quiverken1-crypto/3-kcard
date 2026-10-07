@@ -525,3 +525,4 @@ body.m-port #player-dock #turn-timer .turn-timer-fill, body.m-port #player-dock 
 .rulebook-box .modal-header { flex: none; position: sticky; top: 0; z-index: 2; }
 .rulebook-box .rulebook-content-scroll { flex: 1 1 auto; min-height: 0; }
 .toast-alert.toast-near-info { font-size: 14px !important; line-height: 1.45; padding: 7px 12px !important; background: rgba(120,40,24,.96) !important; border-color: rgba(240,180,120,.6) !important; border-bottom: 0 !important; }
+.unit-kw-mini.kw-spent { opacity: .45; text-decoration: line-through; }

@@ -472,7 +472,8 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
 
   // Step 2: 斩将 (Banish) Check
   // If attacker has 斩将, defender does not have 伏击/潜袭, and attacker effective atk > defender effective atk: banish!
-  if (attacker.keywords.includes(KEYWORDS.ZHAN_JIANG) && !defender.keywords.includes(KEYWORDS.FU_JI) && !wasFaceDown && !ironWall) {
+  // 伏击本回合已触发过 = 本回合视为没有伏击：不再免疫斩将、先登（本次攻击触发的伏击仍算）
+  if (attacker.keywords.includes(KEYWORDS.ZHAN_JIANG) && !hasAmbush && !wasFaceDown && !ironWall) {
     if (attackerEffectiveAtk > defenderEffectiveAtk) {
       removeUnitFromBoard(state, defender.instanceId, true /* isBanish */);
       state.combatLog.push({
@@ -499,7 +500,7 @@ function resolveUnitCombat(state, attacker, loc, defender, targetLoc, player, op
   // Step 3: Special Attacker Properties
   // 先登 (Vanguard): strikes first without counterattack IF it kills the defender.
   // Ineffective if defender has 伏击 or was face down.
-  const hasVanguard = hasVanguardSkill(state, attacker, loc) && !defender.keywords.includes(KEYWORDS.FU_JI) && !wasFaceDown && !ironWall;
+  const hasVanguard = hasVanguardSkill(state, attacker, loc) && !hasAmbush && !wasFaceDown && !ironWall;
   // 冲阵 (Charge): immunity to counterattack unless negated by Ambush
   const hasCharge = hadCharge && !ambushTriggered;
 

@@ -466,6 +466,8 @@ export function endTurn(state) {
     }
     unit.status.ambushUsedThisTurn = false;
   }
+  // 伏击：本回合触发过的（多为敌方单位），回合结束即恢复
+  for (const unit of getAllUnits(state, currentActive === FACTIONS.WEI ? FACTIONS.SHU : FACTIONS.WEI)) unit.status.ambushUsedThisTurn = false;
 
   // Switch player and advance turn
   const nextPlayer = currentActive === FACTIONS.WEI ? FACTIONS.SHU : FACTIONS.WEI;
