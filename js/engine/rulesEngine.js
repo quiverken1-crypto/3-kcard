@@ -318,6 +318,7 @@ function dispatchBase(state, action) {
 
       player.provisions -= moveCost;
       unit.status[STATUS_TYPES.MOVED_THIS_TURN] = true;
+      unit._acted = true; // 帷幄：首次行动后失效
       unit.status[STATUS_TYPES.ACTIONS_USED] += 1;
 
       if (swapped) state.combatLog.push({ type: 'SKILL', playerId: action.playerId, message: `白毦军·断后：与【${swapped.name}】换位` });

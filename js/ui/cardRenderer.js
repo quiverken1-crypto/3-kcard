@@ -25,7 +25,7 @@ export const KEYWORD_GLOSSARY = ({
   '火攻': '【火攻】击败敌军后，对同一区域相邻目标传递等量伤害（无视坚阵），可连续传递。',
   '坚阵': '【坚阵X】受到对战伤害时伤害减少X（上限3），无法减免能力造成的伤害。',
   '守护': '【守护】保护相邻的非守护目标（含主城）不被敌军优先攻击。',
-  '帷幄': '【帷幄】首次行动前无法成为攻击目标，对攻心无效。',
+  '帷幄': '【帷幄】首次行动（移动、攻击、发动主动技）前无法成为攻击目标，行动过后失效；对攻心无效。',
   '警戒': '【警戒】无法成为敌方战法或反制战法的指向目标。',
   '伏击': '【伏击】每回合首次被攻击时先造成伤害，若敌军因此被消灭则自己不受伤害；触发后本回合视为失去伏击（不再免疫斩将、先登），回合结束恢复。',
   '突袭': '【突袭】进场的回合可以立即行动。',
@@ -384,6 +384,7 @@ export function renderUnitOnBoard(unit, options = {}) {
 
   // Compact Keyword Badges on Board
   const keywordBadges = (unit.keywords || []).map(kw => {
+    if (kw === '帷幄' && unit._acted) return `<span class="unit-kw-mini kw-spent" title="帷幄：已行动过，不再保护">${escapeHtml(kw)}</span>`;
     if (kw === '伏击' && unit.status?.ambushUsedThisTurn) return `<span class="unit-kw-mini kw-spent" title="伏击本回合已触发，回合结束后恢复">${escapeHtml(kw)}</span>`;
     return `<span class="unit-kw-mini" title="${escapeHtml(KEYWORD_GLOSSARY[kw.replace(/[0-9]/g, '')] || kw)}">${escapeHtml(kw)}</span>`;
   }).join('');

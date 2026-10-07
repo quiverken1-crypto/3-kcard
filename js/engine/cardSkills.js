@@ -144,6 +144,7 @@ export function resetCardState(card) {
   card._auraAtk = 0;
   card._auraHp = 0;
   card._grantedExtraGranary = false;
+  delete card._acted; // 回到手牌/牌库后重新部署，帷幄重新生效
   if (card.originalFaction) card.faction = card.originalFaction;
   card.status = {
     suppressed: false, suppressedTurnsLeft: 0, inhibited: false, isFaceDown: false,
@@ -296,6 +297,7 @@ export function activateSkill(state, pid, payload = {}) {
   if (reason) throw new Error(reason);
   getActiveSkill(unit, index).apply(state, unit, payload);
   (unit._skillUsed ||= {})[index] = state.turnNumber;
+  unit._acted = true; // 帷幄：发动主动技也算行动
   (unit._skillUsedGame ||= {})[index] = true;
   processDeaths(state);
   refreshAuras(state);

@@ -190,7 +190,9 @@ export function validateAttack(state, attackerId, targetId, actingPlayerId = nul
   if (zhaXiang(defender)) throw new Error('黄盖·诈降：首次攻击前不能被指向');
 
   // 帷幄 (Curtain) Rule: Cannot be targeted before its first action, unless attacker has 攻心
-  if (defender.keywords.includes(KEYWORDS.WEI_WO) && defender.status[STATUS_TYPES.ACTIONS_USED] === 0 && !attacker.keywords.includes(KEYWORDS.GONG_XIN) && !ignoresWeiWo(attacker, state)) {
+  // 帷幄：单位“第一次行动”（移动、攻击、发动主动技）之前不能被攻击；行动过就永久失效。
+  // 以前按“本回合行动次数”判断：刚部署（部署当回合计为已行动）或上回合行动过时，敌方回合里会失效，回合开始又恢复，表现时灵时不灵。
+  if (defender.keywords.includes(KEYWORDS.WEI_WO) && !defender._acted && !attacker.keywords.includes(KEYWORDS.GONG_XIN) && !ignoresWeiWo(attacker, state)) {
     throw new Error('Target protected by 帷幄 (cannot be attacked before acting)');
   }
 
@@ -271,6 +273,7 @@ export function resolveCombat(state, action) {
 
   const loc = findUnit(state, attackerId);
   const attacker = loc.unit;
+  attacker._acted = true; // 帷幄：首次行动后失效
   // 潜袭单位主动攻击时揭示（翻到正面）
   if (attacker.status[STATUS_TYPES.IS_FACE_DOWN]) {
     attacker.status[STATUS_TYPES.IS_FACE_DOWN] = false;
