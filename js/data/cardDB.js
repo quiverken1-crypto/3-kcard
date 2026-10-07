@@ -23,7 +23,8 @@ export const KINGDOMS = {
   dz: { key: 'dz', name: '董', army: '董卓军', leader: '董卓', color: 'dz' },
   xl: { key: 'xl', name: '凉', army: '西凉军', leader: '马腾', color: 'xl' },
   lbiao: { key: 'lbiao', name: '表', army: '刘表军', leader: '刘表', color: 'lbiao' },
-  yshu: { key: 'yshu', name: '术', army: '袁术军', leader: '袁术', color: 'yshu' }
+  yshu: { key: 'yshu', name: '术', army: '袁术军', leader: '袁术', color: 'yshu' },
+  common: { key: 'common', name: '通', army: '通用战法', leader: '', color: 'common', library: true }
 };
 export const BUILTIN_KINGDOMS = Object.freeze(Object.keys(KINGDOMS));
 export function registerKingdom(def) {
@@ -425,7 +426,7 @@ function build(rows, kingdom) {
       cost, actionCost: act, action_cost: act, atk, attack: atk, hp, maxHp: hp, max_hp: hp,
       keywords: [...keywords], badges: [...badges],
       skill: { name: skillName || name, description: desc || '' },
-      copies, inferred: inferred || '', ...(/待实现/.test(inferred || '') ? { pending: true } : {}), isDefector: keywords.includes('降将')
+      copies, inferred: inferred || '', ...(COMMON[String(id).replace(/^[a-z]+_/, '')] ? { commonKey: String(id).replace(/^[a-z]+_/, '') } : {}), ...(/待实现/.test(inferred || '') ? { pending: true } : {}), isDefector: keywords.includes('降将')
     });
   });
 }
@@ -447,11 +448,17 @@ const SHU_NEW = [
   ['shu_zhu_ge_liang_cl', '诸葛亮', 'U', 'S', 5, 2, 3, 4, ['帷幄', '军机2'], [], '草庐/对策', '草庐：失去帷幄时，获得警戒。对策：己方军队成为攻击目标时，使其+1+1。', 1],
   ['shu_san_gu', '三顾茅庐', 'T', '-', 2, 0, 0, 0, [], [], '三顾', '抽3张牌，将其中1张牌加入手中，其余卡牌以任意顺序放入牌堆底。', 1]
 ];
+/* ---------------------------------------------------------------- 通用战法库：任何势力的卡组都能自由搭配 */
+const COMMON_LIMIT = { tuqi: 3 };
+const COMMON_LIB = Object.keys(COMMON).map(k => [...common(k, 'common', COMMON_LIMIT[k] || 2)]);
+export const COMMON_KEYS = Object.freeze(Object.keys(COMMON));
+
 export const CARDS_BY_KINGDOM = Object.freeze({
   wei: [...build(WEI, 'wei'), ...markExtra(build(WEI_EXTRA, 'wei')), ...markExtra(build(WEI_NEW, 'wei'), '新卡')],
   shu: [...build(SHU, 'shu'), ...markExtra(build(SHU_EXTRA, 'shu')), ...markExtra(build(SHU_NEW, 'shu'), '新卡')],
   wu: [...build(WU, 'wu'), ...markExtra(build(WU_NEW, 'wu'), '新卡')], lb: build(LB, 'lb'), gsz: build(GSZ, 'gsz'),
-  ys: build(YS, 'ys'), hj: build(HJ, 'hj'), dz: build(DZ, 'dz'), xl: build(XL, 'xl'), lbiao: build(LBIAO, 'lbiao'), yshu: build(YSHU, 'yshu')
+  ys: build(YS, 'ys'), hj: build(HJ, 'hj'), dz: build(DZ, 'dz'), xl: build(XL, 'xl'), lbiao: build(LBIAO, 'lbiao'), yshu: build(YSHU, 'yshu'),
+  common: build(COMMON_LIB, 'common')
 });
 
 export const ALL_DB_CARDS = Object.freeze(Object.values(CARDS_BY_KINGDOM).flat());

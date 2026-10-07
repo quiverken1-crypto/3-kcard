@@ -1251,7 +1251,7 @@ export function applyInhibitionLocal(unit) {
 
 /** 通用战法（各势力卡组共用同一效果）：wei_xxx / shu_xxx / wu_xxx / lb_xxx */
 function commonTactic(key, spec) {
-  return Object.fromEntries(['wei', 'shu', 'wu', 'lb', 'gsz', 'ys', 'hj', 'dz', 'xl', 'lbiao', 'yshu'].map(k => [`${k}_${key}`, spec]));
+  return Object.fromEntries(['wei', 'shu', 'wu', 'lb', 'gsz', 'ys', 'hj', 'dz', 'xl', 'lbiao', 'yshu', 'common'].map(k => [`${k}_${key}`, spec]));
 }
 
 export const TACTICS = {

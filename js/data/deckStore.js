@@ -25,11 +25,15 @@ export const KINGDOM_KEYS = ['wei', 'shu', 'wu', 'lb', 'gsz', 'ys', 'hj', 'dz', 
 
 const storage = () => { try { return globalThis.localStorage || null; } catch { return null; } };
 
-/** 某势力可用的卡牌（按类型、费用排序） */
-export function libraryFor(kingdom) {
+/** 某势力可用的卡牌（按类型、费用排序）；默认附带“通用战法库”，任何卡组都能自由搭配 */
+export function libraryFor(kingdom, { withCommon = true } = {}) {
   const order = { UNIT: 0, TACTIC: 1, COUNTER: 2 };
-  return [...(CARDS_BY_KINGDOM[kingdom] || []), ...customCardsOf(kingdom)].sort((a, b) => (order[a.type] - order[b.type]) || (a.cost - b.cost) || a.name.localeCompare(b.name, 'zh'));
+  const common = withCommon && kingdom !== 'common' ? commonLibrary() : [];
+  return [...(CARDS_BY_KINGDOM[kingdom] || []), ...customCardsOf(kingdom), ...common].sort((a, b) => (order[a.type] - order[b.type]) || (a.cost - b.cost) || a.name.localeCompare(b.name, 'zh'));
 }
+/** 通用战法库（含在工坊里加到“通用战法”的自定义卡） */
+export const commonLibrary = () => [...(CARDS_BY_KINGDOM.common || []), ...customCardsOf('common')];
+export const isCommonCard = def => def?.kingdom === 'common';
 
 /** 单张卡在卡组中的上限：实体卡张数 */
 export const cardLimit = id => getCardDef(id)?.copies ?? 1;
@@ -126,8 +130,18 @@ export function validateDeck(deck) {
     if (!lib.has(id)) errors.push(`【${def.name}】不属于${kingdoms.map(k => KINGDOMS[k]?.name || '').join('、')}势力`);
     if (n > cardLimit(id)) errors.push(`【${def.name}】最多${cardLimit(id)}张（当前${n}张）`);
     if (def.type === 'UNIT') units += n;
-    perKingdom[def.kingdom] = (perKingdom[def.kingdom] || 0) + n;
+    // 通用战法不属于任何势力：双阵营时计入主阵营
+    const owner = isCommonCard(def) ? deck?.kingdom : def.kingdom;
+    perKingdom[owner] = (perKingdom[owner] || 0) + n;
   }
+  // 同一种通用战法（势力版 + 通用库版合计）不能超过上限
+  const byCommon = {};
+  for (const [id, n] of Object.entries(deck?.cards || {})) {
+    const def = getCardDef(id);
+    if (def?.commonKey) (byCommon[def.commonKey] ||= { n: 0, limit: 0, name: def.name }).n += n;
+    if (def?.commonKey) byCommon[def.commonKey].limit = Math.max(byCommon[def.commonKey].limit, cardLimit(id));
+  }
+  for (const v of Object.values(byCommon)) if (v.n > v.limit) errors.push(`【${v.name}】合计最多${v.limit}张（当前${v.n}张）`);
   const size = deckSize(deck);
   if (dual) {
     if (!deck.subKingdom || deck.subKingdom === deck.kingdom) errors.push('双阵营需要选择一个不同的副阵营');

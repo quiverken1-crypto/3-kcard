@@ -74,7 +74,7 @@ export function getCardArtUrl(card) {
   // 自定义卡：可填 https 图片链接作为卡面
   if (card?.art && /^https:\/\/[^\s'\"()<>\\]{4,300}$/.test(card.art)) return card.art;
   const id = String(card?.cardId || '').replace(/_[0-9]+$/, '');
-  const m = id.match(/^(wei|shu|wu|lb|gsz|ys|hj|dz|xl|lbiao|yshu)_([a-z_]+)$/);
+  const m = id.match(/^(wei|shu|wu|lb|gsz|ys|hj|dz|xl|lbiao|yshu|common)_([a-z_]+)$/);
   if (!m || NO_ART.has(id)) return '';
   if (COMMON_ART.has(m[2])) return `assets/cards/common_${m[2]}.webp`;
   return `assets/cards/${id}.webp`;

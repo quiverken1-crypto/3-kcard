@@ -110,12 +110,12 @@ export class DeckBuilder {
 
   /** 图鉴：按势力浏览全部卡牌 */
   _renderCodex(body) {
-    const keys = allKingdomKeys();
+    const keys = [...allKingdomKeys(), 'common'];
     if (!keys.includes(this.codexKingdom)) this.codexKingdom = keys[0];
     const k = this.codexKingdom;
     const f = (this.codexFilters ||= { type: 'all', troop: 'all', cost: 'all', src: 'all', q: '' });
     const sel = (group, opts, cur) => `<select data-cf="${group}" class="${cur && cur !== 'all' ? 'set' : ''}">${opts.map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
-    const lib = libraryFor(k);
+    const lib = libraryFor(k, { withCommon: false });
     body.innerHTML = `
       <div class="db-codex-bar">
         <div class="db-kpick"></div>
@@ -157,8 +157,9 @@ export class DeckBuilder {
   _matchesWith(def, f) {
     if (f.type !== 'all' && def.type !== f.type) return false;
     if (f.troop !== 'all' && def.troopType !== f.troop) return false;
-    if (f.src === 'base' && def.extra) return false;
+    if (f.src === 'base' && (def.extra || def.kingdom === 'common')) return false;
     if (f.src === 'extra' && !def.extra) return false;
+    if (f.src === 'common' && def.kingdom !== 'common') return false;
     if (f.cost !== 'all') {
       const c = def.cost ?? 0;
       if (f.cost === '0-1' ? c > 1 : f.cost === '6+' ? c < 6 : c !== Number(f.cost)) return false;
@@ -414,14 +415,14 @@ export class DeckBuilder {
             <div class="db-fgroup"><span>类型</span>${chip('type', 'all', '全部', f.type)}${Object.entries(TYPE_LABEL).map(([v, l]) => chip('type', v, l, f.type)).join('')}</div>
             <div class="db-fgroup"><span>兵种</span>${chip('troop', 'all', '全部', f.troop)}${Object.entries(TROOP_LABEL).map(([v, l]) => chip('troop', v, l, f.troop)).join('')}</div>
             <div class="db-fgroup"><span>费用</span>${COST_BUCKETS.map(([v, l]) => chip('cost', v, l, f.cost)).join('')}</div>
-            <div class="db-fgroup"><span>来源</span>${chip('src', 'all', '全部', f.src)}${chip('src', 'base', '实体卡', f.src)}${chip('src', 'extra', '旧图鉴/新卡', f.src)}</div>
+            <div class="db-fgroup"><span>来源</span>${chip('src', 'all', '全部', f.src)}${chip('src', 'base', '实体卡', f.src)}${chip('src', 'extra', '旧图鉴/新卡', f.src)}${chip('src', 'common', '通用战法库', f.src)}</div>
             <input class="db-search" placeholder="搜索卡名 / 技能 / 词条" value="${escapeHtml(f.q)}">
             <div class="db-fselects">
               ${deck.mode === 'dual' ? sel('side', [['all', '阵营'], ['main', `主·${KINGDOMS[k].name}`], ['sub', `副·${KINGDOMS[deck.subKingdom].name}`]], f.side || 'all') : ''}
               ${sel('type', [['all', '类型'], ...Object.entries(TYPE_LABEL)], f.type)}
               ${sel('troop', [['all', '兵种'], ...Object.entries(TROOP_LABEL)], f.troop)}
               ${sel('cost', [['all', '费用'], ...COST_BUCKETS.slice(1).map(([v, l]) => [v, `${l}费`])], f.cost)}
-              ${deck.mode === 'dual' ? '' : sel('src', [['all', '来源'], ['base', '实体卡'], ['extra', '旧图鉴/新卡']], f.src)}
+              ${sel('src', [['all', '来源'], ['base', '实体卡'], ['extra', '旧图鉴/新卡'], ['common', '通用战法库']], f.src)}
               <input class="db-search2" type="search" placeholder="🔍 搜索" value="${escapeHtml(f.q)}">
             </div>
           </aside>
@@ -469,13 +470,14 @@ export class DeckBuilder {
   _matches(def) {
     const f = this.filters;
     if (this.deck.mode === 'dual' && f.side && f.side !== 'all') {
-      if (f.side === 'main' && def.kingdom !== this.deck.kingdom) return false;
+      if (f.side === 'main' && def.kingdom !== this.deck.kingdom && def.kingdom !== 'common') return false;
       if (f.side === 'sub' && def.kingdom !== this.deck.subKingdom) return false;
     }
     if (f.type !== 'all' && def.type !== f.type) return false;
     if (f.troop !== 'all' && def.troopType !== f.troop) return false;
-    if (f.src === 'base' && def.extra) return false;
+    if (f.src === 'base' && (def.extra || def.kingdom === 'common')) return false;
     if (f.src === 'extra' && !def.extra) return false;
+    if (f.src === 'common' && def.kingdom !== 'common') return false;
     if (f.cost !== 'all') {
       const c = def.cost ?? 0;
       if (f.cost === '0-1' ? c > 1 : f.cost === '6+' ? c < 6 : c !== Number(f.cost)) return false;
@@ -492,12 +494,17 @@ export class DeckBuilder {
     if (!pool) return;
     const k = this.deck.kingdom;
     const kingdoms = this.deck.mode === 'dual' ? [k, this.deck.subKingdom] : [k];
-    const list = kingdoms.flatMap(x => libraryFor(x)).filter(d => this._matches(d));
+    const seen = new Set();
+    // 势力自带的通用战法与“通用战法库”是同一张牌：卡池里只列通用库那张（卡组里已有的势力版仍显示，方便调整）
+    const have = this.deck.cards || {};
+    const list = kingdoms.flatMap(x => libraryFor(x))
+      .filter(d => !(d.commonKey && d.kingdom !== 'common' && !have[d.id]))
+      .filter(d => !seen.has(d.id) && seen.add(d.id) && this._matches(d));
     pool.replaceChildren();
     if (!list.length) { pool.innerHTML = '<p class="db-empty">没有符合筛选的卡牌</p>'; return; }
     for (const def of list) {
       const card = createCard(def, { faction: 'WEI', kingdom: def.kingdom || k, instanceId: `lib_${def.id}` });
-      const tile = h(`<div class="db-tile" data-id="${def.id}"><div class="db-tile-card"></div><span class="db-tile-badge"></span>${def.extra ? `<span class="db-tile-src">${def.extraLabel || '旧图鉴'}</span>` : ''}</div>`);
+      const tile = h(`<div class="db-tile" data-id="${def.id}"><div class="db-tile-card"></div><span class="db-tile-badge"></span>${def.kingdom === 'common' ? '<span class="db-tile-src common">通用</span>' : def.extra ? `<span class="db-tile-src">${def.extraLabel || '旧图鉴'}</span>` : ''}</div>`);
       const el = renderHandCard(card);
       tile.querySelector('.db-tile-card').appendChild(el);
       tile.addEventListener('click', (e) => {
