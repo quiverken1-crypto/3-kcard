@@ -1715,6 +1715,8 @@ export function resolveTactic(state, owner, card, prepared, payload = {}) {
 // ==========================================
 
 export function afterAttack(state, attacker, defender, result, targetIsHq) {
+  // 游击撤退：这次攻击无效，被攻击者不再吃到任何“攻击后”效果（压制、抑制、伤害、减益等）
+  if (result?.evaded) defender = null;
   const attackerAlive = isOnBoard(state, attacker);
   const defenderAlive = defender && isOnBoard(state, defender);
   const enemy = opp(attacker.faction);

@@ -129,3 +129,28 @@ test('李文侯·合势 buff is removed cleanly when an ally returns to hand (no
   assert.equal(mw.atk, 1);
   assert.equal(mw.hp, 2);
 });
+
+test('游击 evades only the first attack of the enemy turn, and an evaded hit applies no suppression', async () => {
+  const { createInitialState: init, createCard: mk } = await import('../js/engine/state.js');
+  const { resolveCombat } = await import('../js/engine/combat.js');
+  const { afterAttack } = await import('../js/engine/cardSkills.js');
+  const s = init(); s.phase = 'ACTION'; s.activePlayer = 'WEI'; s.players.WEI.provisions = 30;
+  for (const k of ['LEFT', 'CENTER', 'RIGHT']) s.battlefield.frontline[k].terrain = { type: 'PLAIN', name: '平原', capacity: 3 };
+  const atk = (n, id = 'wei_a') => { const a = mk({ cardId: id, faction: 'WEI', atk: n, hp: 9 }); s.battlefield.frontline.CENTER.units.push(a); s.battlefield.frontline.CENTER.occupant = 'WEI'; return a; };
+  // 第一次就致命：撤退成功，且白马义从的压制不生效
+  const g1 = mk({ cardId: 'shu_g1', faction: 'SHU', atk: 0, hp: 2, keywords: ['游击'] });
+  s.battlefield.frontline.LEFT.units.push(g1); s.battlefield.frontline.LEFT.occupant = 'SHU';
+  const bm = atk(3, 'gsz_bai_ma_yi_cong');
+  const r = resolveCombat(s, { playerId: 'WEI', payload: { attackerId: bm.instanceId, targetId: g1.instanceId } });
+  afterAttack(s, bm, g1, r, false);
+  assert.ok(r.evaded);
+  assert.ok(s.battlefield.support.SHU.slots.includes(g1));
+  assert.ok(!g1.status.suppressed);
+  // 第一次不致命：之后的致命攻击不能再游击
+  const g2 = mk({ cardId: 'shu_g2', faction: 'SHU', atk: 0, hp: 5, keywords: ['游击'] });
+  s.battlefield.frontline.RIGHT.units.push(g2); s.battlefield.frontline.RIGHT.occupant = 'SHU';
+  const r1 = resolveCombat(s, { playerId: 'WEI', payload: { attackerId: atk(2).instanceId, targetId: g2.instanceId } });
+  assert.ok(!r1.evaded);
+  const r2 = resolveCombat(s, { playerId: 'WEI', payload: { attackerId: atk(9).instanceId, targetId: g2.instanceId } });
+  assert.ok(!r2.evaded && r2.defenderDied);
+});
