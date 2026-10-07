@@ -10,7 +10,7 @@
 
 import { FACTIONS, PHASES, STATUS_TYPES, TROOP_TYPES, GAME_CONFIG, hasKeyword } from './constants.js';
 import {
-  drawCard, adjustPrestige, getAllUnits, findUnit, removeUnitFromBoard, registerTurnHooks, markDamaged
+  drawCard, adjustPrestige, getAllUnits, findUnit, removeUnitFromBoard, registerTurnHooks, markDamaged, payCounterReserve
 } from './state.js';
 import { registerAbilityHooks, applyUnitEffect, auraModifiers, activeAbilitiesOf, activeCostBlock, runActiveAbility, refreshAuraKeywords } from './abilities.js';
 
@@ -1195,6 +1195,7 @@ export function triggerCounters(state, event, ctx) {
     if (!spec || spec.event !== event || counter.owner === state.activePlayer) continue;
     if (!spec.check(state, counter.owner, ctx)) continue;
     state.activeCounters = state.activeCounters.filter(c => c.id !== counter.id);
+    payCounterReserve(state, counter);
     state.players[counter.owner].discard.push(counter.cardDef);
     state.combatLog.push({ type: 'COUNTER_TRIGGERED', playerId: counter.owner, counterName: counter.name });
     spec.fire(state, counter.owner, ctx);

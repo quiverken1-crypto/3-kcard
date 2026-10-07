@@ -494,7 +494,8 @@ export function renderResourceHUD(state, viewerFaction = 'WEI') {
     const granaryText = document.getElementById('granary-numeric-text');
     if (granaryText) {
       const extraTxt = player.extraGranaryCap > 0 ? ` (+${player.extraGranaryCap})` : '';
-      granaryText.textContent = `${player.provisions} / ${player.provisionsCap}${extraTxt}`;
+      granaryText.textContent = `${player.provisions} / ${player.provisionsCap}${extraTxt}${player.reservedProvisions > 0 ? ` 预留${player.reservedProvisions}` : ''}`;
+      granaryText.title = player.reservedProvisions > 0 ? `已设下的反制战法预留了 ${player.reservedProvisions} 粮草：这部分不能使用，反制生效时才真正支付` : '';
     }
 
     // Granary 10-Pips

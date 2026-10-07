@@ -41,6 +41,7 @@ import {
   deserializeState,
   cloneState,
   projectStateForClient,
+  payCounterReserve,
   GameState
 } from './state.js';
 import {
@@ -382,7 +383,9 @@ function dispatchBase(state, action) {
       let cost = Math.max(0, card.cost - qiMouDiscount(state, action.playerId));
 
       if (player.provisions < cost) throw new Error(`Insufficient provisions for counter (need ${cost})`);
+      // 反制：打出时不支付，只把费用预留出来（这部分粮草不能再用），生效时才真正扣除
       player.provisions -= cost;
+      player.reservedProvisions = (player.reservedProvisions || 0) + cost;
       player.hand.splice(handIdx, 1);
 
       state.activeCounters.push({
@@ -518,6 +521,7 @@ export function dispatch(state, action) {
       const triggered = runAbilityTrigger(state, 'ON_ENEMY_ACTION', counter.cardDef, context);
       if (triggered.length) {
         state.activeCounters = state.activeCounters.filter(active => active.id !== counter.id);
+        payCounterReserve(state, counter);
         state.players[counter.owner].discard.push(counter.cardDef);
         state.combatLog.push({ type: 'COUNTER_TRIGGERED', playerId: counter.owner, counterName: counter.name });
       }
