@@ -168,6 +168,8 @@ export function putInHand(state, playerId, card) {
   const player = state.players[playerId];
   // 通过技能进入手牌的牌（撤回、检索、捡回）对手已经见过，视为“明牌”
   card._known = true;
+  // 单位回到手牌：数值、词条、光环记账一律复原（否则李文侯等光环的加成会被反向扣掉）
+  if (card.type === 'UNIT' && card.status) { resetCardState(card); card.faction = playerId; }
   if (player.hand.length < GAME_CONFIG.HAND_LIMIT) { player.hand.push(card); return true; }
   player.discard.push(card);
   state.combatLog.push({ type: 'CARD_BURNED', playerId, card });

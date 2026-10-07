@@ -57,7 +57,7 @@ import {
 import { runAbilityTrigger, runLinkedTriggers } from './abilities.js';
 import {
   applyEnterKeywords, onUnitEnter, onUnitMoved, prepareTactic, resolveTactic, afterAttack, resolvePick, autoPickCards, randomPickCards, resolveChoice, autoChoiceTarget, activateSkill, canDeployToFrontline, isSiegeEngine,
-  processDeaths, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getTacticTargets, refreshAuras, baseId, targetSurcharge, qiMouDiscount, getCardPlayCost, unitDeployCost, applyJunJi, triggerCounters
+  processDeaths, getActionCost, actsLikeCavalry as skillActsLikeCavalry, getTacticTargets, refreshAuras, baseId, targetSurcharge, qiMouDiscount, getCardPlayCost, unitDeployCost, applyJunJi, triggerCounters, resetCardState
 } from './cardSkills.js';
 
 /** 按指定位置插入（部署/移动时可放在区域内任意卡牌之间或两侧） */
@@ -307,6 +307,7 @@ function dispatchBase(state, action) {
         } else {
           // Hand cap 9 check
           if (player.hand.length < 9) {
+            resetCardState(unit);
             player.hand.push(unit);
           } else {
             player.discard.push(unit);

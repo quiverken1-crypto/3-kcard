@@ -106,3 +106,26 @@ test('庞德·猛进 still grants 突袭 after units are returned by 云屯鸟�
   assert.ok(mw.keywords.includes('突袭'));
   assert.equal(mw.status.actionsUsed, 0);
 });
+
+test('李文侯·合势 buff is removed cleanly when an ally returns to hand (no -1-1)', async () => {
+  const { RulesEngine } = await import('../js/engine/rulesEngine.js');
+  const { startTurn, createCard: mk } = await import('../js/engine/state.js');
+  const { DB_CARD_MAP } = await import('../js/data/cardDB.js');
+  const SK = await import('../js/engine/cardSkills.js');
+  const re = new RulesEngine({ autoInit: true, seed: 1, weiKingdom: 'xl', shuKingdom: 'shu', firstPlayer: 'WEI' });
+  const s = re.state; if (s.phase === 'MULLIGAN') startTurn(s, 'WEI');
+  s.players.WEI.provisions = 60; s.players.WEI.hand.length = 0;
+  const add = id => { const c = mk(DB_CARD_MAP[id], { faction: 'WEI', kingdom: 'xl' }); s.players.WEI.hand.push(c); return c; };
+  const D = c => { re.dispatch({ type: 'DEPLOY', playerId: 'WEI', payload: { cardInstanceId: c.instanceId, targetZone: 'SUPPORT' } }); while (s.players.WEI.pendingChoices?.length) SK.resolveChoice(s, 'WEI', { targetId: 'HQ' }); };
+  const lw = add('xl_li_wen_hou'), mw = add('xl_ma_wan');
+  D(lw); D(mw);
+  assert.equal(mw.atk, 2);
+  SK.retreatUnit(s, mw, 'test');
+  assert.equal(mw.atk, 1);
+  D(mw);
+  assert.equal(mw.atk, 2);
+  SK.retreatUnit(s, mw, 'test'); SK.retreatUnit(s, lw, 'test');
+  D(mw);
+  assert.equal(mw.atk, 1);
+  assert.equal(mw.hp, 2);
+});
